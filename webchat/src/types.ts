@@ -1,6 +1,7 @@
 export type ConnectionStatus = "connecting" | "online" | "offline";
 export type MobileSection = "chat" | "workspace" | "browser";
 export type ContextPanelName = "workspace" | "browser";
+export type ConversationMode = "normal" | "codex" | "chat_only";
 
 export interface Conversation {
   id: number;

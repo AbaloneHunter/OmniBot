@@ -15,6 +15,7 @@ import type {
   ChatMessage,
   ContextPanelName,
   Conversation,
+  ConversationMode,
   MobileSection,
   RealtimeEventData,
   RealtimeEventName,
@@ -158,12 +159,12 @@ export default function App() {
     }
   }
 
-  async function createConversation() {
+  async function createConversation(mode: ConversationMode) {
     setGlobalError("");
     try {
       const conversation = await request<Conversation>("/conversations", {
         method: "POST",
-        body: { title: "新对话", mode: "normal" },
+        body: { title: "新对话", mode },
       });
       setArchivedOnly(false);
       selectedRef.current = conversation;
@@ -411,7 +412,7 @@ export default function App() {
           selected={selectedConversation}
           archivedOnly={archivedOnly}
           connectionStatus={connectionStatus}
-          onCreate={() => void createConversation()}
+          onCreate={(mode) => void createConversation(mode)}
           onSelect={(conversation) => void selectConversation(conversation)}
           onToggleArchived={() => void toggleArchivedFilter()}
         />
