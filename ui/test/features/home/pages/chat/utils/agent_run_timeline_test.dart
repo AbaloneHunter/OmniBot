@@ -43,31 +43,43 @@ void main() {
     );
   });
 
-  test('groups in-flight task once active text snapshot exists', () {
+  test('keeps in-flight text snapshots ungrouped', () {
     final entries = buildAgentRunTimelineEntries(
       _buildCompletedRunMessages(isFinal: false),
       activeTaskIds: const <String>{'task-1'},
     );
 
-    expect(entries, hasLength(2));
-    expect(entries.first.group?.taskId, 'task-1');
-    expect(
-      entries.first.group?.visibleMessagesNewestFirst.single.id,
+    expect(entries, hasLength(4));
+    expect(entries.where((entry) => entry.group != null), isEmpty);
+    expect(entries.map((entry) => entry.message?.id), <String?>[
       'task-1-text',
-    );
+      'task-1-tool',
+      'task-1-thinking',
+      'user-1',
+    ]);
   });
 
-  test('keeps active run grouped when final text arrives before cleanup', () {
-    final entries = buildAgentRunTimelineEntries(
-      _buildCompletedRunMessages(isFinal: true),
+  test('waits for active task cleanup before folding final text', () {
+    final messages = _buildCompletedRunMessages(isFinal: true);
+    final activeEntries = buildAgentRunTimelineEntries(
+      messages,
       activeTaskIds: const <String>{'task-1'},
     );
+    final completedEntries = buildAgentRunTimelineEntries(messages);
 
-    expect(entries, hasLength(2));
-    expect(entries.first.group?.taskId, 'task-1');
+    expect(activeEntries, hasLength(4));
+    expect(activeEntries.where((entry) => entry.group != null), isEmpty);
+    expect(completedEntries, hasLength(2));
+    expect(completedEntries.first.group?.taskId, 'task-1');
     expect(
-      entries.first.group?.visibleMessagesNewestFirst.single.id,
+      completedEntries.first.group?.visibleMessagesNewestFirst.single.id,
       'task-1-text',
+    );
+    expect(
+      completedEntries.first.group?.processMessagesNewestFirst.map(
+        (message) => message.id,
+      ),
+      containsAll(<String>['task-1-tool', 'task-1-thinking']),
     );
   });
 

@@ -6,6 +6,7 @@ import type {
   ContextPanelName,
   WorkspaceItem,
 } from "../types";
+import { Icon } from "./Icon";
 
 interface ContextPaneProps {
   activePanel: ContextPanelName;
@@ -16,6 +17,7 @@ interface ContextPaneProps {
   workspaceDirty: boolean;
   browserSnapshot: BrowserSnapshot | null;
   browserFrameSeed: number;
+  onOpenConversations: () => void;
   onSelectPanel: (panel: ContextPanelName) => void;
   onWorkspacePath: () => void;
   onWorkspaceItem: (item: WorkspaceItem) => void;
@@ -35,6 +37,7 @@ export function ContextPane({
   workspaceDirty,
   browserSnapshot,
   browserFrameSeed,
+  onOpenConversations,
   onSelectPanel,
   onWorkspacePath,
   onWorkspaceItem,
@@ -60,6 +63,13 @@ export function ContextPane({
 
   return (
     <aside className="context-pane">
+      <div className="mobile-context-header">
+        <button className="appbar-icon" type="button" aria-label="打开对话列表" onClick={onOpenConversations}>
+          <Icon name="menu" size={20} />
+        </button>
+        <strong>{activePanel === "workspace" ? "工作区" : "浏览器"}</strong>
+        <span />
+      </div>
       <div className="context-tabs" role="tablist">
         {(["workspace", "browser"] as ContextPanelName[]).map((panel) => (
           <button
@@ -83,15 +93,19 @@ export function ContextPane({
           </div>
           <div className="header-actions">
             {workspaceFilePath && (
-              <a className="quiet-link" href={workspaceDownloadUrl(workspaceFilePath)}>下载</a>
+              <a className="quiet-link" href={workspaceDownloadUrl(workspaceFilePath)} title="下载">
+                <Icon name="download" size={15} /><span>下载</span>
+              </a>
             )}
-            <button className="quiet-button" type="button" onClick={onWorkspaceRefresh}>刷新</button>
+            <button className="quiet-button" type="button" onClick={onWorkspaceRefresh}>
+              <Icon name="refresh" size={14} /><span>刷新</span>
+            </button>
             <button
               className="primary-small-button"
               type="button"
               disabled={!workspaceDirty || !workspaceFilePath}
               onClick={onWorkspaceSave}
-            >保存</button>
+            ><Icon name="save" size={14} /><span>保存</span></button>
           </div>
         </header>
         <div className="workspace-layout">
@@ -104,7 +118,7 @@ export function ContextPane({
                 onClick={() => onWorkspaceItem(item)}
                 key={item.path}
               >
-                <span aria-hidden="true">{item.isDirectory ? "▸" : "·"}</span>
+                <Icon name={item.isDirectory ? "folder" : "file"} size={15} />
                 <span>{item.name}</span>
                 <small>{item.isDirectory ? "" : formatBytes(item.size)}</small>
               </button>

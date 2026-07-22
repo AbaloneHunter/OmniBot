@@ -7,6 +7,7 @@ import cn.com.omnimind.baselib.util.OmniLog
 import cn.com.omnimind.bot.webchat.AgentRunService
 import cn.com.omnimind.bot.webchat.BrowserMirrorService
 import cn.com.omnimind.bot.webchat.ConversationDomainService
+import cn.com.omnimind.bot.webchat.WebChatAvatarService
 import cn.com.omnimind.bot.webchat.WorkspaceFileService
 import com.google.gson.Gson
 import io.ktor.http.ContentDisposition
@@ -302,6 +303,7 @@ object McpServerManager {
         val workspaceFileService = WorkspaceFileService(appContext)
         val browserMirrorService = BrowserMirrorService(appContext)
         val agentRunService = AgentRunService(appContext)
+        val webChatAvatarService = WebChatAvatarService(appContext)
 
         return embeddedServer(CIO, host = "0.0.0.0", port = port) {
             install(CallLogging)
@@ -335,7 +337,8 @@ object McpServerManager {
                         conversationService,
                         workspaceFileService,
                         browserMirrorService,
-                        agentRunService
+                        agentRunService,
+                        webChatAvatarService
                     )
                 }
 

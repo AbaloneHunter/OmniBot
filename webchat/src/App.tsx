@@ -3,6 +3,7 @@ import { request } from "./api";
 import { ChatPanel } from "./components/ChatPanel";
 import { ContextPane } from "./components/ContextPane";
 import { ConversationSidebar } from "./components/ConversationSidebar";
+import { Icon } from "./components/Icon";
 import { LoginView } from "./components/LoginView";
 import { conversationKey } from "./format";
 import { useRealtime } from "./hooks/useRealtime";
@@ -14,6 +15,7 @@ import type {
   ChatMessage,
   ContextPanelName,
   Conversation,
+  ConversationMode,
   MobileSection,
   RealtimeEventData,
   RealtimeEventName,
@@ -25,6 +27,11 @@ import type {
 } from "./types";
 
 const TOKEN_STORAGE_KEY = "omnibot_webchat_token";
+const MOBILE_SECTION_ICON = {
+  chat: "agent",
+  workspace: "workspace",
+  browser: "browser",
+} as const;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error ?? "请求失败");
@@ -58,8 +65,12 @@ export default function App() {
   const [contextPanel, setContextPanel] = useState<ContextPanelName>("workspace");
   const [mobileSection, setMobileSectionState] = useState<MobileSection>("chat");
   const [conversationsOpen, setConversationsOpen] = useState(false);
+  const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
+  const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(false);
   const [toast, setToast] = useState("");
   const selectedRef = useRef<Conversation | null>(null);
+  const conversationHistoryRef = useRef<string[]>([]);
+  const conversationHistoryIndexRef = useRef(-1);
   const workspacePathRef = useRef("");
   const toastTimerRef = useRef<number | null>(null);
   const autoLoginToken = useRef(initialToken());
@@ -72,6 +83,42 @@ export default function App() {
     if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
     setToast(message);
     toastTimerRef.current = window.setTimeout(() => setToast(""), 2600);
+  }
+
+  function recordConversationNavigation(conversation: Conversation | null) {
+    if (!conversation || Number(conversation.id ?? 0) <= 0) return;
+    const key = conversationKey(conversation);
+    const history = conversationHistoryRef.current;
+    const index = conversationHistoryIndexRef.current;
+    if (history[index] === key) return;
+    const nextHistory = [...history.slice(0, index + 1), key].slice(-50);
+    conversationHistoryRef.current = nextHistory;
+    conversationHistoryIndexRef.current = nextHistory.length - 1;
+  }
+
+  function navigationTarget(direction: -1 | 1) {
+    const conversationsByKey = new Map(
+      conversations.map((conversation) => [conversationKey(conversation), conversation]),
+    );
+    const history = conversationHistoryRef.current;
+    for (
+      let index = conversationHistoryIndexRef.current + direction;
+      index >= 0 && index < history.length;
+      index += direction
+    ) {
+      const conversation = conversationsByKey.get(history[index]);
+      if (conversation) return { conversation, index };
+    }
+    return null;
+  }
+
+  async function navigateConversationHistory(direction: -1 | 1) {
+    const target = navigationTarget(direction);
+    if (!target) return;
+    conversationHistoryIndexRef.current = target.index;
+    selectedRef.current = target.conversation;
+    setSelectedConversation(target.conversation);
+    await loadMessages(target.conversation);
   }
 
   async function loadMessages(conversation = selectedRef.current) {
@@ -102,6 +149,7 @@ export default function App() {
     setConversations(nextConversations);
     selectedRef.current = nextSelected;
     setSelectedConversation(nextSelected);
+    recordConversationNavigation(nextSelected);
     if (nextSelected) await loadMessages(nextSelected);
     else setMessages([]);
   }
@@ -152,16 +200,17 @@ export default function App() {
     }
   }
 
-  async function createConversation() {
+  async function createConversation(mode: ConversationMode) {
     setGlobalError("");
     try {
       const conversation = await request<Conversation>("/conversations", {
         method: "POST",
-        body: { title: "新对话", mode: "normal" },
+        body: { title: "新对话", mode },
       });
       setArchivedOnly(false);
       selectedRef.current = conversation;
       setSelectedConversation(conversation);
+      recordConversationNavigation(conversation);
       await loadConversations(true, false);
       setConversationsOpen(false);
     } catch (error) {
@@ -172,6 +221,7 @@ export default function App() {
   async function selectConversation(conversation: Conversation) {
     selectedRef.current = conversation;
     setSelectedConversation(conversation);
+    recordConversationNavigation(conversation);
     setConversationsOpen(false);
     await loadMessages(conversation);
   }
@@ -394,32 +444,92 @@ export default function App() {
     );
   }
 
+  const previousConversation = navigationTarget(-1);
+  const nextConversation = navigationTarget(1);
+
   return (
     <>
       <div
-        className={`app-view${conversationsOpen ? " conversations-open" : ""}`}
+        className={[
+          "app-view",
+          conversationsOpen && "conversations-open",
+          leftSidebarCollapsed && "left-sidebar-collapsed",
+          rightSidebarCollapsed && "right-sidebar-collapsed",
+        ].filter(Boolean).join(" ")}
         data-mobile-section={mobileSection}
       >
-        <header className="mobile-header">
-          <button
-            className="icon-button"
-            type="button"
-            aria-label="打开对话列表"
-            onClick={() => setConversationsOpen(true)}
-          >☰</button>
-          <strong>Omnibot</strong>
-          <span
-            className={`connection-dot ${connectionStatus === "connecting" ? "" : connectionStatus}`}
-            title="实时连接状态"
-          />
+        <header className="desktop-navigation-bar">
+          <nav className="desktop-navigation-group" aria-label="对话导航">
+            <button
+              className="topbar-icon"
+              type="button"
+              aria-label={leftSidebarCollapsed ? "展开左侧边栏" : "收起左侧边栏"}
+              title={leftSidebarCollapsed ? "展开左侧边栏" : "收起左侧边栏"}
+              aria-pressed={!leftSidebarCollapsed}
+              onClick={() => setLeftSidebarCollapsed((collapsed) => !collapsed)}
+            >
+              <Icon name="panel-left" size={18} />
+            </button>
+            <button
+              className="topbar-icon"
+              type="button"
+              aria-label="回退到上一会话"
+              title="回退到上一会话"
+              disabled={!previousConversation}
+              onClick={() => void navigateConversationHistory(-1)}
+            >
+              <Icon name="arrow-left" size={18} />
+            </button>
+            <button
+              className="topbar-icon"
+              type="button"
+              aria-label="前进到下一会话"
+              title="前进到下一会话"
+              disabled={!nextConversation}
+              onClick={() => void navigateConversationHistory(1)}
+            >
+              <Icon name="arrow-right" size={18} />
+            </button>
+          </nav>
+          <div className="desktop-navigation-group desktop-navigation-end">
+            <button
+              className="topbar-icon"
+              type="button"
+              aria-label={selectedConversation?.isArchived ? "取消归档" : "归档对话"}
+              title={selectedConversation?.isArchived ? "取消归档" : "归档对话"}
+              disabled={!selectedConversation}
+              onClick={() => void updateArchiveState()}
+            >
+              <Icon name="archive" size={16} />
+            </button>
+            <button
+              className="topbar-icon danger"
+              type="button"
+              aria-label="删除对话"
+              title="删除对话"
+              disabled={!selectedConversation}
+              onClick={() => void deleteConversation()}
+            >
+              <Icon name="trash" size={16} />
+            </button>
+            <button
+              className="topbar-icon"
+              type="button"
+              aria-label={rightSidebarCollapsed ? "展开右侧边栏" : "收起右侧边栏"}
+              title={rightSidebarCollapsed ? "展开右侧边栏" : "收起右侧边栏"}
+              aria-pressed={!rightSidebarCollapsed}
+              onClick={() => setRightSidebarCollapsed((collapsed) => !collapsed)}
+            >
+              <Icon name="panel-right" size={18} />
+            </button>
+          </div>
         </header>
-
         <ConversationSidebar
           conversations={conversations}
           selected={selectedConversation}
           archivedOnly={archivedOnly}
           connectionStatus={connectionStatus}
-          onCreate={() => void createConversation()}
+          onCreate={(mode) => void createConversation(mode)}
           onSelect={(conversation) => void selectConversation(conversation)}
           onToggleArchived={() => void toggleArchivedFilter()}
         />
@@ -430,6 +540,7 @@ export default function App() {
           sending={sending}
           activeTaskId={activeTaskId}
           clarifyTaskId={clarifyTaskId}
+          onOpenConversations={() => setConversationsOpen(true)}
           onArchive={() => void updateArchiveState()}
           onDelete={() => void deleteConversation()}
           onSend={sendMessage}
@@ -446,6 +557,7 @@ export default function App() {
           workspaceDirty={workspaceDirty}
           browserSnapshot={browserSnapshot}
           browserFrameSeed={browserFrameSeed}
+          onOpenConversations={() => setConversationsOpen(true)}
           onSelectPanel={setContextPanel}
           onWorkspacePath={() => {
             const parent = workspaceParentPath();
@@ -472,7 +584,10 @@ export default function App() {
               type="button"
               onClick={() => selectMobileSection(section)}
               key={section}
-            >{{ chat: "聊天", workspace: "工作区", browser: "浏览器" }[section]}</button>
+            >
+              <Icon name={MOBILE_SECTION_ICON[section]} size={18} />
+              <span>{{ chat: "聊天", workspace: "工作区", browser: "浏览器" }[section]}</span>
+            </button>
           ))}
         </nav>
         <button

@@ -212,12 +212,10 @@ ChatMessageModel? _resolvePrimaryVisibleMessage(
       .toList(growable: false);
 
   if (isActive) {
-    final activeTextSnapshots = aiTextMessages
-        .where((message) => agentRunKind(message) == 'text_snapshot')
-        .toList(growable: false);
-    if (activeTextSnapshots.isNotEmpty) {
-      return _newestBySequence(activeTextSnapshots);
-    }
+    // A text/reasoning segment can finish before the whole agent turn does.
+    // Keep ordinary in-flight output ungrouped until the task itself leaves
+    // the active set, otherwise every intermediate text snapshot briefly
+    // looks terminal and collapses the preceding process messages.
     if (requestMessages.isNotEmpty) {
       return _newestBySequence(requestMessages);
     }

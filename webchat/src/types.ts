@@ -1,6 +1,7 @@
 export type ConnectionStatus = "connecting" | "online" | "offline";
 export type MobileSection = "chat" | "workspace" | "browser";
 export type ContextPanelName = "workspace" | "browser";
+export type ConversationMode = "normal" | "codex" | "chat_only";
 
 export interface Conversation {
   id: number;
@@ -23,9 +24,11 @@ export interface Attachment {
 
 export interface ChatMessage {
   id?: number | string;
+  contentId?: string;
   user?: number;
   type?: number;
   content?: unknown;
+  streamMeta?: Record<string, unknown>;
   reasoning_content?: string;
   reasoningContent?: string;
   isError?: boolean;
