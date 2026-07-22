@@ -45,7 +45,18 @@ export function ConversationSidebar({
   onToggleArchived,
 }: ConversationSidebarProps) {
   const [search, setSearch] = useState("");
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const query = search.trim().toLowerCase();
+
+  function toggleSection(id: string) {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   const sections = useMemo(() => {
     const visible = query
       ? conversations.filter((conversation) => (
@@ -114,33 +125,48 @@ export function ConversationSidebar({
             <span>{query ? "换个关键词试试" : "点击右上角开始新对话"}</span>
           </div>
         )}
-        {sections.map((section) => (
-          <section className="conversation-section" key={section.id}>
-            <header className="conversation-section-header">
-              <Icon name="agent" size={14} />
-              <span>{SECTION_LABELS[section.id]}</span>
-              <small>{section.items.length}</small>
-            </header>
-            {section.items.map((conversation) => {
-              const active = conversationKey(conversation) === conversationKey(selected);
-              const preview = conversation.summary || conversation.lastMessage || modeLabel(conversation.mode);
-              return (
-                <button
-                  key={conversationKey(conversation)}
-                  className={`conversation-item${active ? " active" : ""}`}
-                  type="button"
-                  onClick={() => onSelect(conversation)}
-                >
-                  <span className="conversation-item-heading">
-                    <strong>{conversation.title || "新对话"}</strong>
-                    <time>{relativeDate(conversation.updatedAt)}</time>
-                  </span>
-                  {query && <p>{preview}</p>}
-                </button>
-              );
-            })}
-          </section>
-        ))}
+        {sections.map((section) => {
+          const collapsed = collapsedSections.has(section.id);
+          return (
+            <section className="conversation-section" key={section.id}>
+              <button
+                className="conversation-section-header"
+                type="button"
+                aria-expanded={!collapsed}
+                onClick={() => toggleSection(section.id)}
+              >
+                <Icon name="agent" size={14} />
+                <span>{SECTION_LABELS[section.id]}</span>
+                <small>{section.items.length}</small>
+                <Icon
+                  name="chevron-down"
+                  size={14}
+                  className={`section-chevron${collapsed ? " collapsed" : ""}`}
+                />
+              </button>
+              <div className={`section-body${collapsed ? " collapsed" : ""}`}>
+                {section.items.map((conversation) => {
+                  const active = conversationKey(conversation) === conversationKey(selected);
+                  const preview = conversation.summary || conversation.lastMessage || modeLabel(conversation.mode);
+                  return (
+                    <button
+                      key={conversationKey(conversation)}
+                      className={`conversation-item${active ? " active" : ""}`}
+                      type="button"
+                      onClick={() => onSelect(conversation)}
+                    >
+                      <span className="conversation-item-heading">
+                        <strong>{conversation.title || "新对话"}</strong>
+                        <time>{relativeDate(conversation.updatedAt)}</time>
+                      </span>
+                      {query && <p>{preview}</p>}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
       </div>
 
       <footer className="connection-footer">

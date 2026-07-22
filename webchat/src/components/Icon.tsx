@@ -5,6 +5,7 @@ export type IconName =
   | "archive"
   | "arrow-up"
   | "browser"
+  | "chevron-down"
   | "chevron-left"
   | "download"
   | "file"
@@ -16,6 +17,7 @@ export type IconName =
   | "save"
   | "search"
   | "square"
+  | "terminal"
   | "trash"
   | "workspace"
   | "x";
@@ -47,6 +49,7 @@ export function Icon({ name, size = 20, ...props }: IconProps) {
         <path d="M3.6 9h16.8M3.6 15h16.8M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
       </>
     ),
+    "chevron-down": <path d="m6 9 6 6 6-6" />,
     "chevron-left": <path d="m15 18-6-6 6-6" />,
     download: <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" />,
     file: (
@@ -73,6 +76,11 @@ export function Icon({ name, size = 20, ...props }: IconProps) {
     ),
     search: <path d="m21 21-4.3-4.3m2.3-5.2a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" />,
     square: <rect width="9" height="9" x="7.5" y="7.5" rx="2" fill="currentColor" stroke="none" />,
+    terminal: (
+      <>
+        <path d="m4 17 6-6-6-6M12 19h8" />
+      </>
+    ),
     trash: (
       <>
         <path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v5M14 11v5" />

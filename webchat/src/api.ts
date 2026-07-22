@@ -1,4 +1,5 @@
 const API_ROOT = "/webchat/api";
+const AVATAR_PAGE_VERSION = Date.now().toString(36);
 
 interface RequestOptions {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
@@ -45,6 +46,10 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 
 export function browserFrameUrl(seed: number): string {
   return `${API_ROOT}/browser/frame?t=${Date.now()}-${seed}`;
+}
+
+export function agentAvatarUrl(): string {
+  return `${API_ROOT}/avatar?v=${AVATAR_PAGE_VERSION}`;
 }
 
 export function workspaceDownloadUrl(path: string): string {

@@ -23,9 +23,11 @@ export interface Attachment {
 
 export interface ChatMessage {
   id?: number | string;
+  contentId?: string;
   user?: number;
   type?: number;
   content?: unknown;
+  streamMeta?: Record<string, unknown>;
   reasoning_content?: string;
   reasoningContent?: string;
   isError?: boolean;
