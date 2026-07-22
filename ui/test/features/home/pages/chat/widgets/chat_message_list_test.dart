@@ -1008,34 +1008,76 @@ void main() {
     },
   );
 
-  testWidgets('active agent run remains expanded while task is in flight', (
-    tester,
-  ) async {
-    final controller = ScrollController();
-    final messages = _buildActiveAgentRunMessages();
+  testWidgets(
+    'thinking auto-collapses before the run folds at task completion',
+    (tester) async {
+      final controller = ScrollController();
+      var messages = _buildActiveAgentRunMessages();
+      var activeTaskIds = <String>{'task-1'};
+      late StateSetter setState;
 
-    await tester.pumpWidget(
-      _buildLocalizedApp(
-        child: SizedBox(
-          width: 400,
-          height: 520,
-          child: ChatMessageList(
-            messages: messages,
-            activeAgentTaskIds: const <String>{'task-1'},
-            scrollController: controller,
-            onBeforeTaskExecute: () async {},
+      await tester.pumpWidget(
+        _buildLocalizedApp(
+          child: StatefulBuilder(
+            builder: (context, stateSetter) {
+              setState = stateSetter;
+              return SizedBox(
+                width: 400,
+                height: 520,
+                child: ChatMessageList(
+                  messages: messages,
+                  activeAgentTaskIds: activeTaskIds,
+                  scrollController: controller,
+                  onBeforeTaskExecute: () async {},
+                ),
+              );
+            },
           ),
         ),
-      ),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 32));
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 32));
 
-    expect(find.text('已折叠运行过程'), findsNothing);
-    expect(find.text('详细思考过程'), findsOneWidget);
-    expect(find.text('运行 git status'), findsOneWidget);
-    expect(find.text('最终回答'), findsOneWidget);
-  });
+      expect(
+        find.byKey(const ValueKey('agent-run-summary-task-1')),
+        findsNothing,
+      );
+      expect(find.text('详细思考过程'), findsOneWidget);
+      expect(find.text('运行 git status'), findsOneWidget);
+      expect(find.text('最终回答'), findsOneWidget);
+
+      // Finishing one thinking/content stage collapses that thinking card, but
+      // must not fold the whole run while the task is still active.
+      setState(() {
+        messages = _buildCompletedAgentRunMessages();
+      });
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('agent-run-summary-task-1')),
+        findsNothing,
+      );
+      expect(find.byType(DeepThinkingCard), findsOneWidget);
+      expect(find.text('详细思考过程'), findsNothing);
+      expect(find.text('运行 git status'), findsOneWidget);
+      expect(find.text('最终回答'), findsOneWidget);
+
+      setState(() {
+        activeTaskIds = <String>{};
+      });
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('agent-run-summary-task-1')),
+        findsOneWidget,
+      );
+      expect(find.text('已处理'), findsOneWidget);
+      expect(find.byType(DeepThinkingCard), findsNothing);
+      expect(find.text('详细思考过程'), findsNothing);
+      expect(find.text('运行 git status'), findsNothing);
+      expect(find.text('最终回答'), findsOneWidget);
+    },
+  );
 
   testWidgets('reaching top auto-loads older messages without jumping to top', (
     tester,
