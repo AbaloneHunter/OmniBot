@@ -37,6 +37,9 @@ class AgentSystemPromptTest {
         assertTrue(prompt.contains("--break-system-packages"))
         assertTrue(prompt.contains("shell.exec"))
         assertTrue(prompt.contains("android_privileged_session_*"))
+        assertTrue(prompt.contains("主动使用 `subagent_dispatch`"))
+        assertTrue(prompt.contains("完整、自足的 instruction"))
+        assertTrue(prompt.contains("终端、高权限、删除以及需要用户确认的动作仍由父 Agent 处理"))
     }
 
     @Test
@@ -80,6 +83,9 @@ class AgentSystemPromptTest {
         assertTrue(prompt.contains("Skills:"))
         assertTrue(prompt.contains("action=shell.exec"))
         assertTrue(prompt.contains("android_privileged_session_*"))
+        assertTrue(prompt.contains("Proactively use `subagent_dispatch`"))
+        assertTrue(prompt.contains("complete, self-contained instructions"))
+        assertTrue(prompt.contains("The parent agent remains responsible"))
     }
 
     @Test
