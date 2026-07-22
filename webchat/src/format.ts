@@ -35,7 +35,7 @@ export function markdownToHtml(value: unknown): string {
 
 export function modeLabel(mode?: string): string {
   return ({
-    normal: "普通",
+    normal: "Agent",
     chat_only: "纯聊天",
     openclaw: "OpenClaw",
     subagent: "SubAgent",

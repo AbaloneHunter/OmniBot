@@ -3,6 +3,7 @@ import { request } from "./api";
 import { ChatPanel } from "./components/ChatPanel";
 import { ContextPane } from "./components/ContextPane";
 import { ConversationSidebar } from "./components/ConversationSidebar";
+import { Icon } from "./components/Icon";
 import { LoginView } from "./components/LoginView";
 import { conversationKey } from "./format";
 import { useRealtime } from "./hooks/useRealtime";
@@ -25,6 +26,11 @@ import type {
 } from "./types";
 
 const TOKEN_STORAGE_KEY = "omnibot_webchat_token";
+const MOBILE_SECTION_ICON = {
+  chat: "agent",
+  workspace: "workspace",
+  browser: "browser",
+} as const;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error ?? "请求失败");
@@ -400,20 +406,6 @@ export default function App() {
         className={`app-view${conversationsOpen ? " conversations-open" : ""}`}
         data-mobile-section={mobileSection}
       >
-        <header className="mobile-header">
-          <button
-            className="icon-button"
-            type="button"
-            aria-label="打开对话列表"
-            onClick={() => setConversationsOpen(true)}
-          >☰</button>
-          <strong>Omnibot</strong>
-          <span
-            className={`connection-dot ${connectionStatus === "connecting" ? "" : connectionStatus}`}
-            title="实时连接状态"
-          />
-        </header>
-
         <ConversationSidebar
           conversations={conversations}
           selected={selectedConversation}
@@ -430,6 +422,7 @@ export default function App() {
           sending={sending}
           activeTaskId={activeTaskId}
           clarifyTaskId={clarifyTaskId}
+          onOpenConversations={() => setConversationsOpen(true)}
           onArchive={() => void updateArchiveState()}
           onDelete={() => void deleteConversation()}
           onSend={sendMessage}
@@ -446,6 +439,7 @@ export default function App() {
           workspaceDirty={workspaceDirty}
           browserSnapshot={browserSnapshot}
           browserFrameSeed={browserFrameSeed}
+          onOpenConversations={() => setConversationsOpen(true)}
           onSelectPanel={setContextPanel}
           onWorkspacePath={() => {
             const parent = workspaceParentPath();
@@ -472,7 +466,10 @@ export default function App() {
               type="button"
               onClick={() => selectMobileSection(section)}
               key={section}
-            >{{ chat: "聊天", workspace: "工作区", browser: "浏览器" }[section]}</button>
+            >
+              <Icon name={MOBILE_SECTION_ICON[section]} size={18} />
+              <span>{{ chat: "聊天", workspace: "工作区", browser: "浏览器" }[section]}</span>
+            </button>
           ))}
         </nav>
         <button
