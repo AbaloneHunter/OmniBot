@@ -62,7 +62,9 @@ class AgentOrchestrator(
         val initialMessages: List<ChatCompletionMessage>,
         val executionEnv: AgentExecutionEnvironment,
         val conversationId: Long? = null,
-        val contextCompactor: AgentConversationContextCompactor? = null
+        val contextCompactor: AgentConversationContextCompactor? = null,
+        val maxModelRounds: Int? = null,
+        val maxCompletionTokens: Int = 16384
     )
 
     private val json = Json {
@@ -132,6 +134,17 @@ class AgentOrchestrator(
 
         try {
             roundLoop@ while (true) {
+                val maxModelRounds = input.maxModelRounds?.coerceAtLeast(1)
+                if (maxModelRounds != null && completedModelRounds >= maxModelRounds) {
+                    val message = t(
+                        "Agent 已达到 $maxModelRounds 轮模型调用上限。",
+                        "Agent reached the $maxModelRounds-round model-call limit."
+                    )
+                    callback.onError(message, false)
+                    terminalError = AgentResult.Error(message)
+                    terminated = true
+                    break@roundLoop
+                }
                 completedModelRounds += 1
                 val round = completedModelRounds
                 val assistantContentPrefix = accumulatedAssistantContent
@@ -153,7 +166,7 @@ class AgentOrchestrator(
                         request = ChatCompletionRequest(
                             messages = memory.snapshot(),
                             model = model,
-                            maxCompletionTokens = 16384,
+                            maxCompletionTokens = input.maxCompletionTokens.coerceIn(1, 16384),
                             stream = true,
                             streamOptions = ChatCompletionStreamOptions(includeUsage = true),
                             enableThinking = if (disableThinking) false else null,

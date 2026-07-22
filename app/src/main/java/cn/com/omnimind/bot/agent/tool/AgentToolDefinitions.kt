@@ -498,11 +498,18 @@ object AgentToolDefinitions {
         "整理后等待工具结果，再决定是否补充长期记忆。" to
             "Wait for the tool result after the rollup, then decide whether to add more long-term memory.",
         "可选日期，格式 YYYY-MM-DD。" to "Optional date in YYYY-MM-DD format.",
-        "把多个可并行的小任务分派给 subagent 集群执行，并返回聚合结果。" to
-            "Dispatch multiple parallelizable subtasks to the subagent cluster and return the aggregated result.",
+        "把多个相互独立、可并行的小任务主动分派给具有隔离上下文的 subagent，并返回聚合结果。简单任务或必须严格串行共享中间状态的任务不要分派。" to
+            "Proactively dispatch multiple independent, parallelizable subtasks to subagents with isolated contexts and return the aggregated result. Do not dispatch trivial tasks or tasks that must share intermediate state in strict sequence.",
         "分派后等待工具结果，再汇总给用户。" to
             "Wait for the tool result after dispatching, then summarize it for the user.",
-        "需要并行执行的子任务列表。" to "List of subtasks to execute in parallel.",
+        "需要并行执行的子任务列表。每项都要包含自足的 instruction，并按任务性质选择 profileId。" to
+            "List of subtasks to execute in parallel. Each item must contain a self-contained instruction and choose a profileId appropriate for the task.",
+        "子任务的完整、自足指令，不要依赖主会话中未写入此处的上下文。" to
+            "Complete, self-contained instructions for the subtask. Do not rely on main-conversation context that is not included here.",
+        "专家类型：general 可读写工作区；explorer 只读检索与查证；memory-curator 整理记忆；planner 只输出计划。" to
+            "Expert type: general can read and write the workspace; explorer performs read-only research and verification; memory-curator organizes memory; planner only produces a plan.",
+        "未给子任务指定 profileId 时使用的专家类型，默认 general。" to
+            "Expert type used when a subtask omits profileId. Defaults to general.",
         "并发度，默认 2，范围 1-6。" to "Concurrency level. Default 2, range 1-6.",
         "结果聚合要求，可选。" to "Optional instructions for result aggregation.",
         "创建新的定时任务。`targetKind=subagent` 为唯一支持的执行类型。执行后等待工具结果，再决定是否回复用户；`subagentPrompt` 必须写成任务触发时要立即执行的动作，不要重复填写“每天几点提醒我/定时去做”这类调度描述。" to
@@ -2031,7 +2038,10 @@ object AgentToolDefinitions {
             put("name", "subagent_dispatch")
             put("displayName", "分派子任务")
             put("toolType", "subagent")
-            put("description", "把多个可并行的小任务分派给 subagent 集群执行，并返回聚合结果。")
+            put(
+                "description",
+                "把多个相互独立、可并行的小任务主动分派给具有隔离上下文的 subagent，并返回聚合结果。简单任务或必须严格串行共享中间状态的任务不要分派。"
+            )
             put("postToolRule", "分派后等待工具结果，再汇总给用户。")
             putJsonObject("parameters") {
                 put("type", "object")
@@ -2039,9 +2049,50 @@ object AgentToolDefinitions {
                     putJsonObject("tasks") {
                         put("type", "array")
                         putJsonObject("items") {
-                            put("type", "string")
+                            put("type", "object")
+                            putJsonObject("properties") {
+                                putJsonObject("instruction") {
+                                    put("type", "string")
+                                    put(
+                                        "description",
+                                        "子任务的完整、自足指令，不要依赖主会话中未写入此处的上下文。"
+                                    )
+                                }
+                                putJsonObject("profileId") {
+                                    put("type", "string")
+                                    putJsonArray("enum") {
+                                        add("general")
+                                        add("explorer")
+                                        add("memory-curator")
+                                        add("planner")
+                                    }
+                                    put(
+                                        "description",
+                                        "专家类型：general 可读写工作区；explorer 只读检索与查证；memory-curator 整理记忆；planner 只输出计划。"
+                                    )
+                                }
+                            }
+                            putJsonArray("required") {
+                                add("instruction")
+                            }
                         }
-                        put("description", "需要并行执行的子任务列表。")
+                        put(
+                            "description",
+                            "需要并行执行的子任务列表。每项都要包含自足的 instruction，并按任务性质选择 profileId。"
+                        )
+                    }
+                    putJsonObject("defaultProfileId") {
+                        put("type", "string")
+                        putJsonArray("enum") {
+                            add("general")
+                            add("explorer")
+                            add("memory-curator")
+                            add("planner")
+                        }
+                        put(
+                            "description",
+                            "未给子任务指定 profileId 时使用的专家类型，默认 general。"
+                        )
                     }
                     putJsonObject("concurrency") {
                         put("type", "integer")

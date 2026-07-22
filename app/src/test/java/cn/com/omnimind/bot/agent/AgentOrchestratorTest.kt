@@ -82,6 +82,44 @@ class AgentOrchestratorTest {
     }
 
     @Test
+    fun inputLimitsModelRoundsAndCompletionTokens() = runBlocking {
+        val llmClient = FakeLlmClient(
+            turns = listOf(
+                assistantTurn(toolCalls = listOf(toolCall("file_read")))
+            )
+        )
+        val toolExecutor = FakeToolExecutor(
+            results = mapOf(
+                "file_read" to listOf(
+                    ToolExecutionResult.ContextResult(
+                        toolName = "file_read",
+                        summaryText = "read",
+                        previewJson = "{}",
+                        rawResultJson = "{}",
+                        success = true
+                    )
+                )
+            )
+        )
+        val callback = RecordingCallback()
+
+        val result = createOrchestrator(llmClient, toolExecutor).run(
+            AgentOrchestrator.Input(
+                callback = callback,
+                initialMessages = initialMessages("读取文件后继续"),
+                executionEnv = FakeExecutionEnvironment("读取文件后继续"),
+                maxModelRounds = 1,
+                maxCompletionTokens = 4096
+            )
+        )
+
+        assertTrue(result is AgentResult.Error)
+        assertEquals(1, llmClient.requests.size)
+        assertEquals(4096, llmClient.requests.single().maxCompletionTokens)
+        assertTrue(callback.errors.single().contains("1 轮模型调用上限"))
+    }
+
+    @Test
     fun failedToolResultCanNaturallyBecomeTextReply() = runBlocking {
         val llmClient = FakeLlmClient(
             turns = listOf(
