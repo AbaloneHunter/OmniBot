@@ -65,6 +65,21 @@ elif [ "$TERMINAL_DISTRIBUTION" = "ubuntu" ]; then
     configure_apt_repositories || true
 fi
 
+suppress_ubuntu_sudo_group_probe() {
+    [ "$TERMINAL_DISTRIBUTION" = "ubuntu" ] || return 0
+
+    # Ubuntu's /etc/bash.bashrc calls `groups` to decide whether to show a sudo
+    # hint. PRoot keeps Android supplementary GIDs, which Ubuntu cannot resolve
+    # through its own /etc/group, so that harmless probe pollutes every new
+    # interactive session with "cannot find name for group ID" warnings.
+    # Keep the Android groups intact because they grant host network/storage
+    # access, and use Ubuntu's supported opt-out for the unnecessary sudo hint.
+    mkdir -p "$HOME"
+    [ -e "$HOME/.hushlogin" ] || : > "$HOME/.hushlogin"
+}
+
+suppress_ubuntu_sudo_group_probe
+
 if [ "$HEADLESS_MODE" = "1" ]; then
     export PS1=""
     export PS2=""
