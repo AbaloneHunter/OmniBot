@@ -2298,6 +2298,7 @@ class _ChatMessageListState extends State<ChatMessageList> {
   Widget _buildTimelineListRow({
     required List<ChatMessageModel> messageSource,
     required AgentRunTimelineEntry entry,
+    required Set<String> activeAcpAvatarMessageIds,
     required String? latestUserMessageId,
     required EdgeInsets padding,
   }) {
@@ -2322,6 +2323,9 @@ class _ChatMessageListState extends State<ChatMessageList> {
         onToggleAgentRunGroup: _toggleAgentRunGroup,
         expandedAgentRunTaskIds: _expandedAgentRunTaskIds,
         useAcpPresentation: widget.useAcpPresentation,
+        showAcpAgentAvatar:
+            entry.message != null &&
+            activeAcpAvatarMessageIds.contains(entry.message!.id),
         visualProfile: widget.visualProfile,
         appearanceConfig: widget.appearanceConfig,
       );
@@ -2368,6 +2372,43 @@ class _ChatMessageListState extends State<ChatMessageList> {
         );
       },
     );
+  }
+
+  Set<String> _activeAcpAvatarMessageIds(Iterable<ChatMessageModel> messages) {
+    if (!widget.useAcpPresentation || widget.activeAgentTaskIds.isEmpty) {
+      return const <String>{};
+    }
+    final firstTextByTask = <String, ChatMessageModel>{};
+    for (final message in messages) {
+      if (message.user != 2 ||
+          message.type != 1 ||
+          (message.agentId?.trim().isEmpty ?? true)) {
+        continue;
+      }
+      final taskId = agentRunParentTaskId(message);
+      if (taskId == null || !widget.activeAgentTaskIds.contains(taskId)) {
+        continue;
+      }
+      final existing = firstTextByTask[taskId];
+      if (existing == null || _isEarlierAgentText(message, existing)) {
+        firstTextByTask[taskId] = message;
+      }
+    }
+    return firstTextByTask.values.map((message) => message.id).toSet();
+  }
+
+  bool _isEarlierAgentText(
+    ChatMessageModel candidate,
+    ChatMessageModel existing,
+  ) {
+    final candidateSequence = agentRunSequence(candidate);
+    final existingSequence = agentRunSequence(existing);
+    if (candidateSequence >= 0 &&
+        existingSequence >= 0 &&
+        candidateSequence != existingSequence) {
+      return candidateSequence < existingSequence;
+    }
+    return !candidate.createAt.isAfter(existing.createAt);
   }
 
   @override
@@ -2423,6 +2464,7 @@ class _ChatMessageListState extends State<ChatMessageList> {
     String? latestUserMessageId;
     final messageSource = _observableMessages ?? widget.messages;
     final timelineEntries = _resolveTimelineEntries(messageSource);
+    final activeAcpAvatarMessageIds = _activeAcpAvatarMessageIds(messageSource);
     _pruneEntryRowKeys(timelineEntries);
     for (final item in messageSource) {
       if (item.user == 1) {
@@ -2449,6 +2491,7 @@ class _ChatMessageListState extends State<ChatMessageList> {
           child: _buildTimelineListRow(
             messageSource: messageSource,
             entry: entry,
+            activeAcpAvatarMessageIds: activeAcpAvatarMessageIds,
             latestUserMessageId: latestUserMessageId,
             padding: EdgeInsets.only(top: needTopPadding ? 24.0 : 0.0),
           ),
@@ -2508,6 +2551,7 @@ class _ChatTimelineListRow extends StatelessWidget {
     required this.onToggleAgentRunGroup,
     required this.expandedAgentRunTaskIds,
     required this.useAcpPresentation,
+    required this.showAcpAgentAvatar,
     required this.visualProfile,
     required this.appearanceConfig,
   });
@@ -2529,6 +2573,7 @@ class _ChatTimelineListRow extends StatelessWidget {
   final void Function(String taskId) onToggleAgentRunGroup;
   final Set<String> expandedAgentRunTaskIds;
   final bool useAcpPresentation;
+  final bool showAcpAgentAvatar;
   final AppBackgroundVisualProfile visualProfile;
   final AppBackgroundConfig appearanceConfig;
 
@@ -2589,6 +2634,7 @@ class _ChatTimelineListRow extends StatelessWidget {
     final agentId = currentMessage.agentId?.trim() ?? '';
     final showAcpAgentAvatar =
         useAcpPresentation &&
+        this.showAcpAgentAvatar &&
         currentMessage.user == 2 &&
         currentMessage.type == 1 &&
         agentId.isNotEmpty;

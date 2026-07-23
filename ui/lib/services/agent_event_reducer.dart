@@ -191,13 +191,30 @@ class AgentEventReducer {
           );
         }
       } else if (isAgentToolItemType(itemType)) {
+        final existingCardId = _findToolCardIdForCallId(runtime, startedItemId);
+        final existingMessage = existingCardId == null
+            ? null
+            : runtime.messages.cast<ChatMessageModel?>().firstWhere(
+                (message) => message?.id == existingCardId,
+                orElse: () => null,
+              );
+        final existing = existingCardId == null
+            ? null
+            : _toolCardData(runtime, existingCardId);
+        final mergedItem = _mergeAgentToolUpdate(existing, item);
         final toolInfo = normalizeAgentToolCall(
-          item,
-          itemType: itemType,
+          mergedItem,
+          itemType: canonicalAgentItemType(
+            _string(mergedItem['type']) ?? itemType,
+          ),
+          fallbackToolType: (existing?['toolType'] ?? '').toString(),
+          fallbackTitle: (existing?['toolTitle'] ?? existing?['displayName'])
+              ?.toString(),
           fallbackStatus: 'running',
         );
         final cardId =
-            '$startedItemId-agent-${agentToolCardSuffix(toolInfo.toolType, itemType: itemType)}';
+            existingCardId ??
+            '$startedItemId-agent-${agentToolCardSuffix(toolInfo.toolType, itemType: toolInfo.itemType)}';
         _upsertToolCard(
           runtime,
           cardId: cardId,
@@ -208,12 +225,13 @@ class AgentEventReducer {
           summary: toolInfo.summary,
           progress: toolInfo.progress,
           terminalOutput: toolInfo.terminalOutput,
-          raw: item,
+          raw: mergedItem,
           streamMeta: _streamMeta(
             runtime,
             parentTaskId: parentTaskId,
             entryId: cardId,
             kind: method == 'item/updated' ? 'tool_progress' : 'tool_started',
+            existingMessage: existingMessage,
           ),
         );
       } else if (itemType.contains('requestApproval')) {
@@ -1867,14 +1885,34 @@ class AgentEventReducer {
       runtime.agentReplayDeltaOffsets.remove(cardId);
     }
     if (isAgentToolItemType(itemType)) {
+      final completedItemId = itemId ?? _string(item['id']) ?? taskId;
+      final existingCardId = _findToolCardIdForCallId(runtime, completedItemId);
+      final existingMessage = existingCardId == null
+          ? null
+          : runtime.messages.cast<ChatMessageModel?>().firstWhere(
+              (message) => message?.id == existingCardId,
+              orElse: () => null,
+            );
+      final existing = existingCardId == null
+          ? null
+          : _toolCardData(runtime, existingCardId);
+      final mergedItem = _mergeAgentToolUpdate(existing, item);
+      final mergedItemType = canonicalAgentItemType(
+        _string(mergedItem['type']) ?? itemType,
+      );
       final toolInfo = normalizeAgentToolCall(
-        item,
-        itemType: itemType,
+        mergedItem,
+        itemType: mergedItemType,
+        fallbackToolType: (existing?['toolType'] ?? '').toString(),
+        fallbackTitle: (existing?['toolTitle'] ?? existing?['displayName'])
+            ?.toString(),
         fallbackStatus: 'success',
       );
-      final completedItemId = itemId ?? _string(item['id']) ?? taskId;
-      final suffix = agentToolCardSuffix(toolInfo.toolType, itemType: itemType);
-      final cardId = '$completedItemId-agent-$suffix';
+      final suffix = agentToolCardSuffix(
+        toolInfo.toolType,
+        itemType: mergedItemType,
+      );
+      final cardId = existingCardId ?? '$completedItemId-agent-$suffix';
       _upsertToolCard(
         runtime,
         cardId: cardId,
@@ -1885,7 +1923,7 @@ class AgentEventReducer {
         summary: toolInfo.summary,
         progress: toolInfo.progress,
         terminalOutput: toolInfo.terminalOutput,
-        raw: item,
+        raw: mergedItem,
         streamMeta: _streamMeta(
           runtime,
           parentTaskId: taskId,
@@ -1894,6 +1932,7 @@ class AgentEventReducer {
               ? 'tool_progress'
               : 'tool_completed',
           isFinal: toolInfo.status != 'running',
+          existingMessage: existingMessage,
         ),
         touchTurn: false,
       );
@@ -2513,6 +2552,29 @@ class AgentEventReducer {
       return null;
     }
     return cardData;
+  }
+
+  Map<String, dynamic> _mergeAgentToolUpdate(
+    Map<String, dynamic>? existingCardData,
+    Map<String, dynamic> incoming,
+  ) {
+    final existingRaw = _decodeJsonValue(
+      (existingCardData?['rawResultJson'] ?? '').toString(),
+    );
+    final existingMap = _asStringMap(existingRaw);
+    if (existingMap == null || existingMap.isEmpty) {
+      return Map<String, dynamic>.from(incoming);
+    }
+    final merged = Map<String, dynamic>.from(existingMap);
+    for (final entry in incoming.entries) {
+      // ACP tool_call_update is a sparse patch. LocalAcpRuntime keeps absent
+      // fields as explicit nulls while projecting it to a Map, so a shallow
+      // spread would erase kind/title/input/content from the initial call.
+      if (entry.value != null) {
+        merged[entry.key] = entry.value;
+      }
+    }
+    return merged;
   }
 
   String? _findToolCardIdForCallId(

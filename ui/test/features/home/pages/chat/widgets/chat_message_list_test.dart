@@ -654,7 +654,27 @@ void main() {
     'active Claude response shows its brand icon before text and keeps it after folding',
     (tester) async {
       final controller = ScrollController();
-      final messages = _buildCompletedAcpAgentRunMessages();
+      final messages = <ChatMessageModel>[
+        ChatMessageModel(
+          id: 'task-1-text-2',
+          type: 1,
+          user: 2,
+          content: const <String, dynamic>{
+            'text': '工具完成后的正文',
+            'id': 'task-1-text-2',
+            'agentId': 'claude-code-acp',
+            'agentName': 'Claude Code',
+          },
+          streamMeta: const <String, dynamic>{
+            'parentTaskId': 'task-1',
+            'kind': 'text_snapshot',
+            'seq': 31,
+            'entryId': 'task-1-text-2',
+            'isFinal': true,
+          },
+        ),
+        ..._buildCompletedAcpAgentRunMessages(),
+      ];
       var activeTaskIds = <String>{'task-1'};
       late StateSetter setState;
 
@@ -684,6 +704,14 @@ void main() {
         const ValueKey('acp-message-avatar-task-1-text'),
       );
       expect(activeAvatar, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('acp-message-avatar-task-1-text-2')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('acp-message-avatar-task-1-tool-search-1')),
+        findsNothing,
+      );
       final activeBrandIcon = tester.widget<AgentBrandIcon>(
         find.descendant(
           of: activeAvatar,
@@ -699,6 +727,7 @@ void main() {
         find.byKey(const ValueKey('agent-run-summary-task-1')),
         findsNothing,
       );
+      expect(find.byType(AgentBrandIcon), findsOneWidget);
 
       setState(() {
         activeTaskIds = <String>{};
@@ -714,6 +743,7 @@ void main() {
         find.byKey(const ValueKey('agent-run-summary-task-1')),
         findsOneWidget,
       );
+      expect(find.text('工具完成后的正文'), findsOneWidget);
     },
   );
 

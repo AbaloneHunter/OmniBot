@@ -477,7 +477,13 @@ class AgentParsedCommandAction {
 }
 
 Map<String, dynamic> _toolArguments(Map<String, dynamic> raw) {
-  for (final key in const <String>['arguments', 'args', 'input']) {
+  for (final key in const <String>[
+    'arguments',
+    'args',
+    'input',
+    'rawInput',
+    'raw_input',
+  ]) {
     final map = _asStringMap(raw[key]);
     if (map != null) {
       return map;
@@ -713,6 +719,8 @@ String _resolveToolTitle(
     arguments['tool_title'],
     arguments['displayName'],
     arguments['display_name'],
+    arguments['description'],
+    raw['description'],
   ]);
   if (explicit != null) {
     return _compactTitle(explicit, maxLength: 48);
@@ -738,12 +746,20 @@ String _resolveToolTitle(
     if (command != null) {
       return _compactTitle(command, maxLength: 48);
     }
+    final acpTitle = _firstString([raw['title']]);
+    if (acpTitle != null) {
+      return _compactTitle(acpTitle, maxLength: 48);
+    }
     return fallbackTitle?.trim().isNotEmpty == true
         ? _compactTitle(fallbackTitle!, maxLength: 48)
         : 'Agent command';
   }
 
   if (canonicalItemType == 'fileChange' || toolType == 'file') {
+    final acpTitle = _firstString([raw['title']]);
+    if (acpTitle != null) {
+      return _compactTitle(acpTitle, maxLength: 48);
+    }
     final path = _resolvePath(raw, arguments);
     if (path != null) {
       return _compactTitle(
@@ -898,6 +914,10 @@ String _resolveToolTitle(
 
   if (fallbackTitle?.trim().isNotEmpty == true) {
     return _compactTitle(fallbackTitle!, maxLength: 48);
+  }
+  final acpTitle = _firstString([raw['title']]);
+  if (acpTitle != null) {
+    return _compactTitle(acpTitle, maxLength: 48);
   }
   if (shortName != null && shortName.isNotEmpty) {
     return _compactTitle(shortName, maxLength: 48);

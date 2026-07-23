@@ -555,6 +555,151 @@ diff --git a/lib/main.dart b/lib/main.dart
     expect((cardData['diffText'] ?? '').toString(), contains('diff --git'));
   });
 
+  test(
+    'ACP sparse completion updates keep one file card and preserve its diff',
+    () {
+      const callId = 'call-file-1';
+      reducer.reduce(
+        runtime: runtime,
+        event: {
+          'message': {
+            'method': 'item/started',
+            'params': {
+              'turnId': 'turn-1',
+              'item': {
+                'id': callId,
+                'type': 'fileChange',
+                'title': 'Write',
+                'status': 'pending',
+                'content': <dynamic>[],
+                'rawInput': jsonEncode({
+                  'file_path': '/workspace/edit-demo.txt',
+                  'content': 'old line\n',
+                }),
+              },
+            },
+          },
+        },
+      );
+      final initialSequence = runtime.messages.single.streamMeta?['seq'];
+      reducer.reduce(
+        runtime: runtime,
+        event: {
+          'message': {
+            'method': 'item/updated',
+            'params': {
+              'turnId': 'turn-1',
+              'item': {
+                'id': callId,
+                'type': 'fileChange',
+                'title': 'Write edit-demo.txt',
+                'status': null,
+                'content': [
+                  {
+                    'type': 'diff',
+                    'path': '/workspace/edit-demo.txt',
+                    'oldText': 'old line\n',
+                    'newText': 'new line\n',
+                  },
+                ],
+                'rawInput': jsonEncode({
+                  'file_path': '/workspace/edit-demo.txt',
+                  'content': 'new line\n',
+                }),
+              },
+            },
+          },
+        },
+      );
+      reducer.reduce(
+        runtime: runtime,
+        event: {
+          'message': {
+            'method': 'item/completed',
+            'params': {
+              'turnId': 'turn-1',
+              'item': {
+                'id': callId,
+                'type': 'tool',
+                'title': null,
+                'status': 'completed',
+                'content': null,
+                'rawInput': null,
+                'rawOutput': '"File created successfully"',
+              },
+            },
+          },
+        },
+      );
+
+      expect(runtime.messages, hasLength(1));
+      expect(runtime.messages.single.id, '$callId-agent-file');
+      final cardData = runtime.messages.single.cardData!;
+      expect(cardData['toolType'], 'file');
+      expect(cardData['toolTitle'], 'Write edit-demo.txt');
+      expect(cardData['status'], 'success');
+      expect(cardData['showDiff'], isTrue);
+      expect(cardData['filePath'], '/workspace/edit-demo.txt');
+      expect(cardData['summary'], '1 file · +1 -1');
+      expect(cardData['argsJson'], contains('/workspace/edit-demo.txt'));
+      expect(cardData['rawResultJson'], contains('File created successfully'));
+      expect(runtime.messages.single.streamMeta?['seq'], initialSequence);
+    },
+  );
+
+  test(
+    'ACP command cards prefer raw input description over generic labels',
+    () {
+      const callId = 'call-command-1';
+      reducer.reduce(
+        runtime: runtime,
+        event: {
+          'message': {
+            'method': 'item/started',
+            'params': {
+              'turnId': 'turn-1',
+              'item': {
+                'id': callId,
+                'type': 'commandExecution',
+                'title': 'Terminal',
+                'status': 'pending',
+                'rawInput': '{}',
+              },
+            },
+          },
+        },
+      );
+      reducer.reduce(
+        runtime: runtime,
+        event: {
+          'message': {
+            'method': 'item/completed',
+            'params': {
+              'turnId': 'turn-1',
+              'item': {
+                'id': callId,
+                'type': 'commandExecution',
+                'title': 'ls -la /workspace',
+                'status': 'completed',
+                'rawInput': jsonEncode({
+                  'command': 'ls -la /workspace',
+                  'description': 'Inspect the workspace contents',
+                }),
+              },
+            },
+          },
+        },
+      );
+
+      expect(runtime.messages, hasLength(1));
+      final cardData = runtime.messages.single.cardData!;
+      expect(cardData['toolTitle'], 'Inspect the workspace contents');
+      expect(cardData['toolTitle'], isNot('Agent command'));
+      expect(cardData['status'], 'success');
+      expect(cardData['argsJson'], contains('ls -la /workspace'));
+    },
+  );
+
   test('maps hunk-only changes json into first-class diff tool cards', () {
     reducer.reduce(
       runtime: runtime,
