@@ -46,6 +46,7 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
   OverlayGlassPopupHandle<_AgentRunSettingsMenuAction>?
   _agentRunSettingsMenuHandle;
   bool _isOpeningAgentRunSettingsMenu = false;
+  bool _isAgentRunSettingsMenuOpen = false;
   OverlayGlassPopupHandle<AgentPermissionMode>? _agentPermissionMenuHandle;
 
   @override
@@ -847,7 +848,6 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
         _isOpeningAgentRunSettingsMenu = false;
         return;
       }
-      _modelPickerSpinController.forward(from: 0);
       final opened = widget.onAgentRunSettingsOpened;
       if (opened != null) {
         unawaited(
@@ -887,6 +887,7 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
       final handle = showOverlayGlassPopup<_AgentRunSettingsMenuAction>(
         context: anchorContext,
         anchor: anchor,
+        preferBelow: false,
         reverseTransitionDuration: Duration.zero,
         dismissOnBackButton: false,
         builder: (handle) => _AgentRunSettingsMenuContent(
@@ -917,6 +918,9 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
         ),
       );
       _agentRunSettingsMenuHandle = handle;
+      setState(() {
+        _isAgentRunSettingsMenuOpen = true;
+      });
       try {
         final action = await handle.future;
         if (action == null) return;
@@ -933,6 +937,11 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
       } finally {
         if (_agentRunSettingsMenuHandle == handle) {
           _agentRunSettingsMenuHandle = null;
+          if (mounted) {
+            setState(() {
+              _isAgentRunSettingsMenuOpen = false;
+            });
+          }
         }
       }
     }
@@ -960,15 +969,31 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
               height: compact ? 24 : 28,
               alignment: Alignment.center,
               child: RepaintBoundary(
-                child: RotationTransition(
-                  turns: CurvedAnimation(
-                    parent: _modelPickerSpinController,
-                    curve: Curves.easeOutCubic,
-                  ),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 240),
+                  reverseDuration: const Duration(milliseconds: 190),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) {
+                    return FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(
+                        scale: Tween<double>(
+                          begin: 0.84,
+                          end: 1,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    );
+                  },
                   child: Icon(
-                    LucideIcons.package,
-                    key: const ValueKey(
-                      'chat-input-agent-run-settings-package-icon',
+                    _isAgentRunSettingsMenuOpen
+                        ? LucideIcons.packageOpen
+                        : LucideIcons.package,
+                    key: ValueKey(
+                      _isAgentRunSettingsMenuOpen
+                          ? 'chat-input-agent-run-settings-package-open-icon'
+                          : 'chat-input-agent-run-settings-package-icon',
                     ),
                     size: compact ? 20 : 22,
                     color: selectedColor,
@@ -1404,8 +1429,6 @@ class _AgentPermissionGlassMenuContent extends StatefulWidget {
     required this.onSelect,
   });
 
-  static const double _rowHeight = 42;
-
   final double width;
   final List<_AgentPermissionOptionData> options;
   final AgentPermissionMode selected;
@@ -1444,13 +1467,14 @@ class _AgentPermissionGlassMenuContentState
     final palette = context.omniPalette;
     final isDark = context.isDarkTheme;
     final selectedBackground = isDark
-        ? Color.alphaBlend(
-            widget.selectedColor.withValues(alpha: 0.18),
-            palette.surfaceSecondary.withValues(alpha: 0.52),
-          )
-        : widget.selectedColor.withValues(alpha: 0.10);
+        ? Color.lerp(
+            palette.surfaceSecondary.withValues(alpha: 0.48),
+            palette.accentPrimary,
+            0.18,
+          )!
+        : const Color(0xFF2C7FEB).withValues(alpha: 0.12);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
+      padding: const EdgeInsets.fromLTRB(10, 2, 10, 2),
       child: InkWell(
         key: ValueKey('chat-input-agent-permission-option-${option.mode.name}'),
         onTap: () => _select(option.mode),
@@ -1458,20 +1482,10 @@ class _AgentPermissionGlassMenuContentState
         child: AnimatedContainer(
           duration: _selectionDuration,
           curve: Curves.easeOutCubic,
-          constraints: const BoxConstraints(
-            minHeight: _AgentPermissionGlassMenuContent._rowHeight,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: isSelected ? selectedBackground : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
-            border: isSelected
-                ? Border.all(
-                    color: widget.selectedColor.withValues(
-                      alpha: isDark ? 0.30 : 0.20,
-                    ),
-                  )
-                : null,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -1487,20 +1501,19 @@ class _AgentPermissionGlassMenuContentState
                     fontSize: 13,
                     height: 1.15,
                     color: widget.textColor,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
               const SizedBox(width: 8),
-              AnimatedOpacity(
-                duration: _selectionDuration,
-                opacity: isSelected ? 1 : 0,
-                child: Icon(
+              if (isSelected)
+                Icon(
                   Icons.check_rounded,
-                  size: 16,
-                  color: widget.selectedColor,
+                  size: 15,
+                  color: isDark
+                      ? palette.accentPrimary
+                      : const Color(0xFF2C7FEB),
                 ),
-              ),
             ],
           ),
         ),
@@ -2003,6 +2016,7 @@ class _AgentRunSettingsMenuContentState
       _AgentRunSettingsMenuPage.reasoning => _buildReasoningList(),
     };
     return SizedBox(
+      key: const ValueKey('chat-input-agent-run-settings-menu'),
       width: widget.width,
       child: OmniGlassPanel(
         width: widget.width,

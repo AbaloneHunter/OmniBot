@@ -165,6 +165,54 @@ void main() {
         findsOneWidget,
       );
     }
+    final selectedPermissionRow = find.byKey(
+      const ValueKey('chat-input-agent-permission-option-fullAccess'),
+    );
+    final selectedPermissionContainer = tester.widget<AnimatedContainer>(
+      find.descendant(
+        of: selectedPermissionRow,
+        matching: find.byType(AnimatedContainer),
+      ),
+    );
+    final selectedPermissionDecoration =
+        selectedPermissionContainer.decoration! as BoxDecoration;
+    expect(
+      selectedPermissionContainer.padding,
+      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    );
+    expect(
+      selectedPermissionDecoration.color,
+      const Color(0xFF2C7FEB).withValues(alpha: 0.12),
+    );
+    expect(selectedPermissionDecoration.border, isNull);
+    expect(
+      tester
+          .widget<Text>(
+            find.descendant(
+              of: selectedPermissionRow,
+              matching: find.byType(Text),
+            ),
+          )
+          .style
+          ?.fontWeight,
+      FontWeight.w500,
+    );
+    expect(
+      find.descendant(
+        of: selectedPermissionRow,
+        matching: find.byIcon(Icons.check_rounded),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('chat-input-agent-permission-option-defaultMode'),
+        ),
+        matching: find.byIcon(Icons.check_rounded),
+      ),
+      findsNothing,
+    );
 
     await tester.tap(
       find.byKey(
@@ -261,7 +309,7 @@ void main() {
         of: settingsButton,
         matching: find.byType(RotationTransition),
       ),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.descendant(of: settingsButton, matching: find.text('gpt-5-agent')),
@@ -270,7 +318,14 @@ void main() {
 
     await tester.tap(settingsButton);
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final openIcon = tester.widget<Icon>(
+      find.byKey(
+        const ValueKey('chat-input-agent-run-settings-package-open-icon'),
+      ),
+    );
+    expect(openIcon.icon, LucideIcons.packageOpen);
 
     expect(
       find.byKey(const ValueKey('conversation-model-selector-search')),
@@ -337,6 +392,64 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 300));
     expect(selectedEffort, 'xhigh');
+  });
+
+  testWidgets('agent run settings menu opens above a focused composer', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    final focusNode = FocusNode();
+    addTearDown(controller.dispose);
+    addTearDown(focusNode.dispose);
+    addTearDown(tester.view.resetViewInsets);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.bottomCenter,
+            child: ChatInputArea(
+              controller: controller,
+              focusNode: focusNode,
+              isProcessing: false,
+              onSendMessage: () {},
+              onCancelTask: () {},
+              useLargeComposerStyle: true,
+              agentRunSettings: const AgentRunSettings(
+                modelId: 'gpt-5-agent',
+                reasoningEffort: 'high',
+                modelOptions: <String>['gpt-5-agent'],
+                reasoningEffortOptions: <String>['low', 'high'],
+              ),
+              onAgentRunSettingsChanged: ({modelId, reasoningEffort}) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    focusNode.requestFocus();
+    tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 260));
+
+    final settingsButton = find.byKey(
+      const ValueKey('chat-input-agent-run-settings-button'),
+    );
+    await tester.tap(settingsButton);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    final menu = find.byKey(
+      const ValueKey('chat-input-agent-run-settings-menu'),
+    );
+    expect(menu, findsOneWidget);
+    expect(
+      tester.getBottomLeft(menu).dy,
+      lessThan(tester.getTopLeft(settingsButton).dy),
+    );
+    expect(focusNode.hasFocus, isTrue);
   });
 
   testWidgets('agent run settings hides unsupported reasoning control', (
