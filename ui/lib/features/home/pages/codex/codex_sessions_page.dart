@@ -310,7 +310,7 @@ class _CodexSessionsPageState extends State<CodexSessionsPage> {
       _isSwitchingWorkspace = true;
     });
     try {
-      final config = await CodexAppServerService.readLocalConfig();
+      final config = await CodexAppServerService.readRemoteBridgeConfig();
       if (!mounted) return;
       if (!config.remoteEnabled || config.remoteBridgeUrl.trim().isEmpty) {
         showToast(
@@ -334,10 +334,7 @@ class _CodexSessionsPageState extends State<CodexSessionsPage> {
       if (nextCwd == config.remoteCwd.trim()) {
         return;
       }
-      await CodexAppServerService.writeLocalConfig(
-        baseUrl: config.baseUrl,
-        model: config.model,
-        apiKey: config.apiKey,
+      await CodexAppServerService.writeRemoteBridgeConfig(
         remoteEnabled: true,
         remoteBridgeUrl: config.remoteBridgeUrl,
         remoteBridgeToken: config.remoteBridgeToken,
@@ -680,7 +677,7 @@ class _CodexSessionsPageState extends State<CodexSessionsPage> {
 
   Future<void> _openSessionWorkspace(_CodexSessionSummary session) async {
     try {
-      final config = await CodexAppServerService.readLocalConfig();
+      final config = await CodexAppServerService.readRemoteBridgeConfig();
       if (!mounted) return;
       final workspacePath = session.cwd.trim().isNotEmpty
           ? session.cwd.trim()
@@ -840,7 +837,7 @@ class _CodexSessionsPageState extends State<CodexSessionsPage> {
           child: Row(
             children: [
               Icon(
-                isRemote ? Icons.hub_rounded : Icons.terminal_rounded,
+                Icons.hub_rounded,
                 size: 20,
                 color: isRemote ? palette.accentPrimary : palette.textPrimary,
               ),
@@ -852,9 +849,7 @@ class _CodexSessionsPageState extends State<CodexSessionsPage> {
                     Text(
                       isRemote
                           ? (_isEnglish ? 'Remote PC Bridge' : '远程 PC Bridge')
-                          : (_isEnglish
-                                ? 'Local Terminal Codex'
-                                : '本地终端环境 Codex'),
+                          : (_isEnglish ? 'Local ACP Agent' : '本地 ACP Agent'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(

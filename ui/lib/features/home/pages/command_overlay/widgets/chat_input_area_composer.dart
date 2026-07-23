@@ -27,13 +27,16 @@ const List<String> _kDefaultCodexReasoningEfforts = <String>[
 
 const String _kCodexRunSettingsProviderId = '__codex_run_settings__';
 
-enum _CodexRunSettingsMenuKind { model, effort }
+enum _CodexRunSettingsMenuKind { agent, model, effort }
 
 class _CodexRunSettingsMenuAction {
   const _CodexRunSettingsMenuAction._(this.kind, this.value);
 
   const _CodexRunSettingsMenuAction.model(String value)
     : this._(_CodexRunSettingsMenuKind.model, value);
+
+  const _CodexRunSettingsMenuAction.agent(String value)
+    : this._(_CodexRunSettingsMenuKind.agent, value);
 
   const _CodexRunSettingsMenuAction.effort(String value)
     : this._(_CodexRunSettingsMenuKind.effort, value);
@@ -837,6 +840,7 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
     final palette = context.omniPalette;
     final modelId = settings.modelId.trim();
     final effort = settings.reasoningEffort.trim();
+    final agentName = settings.agentName.trim();
     final english = Localizations.localeOf(context).languageCode == 'en';
     final displayModel = modelId.isEmpty
         ? (settings.isLoadingModels
@@ -846,9 +850,13 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
     final displayEffort = effort.isEmpty
         ? ''
         : _codexReasoningEffortLabel(effort, compact: true);
-    final displayText = displayEffort.isEmpty
+    final modelAndEffort = displayEffort.isEmpty
         ? displayModel
         : '$displayModel · $displayEffort';
+    final displayText =
+        agentName.isNotEmpty && agentName.toLowerCase() != 'codex'
+        ? '$agentName · $modelAndEffort'
+        : modelAndEffort;
     final selectedColor = palette.accentPrimary;
     final menuTextColor = context.isDarkTheme
         ? palette.textPrimary
@@ -889,6 +897,7 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
       final refreshedSettings = widget.codexRunSettings ?? settings;
       final refreshedModelId = refreshedSettings.modelId.trim();
       final refreshedEffort = refreshedSettings.reasoningEffort.trim();
+      final refreshedAgentId = refreshedSettings.agentId.trim();
       final modelOptions = _codexRunSettingsOptions(
         current: refreshedModelId,
         options: refreshedSettings.modelOptions,
@@ -951,6 +960,14 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
             );
           },
           footer: _CodexReasoningEffortSelectorFooter(
+            agentHeader: english ? 'Agent' : 'Agent 模式',
+            agents: refreshedSettings.agentOptions,
+            selectedAgentId: refreshedAgentId,
+            onSelectAgent: (value) {
+              unawaited(
+                handle.dismiss(_CodexRunSettingsMenuAction.agent(value)),
+              );
+            },
             header: english ? 'Reasoning' : '推理强度',
             options: [
               for (final option in effortOptions)
@@ -978,6 +995,9 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
         if (changed == null) return;
         unawaited(
           Future<void>.sync(() {
+            if (action.kind == _CodexRunSettingsMenuKind.agent) {
+              return changed(agentId: action.value);
+            }
             if (action.kind == _CodexRunSettingsMenuKind.model) {
               return changed(modelId: action.value);
             }
@@ -999,6 +1019,7 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
         child: Tooltip(
           message: [
             if (modelId.isNotEmpty) modelId,
+            if (agentName.isNotEmpty) agentName,
             if (effort.isNotEmpty) _codexReasoningEffortLabel(effort),
           ].join(' · '),
           waitDuration: const Duration(milliseconds: 400),
@@ -1622,6 +1643,10 @@ class _CodexRunSettingsOptionData {
 
 class _CodexReasoningEffortSelectorFooter extends StatelessWidget {
   const _CodexReasoningEffortSelectorFooter({
+    required this.agentHeader,
+    required this.agents,
+    required this.selectedAgentId,
+    required this.onSelectAgent,
     required this.header,
     required this.options,
     required this.selectedEffort,
@@ -1634,18 +1659,22 @@ class _CodexReasoningEffortSelectorFooter extends StatelessWidget {
   static const Duration _checkAnimationDuration = Duration(milliseconds: 160);
 
   final String header;
+  final String agentHeader;
+  final List<CodexAgentOption> agents;
+  final String selectedAgentId;
+  final ValueChanged<String> onSelectAgent;
   final List<_CodexRunSettingsOptionData> options;
   final String selectedEffort;
   final Color selectedColor;
   final Color textColor;
   final ValueChanged<String> onSelect;
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, {String? text}) {
     final palette = context.omniPalette;
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 9, 14, 5),
       child: Text(
-        header,
+        text ?? header,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
@@ -1666,6 +1695,7 @@ class _CodexReasoningEffortSelectorFooter extends StatelessWidget {
     required String label,
     required bool selected,
     required String value,
+    ValueChanged<String>? onSelected,
   }) {
     final palette = context.omniPalette;
     final isDark = context.isDarkTheme;
@@ -1679,7 +1709,7 @@ class _CodexReasoningEffortSelectorFooter extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
       child: InkWell(
         key: ValueKey('chat-input-codex-run-settings-option-$keySuffix'),
-        onTap: () => onSelect(value),
+        onTap: () => (onSelected ?? onSelect)(value),
         borderRadius: BorderRadius.circular(12),
         child: AnimatedContainer(
           duration: _checkAnimationDuration,
@@ -1750,6 +1780,19 @@ class _CodexReasoningEffortSelectorFooter extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildDivider(context),
+        if (agents.isNotEmpty) ...[
+          _buildHeader(context, text: agentHeader),
+          for (final agent in agents)
+            _buildOption(
+              context: context,
+              keySuffix: 'agent-${agent.id}',
+              label: agent.name,
+              selected: agent.id == selectedAgentId,
+              value: agent.id,
+              onSelected: onSelectAgent,
+            ),
+          _buildDivider(context),
+        ],
         _buildHeader(context),
         for (final option in options)
           _buildOption(

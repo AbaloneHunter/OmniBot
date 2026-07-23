@@ -1299,7 +1299,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get alpinePipInstall => 'Python 包安装器';
 
   @override
-  String get alpineCodex => 'OpenAI Codex CLI 与 app-server 桥接';
+  String get alpineCodex => 'OpenAI Codex CLI（供 ACP Agent 使用）';
+
+  @override
+  String get alpineClaudeCode => 'Anthropic Claude Code CLI（供 ACP Agent 使用）';
+
+  @override
+  String get alpineOpenCode => 'OpenCode CLI（内置 ACP 支持）';
 
   @override
   String get alpineSshClient => 'SSH 客户端';

@@ -84,6 +84,18 @@ const List<_EnvironmentDefinition> _environmentDefinitions =
         groupKey: 'alpineAiAgent',
       ),
       _EnvironmentDefinition(
+        id: 'claude_code',
+        title: 'Claude Code',
+        descriptionKey: 'alpineClaudeCode',
+        groupKey: 'alpineAiAgent',
+      ),
+      _EnvironmentDefinition(
+        id: 'opencode',
+        title: 'OpenCode',
+        descriptionKey: 'alpineOpenCode',
+        groupKey: 'alpineAiAgent',
+      ),
+      _EnvironmentDefinition(
         id: 'ssh_client',
         title: 'ssh',
         descriptionKey: 'alpineSshClient',
@@ -222,6 +234,10 @@ class _TermuxSettingPageState extends State<TermuxSettingPage>
         return l10n.alpinePipInstall;
       case 'alpineCodex':
         return l10n.alpineCodex;
+      case 'alpineClaudeCode':
+        return l10n.alpineClaudeCode;
+      case 'alpineOpenCode':
+        return l10n.alpineOpenCode;
       case 'alpineSshClient':
         return l10n.alpineSshClient;
       case 'alpineSshpass':

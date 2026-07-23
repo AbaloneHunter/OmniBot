@@ -3,21 +3,6 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 
-enum CodexLocalAuthMode {
-  chatgpt('chatgpt'),
-  api('api');
-
-  const CodexLocalAuthMode(this.payloadValue);
-
-  final String payloadValue;
-
-  static CodexLocalAuthMode fromValue(Object? value) {
-    return value?.toString().trim().toLowerCase() == chatgpt.payloadValue
-        ? chatgpt
-        : api;
-  }
-}
-
 enum CodexLoginType {
   chatgpt('chatgpt'),
   chatgptDeviceCode('chatgptDeviceCode'),
@@ -37,7 +22,6 @@ class CodexStatus {
     this.codexHome,
     this.cwd,
     this.runtime,
-    this.localAuthMode = CodexLocalAuthMode.api,
     this.remoteEnabled = false,
     this.remoteBridgeUrl,
     this.remoteCwd,
@@ -46,6 +30,11 @@ class CodexStatus {
     this.remoteDesktopAvailable,
     this.remoteActiveConnections,
     this.remoteUptimeMs,
+    this.protocol,
+    this.protocolVersion,
+    this.activeAgentId,
+    this.activeAgentName,
+    this.capabilities = const <String, dynamic>{},
   });
 
   final bool connected;
@@ -55,7 +44,6 @@ class CodexStatus {
   final String? codexHome;
   final String? cwd;
   final String? runtime;
-  final CodexLocalAuthMode localAuthMode;
   final bool remoteEnabled;
   final String? remoteBridgeUrl;
   final String? remoteCwd;
@@ -64,6 +52,11 @@ class CodexStatus {
   final bool? remoteDesktopAvailable;
   final int? remoteActiveConnections;
   final int? remoteUptimeMs;
+  final String? protocol;
+  final int? protocolVersion;
+  final String? activeAgentId;
+  final String? activeAgentName;
+  final Map<String, dynamic> capabilities;
 
   bool get canConnect => ready;
 
@@ -77,7 +70,6 @@ class CodexStatus {
       codexHome: _stringOrNull(source['codexHome']),
       cwd: _stringOrNull(source['cwd']),
       runtime: _stringOrNull(source['runtime']),
-      localAuthMode: CodexLocalAuthMode.fromValue(source['localAuthMode']),
       remoteEnabled: source['remoteEnabled'] == true,
       remoteBridgeUrl: _stringOrNull(source['remoteBridgeUrl']),
       remoteCwd: _stringOrNull(source['remoteCwd']),
@@ -86,6 +78,12 @@ class CodexStatus {
       remoteDesktopAvailable: _boolOrNull(source['remoteDesktopAvailable']),
       remoteActiveConnections: _intOrNull(source['remoteActiveConnections']),
       remoteUptimeMs: _intOrNull(source['remoteUptimeMs']),
+      protocol: _stringOrNull(source['protocol']),
+      protocolVersion: _intOrNull(source['protocolVersion']),
+      activeAgentId: _stringOrNull(source['activeAgentId']),
+      activeAgentName: _stringOrNull(source['activeAgentName']),
+      capabilities:
+          _normalizeMap(source['capabilities']) ?? const <String, dynamic>{},
     );
   }
 
@@ -96,7 +94,134 @@ String codexModelSourceKey(CodexStatus status) {
   if (status.runtime == 'remote' || status.remoteEnabled) {
     return 'remote';
   }
-  return 'local-${status.localAuthMode.payloadValue}';
+  return 'local-${status.activeAgentId ?? 'agent'}';
+}
+
+class AcpAgentProfile {
+  const AcpAgentProfile({
+    required this.id,
+    required this.name,
+    required this.command,
+    this.description = '',
+    this.arguments = const <String>[],
+    this.environment = const <String, String>{},
+    this.providerProfileId = '',
+    this.modelId = '',
+    this.enabled = true,
+    this.builtIn = false,
+    this.source = 'custom',
+    this.selected = false,
+    this.installed,
+    this.status = 'unchecked',
+    this.lastCheckError,
+    this.lastCheckLatencyMs,
+    this.lastCheckAt,
+    this.capabilities = const <String, dynamic>{},
+    this.discoveryCommand,
+    this.managedAdapter = false,
+  });
+
+  final String id;
+  final String name;
+  final String command;
+  final String description;
+  final List<String> arguments;
+  final Map<String, String> environment;
+  final String providerProfileId;
+  final String modelId;
+  final bool enabled;
+  final bool builtIn;
+  final String source;
+  final bool selected;
+  final bool? installed;
+  final String status;
+  final String? lastCheckError;
+  final int? lastCheckLatencyMs;
+  final int? lastCheckAt;
+  final Map<String, dynamic> capabilities;
+  final String? discoveryCommand;
+  final bool managedAdapter;
+
+  factory AcpAgentProfile.fromMap(Map<dynamic, dynamic> map) {
+    final rawArguments = map['arguments'];
+    final rawEnvironment = map['environment'];
+    return AcpAgentProfile(
+      id: _stringOrNull(map['id']) ?? '',
+      name: _stringOrNull(map['name']) ?? '',
+      command: _stringOrNull(map['command']) ?? '',
+      description: _stringOrNull(map['description']) ?? '',
+      arguments: rawArguments is List
+          ? rawArguments
+                .map((value) => value.toString().trim())
+                .where((value) => value.isNotEmpty)
+                .toList(growable: false)
+          : const <String>[],
+      environment: rawEnvironment is Map
+          ? rawEnvironment.map(
+              (key, value) => MapEntry(key.toString(), value.toString()),
+            )
+          : const <String, String>{},
+      providerProfileId: _stringOrNull(map['providerProfileId']) ?? '',
+      modelId: _stringOrNull(map['modelId']) ?? '',
+      enabled: map['enabled'] != false,
+      builtIn: map['builtIn'] == true,
+      source: _stringOrNull(map['source']) ?? 'custom',
+      selected: map['selected'] == true,
+      installed: _boolOrNull(map['installed']),
+      status: _stringOrNull(map['status']) ?? 'unchecked',
+      lastCheckError: _stringOrNull(map['lastCheckError']),
+      lastCheckLatencyMs: _intOrNull(map['lastCheckLatencyMs']),
+      lastCheckAt: _intOrNull(map['lastCheckAt']),
+      capabilities:
+          _normalizeMap(map['capabilities']) ?? const <String, dynamic>{},
+      discoveryCommand: _stringOrNull(map['discoveryCommand']),
+      managedAdapter: map['managedAdapter'] == true,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'name': name,
+    'description': description,
+    'command': command,
+    'arguments': arguments,
+    'environment': environment,
+    'providerProfileId': providerProfileId,
+    'modelId': modelId,
+    'enabled': enabled,
+  };
+}
+
+class AcpAgentCatalog {
+  const AcpAgentCatalog({required this.selectedAgentId, required this.agents});
+
+  final String selectedAgentId;
+  final List<AcpAgentProfile> agents;
+
+  AcpAgentProfile? get selectedAgent {
+    for (final agent in agents) {
+      if (agent.id == selectedAgentId) return agent;
+    }
+    return agents.isEmpty ? null : agents.first;
+  }
+
+  factory AcpAgentCatalog.fromMap(Map<dynamic, dynamic>? map) {
+    final source = map ?? const <dynamic, dynamic>{};
+    final rawAgents = source['agents'];
+    final agents = rawAgents is List
+        ? rawAgents
+              .whereType<Map>()
+              .map(AcpAgentProfile.fromMap)
+              .where((agent) => agent.id.isNotEmpty)
+              .toList(growable: false)
+        : const <AcpAgentProfile>[];
+    return AcpAgentCatalog(
+      selectedAgentId:
+          _stringOrNull(source['selectedAgentId']) ??
+          (agents.isEmpty ? '' : agents.first.id),
+      agents: agents,
+    );
+  }
 }
 
 String? selectCodexRequestModel({
@@ -104,17 +229,10 @@ String? selectCodexRequestModel({
   required String? overrideModel,
   required String? activeModel,
   required String? scopedModel,
-  required String? configuredApiModel,
   required bool activeModelSourceMatches,
 }) {
-  final isLocalApi =
-      status.runtime != 'remote' &&
-      !status.remoteEnabled &&
-      status.localAuthMode == CodexLocalAuthMode.api;
   return _stringOrNull(
-    overrideModel ??
-        (activeModelSourceMatches ? activeModel : scopedModel) ??
-        (isLocalApi ? configuredApiModel : null),
+    overrideModel ?? (activeModelSourceMatches ? activeModel : scopedModel),
   );
 }
 
@@ -127,14 +245,8 @@ bool isCurrentCodexModelLoad({
   return requestId == activeRequestId && requestSource == currentSource;
 }
 
-class CodexLocalConfig {
-  const CodexLocalConfig({
-    required this.baseUrl,
-    required this.model,
-    required this.apiKey,
-    this.officialModel = '',
-    this.localAuthMode = CodexLocalAuthMode.api,
-    this.codexHome,
+class CodexRemoteBridgeConfig {
+  const CodexRemoteBridgeConfig({
     this.remoteEnabled = false,
     this.remoteBridgeUrl = '',
     this.remoteBridgeToken = '',
@@ -143,12 +255,6 @@ class CodexLocalConfig {
     this.runtime,
   });
 
-  final String baseUrl;
-  final String model;
-  final String apiKey;
-  final String officialModel;
-  final CodexLocalAuthMode localAuthMode;
-  final String? codexHome;
   final bool remoteEnabled;
   final String remoteBridgeUrl;
   final String remoteBridgeToken;
@@ -156,15 +262,9 @@ class CodexLocalConfig {
   final bool remoteConfigured;
   final String? runtime;
 
-  factory CodexLocalConfig.fromMap(Map<dynamic, dynamic>? map) {
+  factory CodexRemoteBridgeConfig.fromMap(Map<dynamic, dynamic>? map) {
     final source = map ?? const <dynamic, dynamic>{};
-    return CodexLocalConfig(
-      baseUrl: _stringOrNull(source['baseUrl']) ?? '',
-      model: _stringOrNull(source['model']) ?? '',
-      apiKey: _stringOrNull(source['apiKey']) ?? '',
-      officialModel: _stringOrNull(source['officialModel']) ?? '',
-      localAuthMode: CodexLocalAuthMode.fromValue(source['localAuthMode']),
-      codexHome: _stringOrNull(source['codexHome']),
+    return CodexRemoteBridgeConfig(
       remoteEnabled: source['remoteEnabled'] == true,
       remoteBridgeUrl: _stringOrNull(source['remoteBridgeUrl']) ?? '',
       remoteBridgeToken: _stringOrNull(source['remoteBridgeToken']) ?? '',
@@ -339,6 +439,39 @@ class CodexAppServerService {
     return CodexStatus.fromMap(result);
   }
 
+  static Future<AcpAgentCatalog> listAgents() async {
+    return AcpAgentCatalog.fromMap(await _invokeMap('agent/list'));
+  }
+
+  static Future<AcpAgentCatalog> refreshAgents() async {
+    return AcpAgentCatalog.fromMap(await _invokeMap('agent/refresh'));
+  }
+
+  static Future<AcpAgentCatalog> selectAgent(String agentId) async {
+    return AcpAgentCatalog.fromMap(
+      await _invokeMap('agent/select', {'agentId': agentId.trim()}),
+    );
+  }
+
+  static Future<AcpAgentCatalog> saveAgent(AcpAgentProfile agent) async {
+    final response = await _invokeMap('agent/save', {'agent': agent.toMap()});
+    return AcpAgentCatalog.fromMap(
+      response['catalog'] is Map
+          ? response['catalog'] as Map<dynamic, dynamic>
+          : response,
+    );
+  }
+
+  static Future<AcpAgentCatalog> deleteAgent(String agentId) async {
+    return AcpAgentCatalog.fromMap(
+      await _invokeMap('agent/delete', {'agentId': agentId.trim()}),
+    );
+  }
+
+  static Future<Map<String, dynamic>> testAgent(String agentId) {
+    return _invokeMap('agent/test', {'agentId': agentId.trim()});
+  }
+
   static Future<Map<String, dynamic>> startThread({
     int? conversationId,
     String? cwd,
@@ -488,16 +621,8 @@ class CodexAppServerService {
     return _invokeMap('model/list', {'limit': 100});
   }
 
-  static Future<Map<String, dynamic>> listModelsForStatus(CodexStatus status) {
-    final useConfiguredLocalApi =
-        status.runtime != 'remote' &&
-        !status.remoteEnabled &&
-        status.localAuthMode == CodexLocalAuthMode.api;
-    if (useConfiguredLocalApi) {
-      return _invokeMap('config/local/models');
-    }
-    return listModels();
-  }
+  static Future<Map<String, dynamic>> listModelsForStatus(CodexStatus status) =>
+      listModels();
 
   static Future<Map<String, dynamic>> listCollaborationModes() {
     return _invokeMap('collaborationMode/list');
@@ -507,44 +632,24 @@ class CodexAppServerService {
     return _invokeMap('config/read');
   }
 
-  static Future<CodexLocalConfig> readLocalConfig() async {
-    final result = await _invokeMap('config/local/read');
-    return CodexLocalConfig.fromMap(result);
+  static Future<CodexRemoteBridgeConfig> readRemoteBridgeConfig() async {
+    final result = await _invokeMap('config/remote/read');
+    return CodexRemoteBridgeConfig.fromMap(result);
   }
 
-  static Future<CodexLocalConfig> writeLocalConfig({
-    required String baseUrl,
-    required String model,
-    required String apiKey,
-    String? officialModel,
-    CodexLocalAuthMode? localAuthMode,
+  static Future<CodexRemoteBridgeConfig> writeRemoteBridgeConfig({
     bool remoteEnabled = false,
     String remoteBridgeUrl = '',
     String remoteBridgeToken = '',
     String remoteCwd = '',
   }) async {
-    final result = await _invokeMap('config/local/write', {
-      'baseUrl': baseUrl.trim(),
-      'model': model.trim(),
-      'apiKey': apiKey.trim(),
-      if (officialModel != null) 'officialModel': officialModel.trim(),
-      if (localAuthMode != null) 'localAuthMode': localAuthMode.payloadValue,
+    final result = await _invokeMap('config/remote/write', {
       'remoteEnabled': remoteEnabled,
       'remoteBridgeUrl': remoteBridgeUrl.trim(),
       'remoteBridgeToken': remoteBridgeToken.trim(),
       'remoteCwd': remoteCwd.trim(),
     });
-    return CodexLocalConfig.fromMap(result);
-  }
-
-  static Future<Map<String, dynamic>> listLocalApiModels({
-    required String baseUrl,
-    required String apiKey,
-  }) {
-    return _invokeMap('config/local/models', {
-      'baseUrl': baseUrl.trim(),
-      'apiKey': apiKey.trim(),
-    });
+    return CodexRemoteBridgeConfig.fromMap(result);
   }
 
   static Future<Map<String, dynamic>> testRemoteConfig({

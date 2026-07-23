@@ -153,49 +153,38 @@ void main() {
     });
   });
 
-  test('reads and writes local codex config files', () async {
+  test('reads and writes only remote bridge config', () async {
     final calls = <MethodCall>[];
     messenger.setMockMethodCallHandler(channel, (call) async {
       calls.add(call);
       return <String, dynamic>{
-        'baseUrl': 'https://example.com/v1',
-        'model': 'gpt-5.5',
-        'officialModel': 'gpt-5.5-codex',
-        'localAuthMode': 'chatgpt',
-        'apiKey': 'key',
-        'codexHome': '/root/.codex',
+        'remoteEnabled': true,
+        'remoteBridgeUrl': 'ws://192.168.1.2:17321/codex',
+        'remoteBridgeToken': 'token',
+        'remoteCwd': '/Users/name/code/project',
       };
     });
 
-    final read = await CodexAppServerService.readLocalConfig();
-    final written = await CodexAppServerService.writeLocalConfig(
-      baseUrl: ' https://example.com/v1 ',
-      model: ' gpt-5.5 ',
-      apiKey: ' key ',
-      officialModel: ' gpt-5.5-codex ',
-      localAuthMode: CodexLocalAuthMode.chatgpt,
+    final read = await CodexAppServerService.readRemoteBridgeConfig();
+    final written = await CodexAppServerService.writeRemoteBridgeConfig(
+      remoteEnabled: true,
+      remoteBridgeUrl: ' ws://192.168.1.2:17321/codex ',
+      remoteBridgeToken: ' token ',
+      remoteCwd: ' /Users/name/code/project ',
     );
 
-    expect(read.baseUrl, 'https://example.com/v1');
-    expect(read.model, 'gpt-5.5');
-    expect(read.officialModel, 'gpt-5.5-codex');
-    expect(read.localAuthMode, CodexLocalAuthMode.chatgpt);
-    expect(read.apiKey, 'key');
-    expect(written.codexHome, '/root/.codex');
+    expect(read.remoteEnabled, isTrue);
+    expect(read.remoteBridgeUrl, 'ws://192.168.1.2:17321/codex');
+    expect(written.remoteCwd, '/Users/name/code/project');
     expect(calls.map((call) => call.method), [
-      'config/local/read',
-      'config/local/write',
+      'config/remote/read',
+      'config/remote/write',
     ]);
     expect(calls.last.arguments, <String, dynamic>{
-      'baseUrl': 'https://example.com/v1',
-      'model': 'gpt-5.5',
-      'apiKey': 'key',
-      'officialModel': 'gpt-5.5-codex',
-      'localAuthMode': 'chatgpt',
-      'remoteEnabled': false,
-      'remoteBridgeUrl': '',
-      'remoteBridgeToken': '',
-      'remoteCwd': '',
+      'remoteEnabled': true,
+      'remoteBridgeUrl': 'ws://192.168.1.2:17321/codex',
+      'remoteBridgeToken': 'token',
+      'remoteCwd': '/Users/name/code/project',
     });
   });
 
@@ -219,52 +208,10 @@ void main() {
     expect(calls[1].arguments, {'loginId': 'login-1'});
   });
 
-  test('forwards custom Codex model list credentials', () async {
-    MethodCall? capturedCall;
+  test('ACP agent model picker uses initialize config options', () async {
+    final calls = <MethodCall>[];
     messenger.setMockMethodCallHandler(channel, (call) async {
-      capturedCall = call;
-      return <String, dynamic>{'models': <dynamic>[]};
-    });
-
-    await CodexAppServerService.listLocalApiModels(
-      baseUrl: ' https://example.com/v1 ',
-      apiKey: ' secret ',
-    );
-
-    expect(capturedCall?.method, 'config/local/models');
-    expect(capturedCall?.arguments, {
-      'baseUrl': 'https://example.com/v1',
-      'apiKey': 'secret',
-    });
-  });
-
-  test(
-    'local API input model picker uses configured provider catalog',
-    () async {
-      MethodCall? capturedCall;
-      messenger.setMockMethodCallHandler(channel, (call) async {
-        capturedCall = call;
-        return <String, dynamic>{'models': <dynamic>[]};
-      });
-
-      await CodexAppServerService.listModelsForStatus(
-        const CodexStatus(
-          connected: true,
-          ready: true,
-          runtime: 'local',
-          localAuthMode: CodexLocalAuthMode.api,
-        ),
-      );
-
-      expect(capturedCall?.method, 'config/local/models');
-      expect(capturedCall?.arguments, isEmpty);
-    },
-  );
-
-  test('ChatGPT input model picker keeps using Codex model list', () async {
-    MethodCall? capturedCall;
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      capturedCall = call;
+      calls.add(call);
       return <String, dynamic>{'models': <dynamic>[]};
     });
 
@@ -273,23 +220,17 @@ void main() {
         connected: true,
         ready: true,
         runtime: 'local',
-        localAuthMode: CodexLocalAuthMode.chatgpt,
+        activeAgentId: 'custom-agent',
       ),
     );
 
-    expect(capturedCall?.method, 'model/list');
-    expect(capturedCall?.arguments, {'limit': 100});
+    expect(calls.map((call) => call.method), ['model/list']);
   });
 
   test('keeps Codex model sources separate', () {
     expect(
       codexModelSourceKey(
-        const CodexStatus(
-          connected: true,
-          ready: true,
-          runtime: 'remote',
-          localAuthMode: CodexLocalAuthMode.api,
-        ),
+        const CodexStatus(connected: true, ready: true, runtime: 'remote'),
       ),
       'remote',
     );
@@ -299,58 +240,72 @@ void main() {
           connected: true,
           ready: true,
           runtime: 'local',
-          localAuthMode: CodexLocalAuthMode.chatgpt,
+          activeAgentId: 'codex-acp',
         ),
       ),
-      'local-chatgpt',
-    );
-    expect(
-      codexModelSourceKey(
-        const CodexStatus(
-          connected: true,
-          ready: true,
-          runtime: 'local',
-          localAuthMode: CodexLocalAuthMode.api,
-        ),
-      ),
-      'local-api',
+      'local-codex-acp',
     );
   });
 
-  test('local API requests use the selected input model', () {
+  test('parses ACP identity and capability payload from status', () {
+    final status = CodexStatus.fromMap(<String, dynamic>{
+      'connected': true,
+      'ready': true,
+      'runtime': 'local',
+      'protocol': 'acp',
+      'protocolVersion': 1,
+      'activeAgentId': 'custom-agent',
+      'activeAgentName': 'Custom Agent',
+      'capabilities': <String, dynamic>{
+        'loadSession': true,
+        'prompt': <String, dynamic>{'image': true},
+      },
+    });
+
+    expect(status.protocol, 'acp');
+    expect(status.protocolVersion, 1);
+    expect(status.activeAgentId, 'custom-agent');
+    expect(status.activeAgentName, 'Custom Agent');
+    expect(status.capabilities['loadSession'], true);
+    expect(codexModelSourceKey(status), 'local-custom-agent');
+  });
+
+  test('parses managed ACP adapter discovery metadata', () {
+    final agent = AcpAgentProfile.fromMap(<String, dynamic>{
+      'id': 'codex-acp',
+      'name': 'Codex',
+      'command': 'codex-acp',
+      'discoveryCommand': 'codex',
+      'managedAdapter': true,
+      'status': 'unchecked',
+    });
+
+    expect(agent.discoveryCommand, 'codex');
+    expect(agent.managedAdapter, isTrue);
+  });
+
+  test('local Agent requests use the selected ACP model', () {
     final model = selectCodexRequestModel(
-      status: const CodexStatus(
-        connected: true,
-        ready: true,
-        runtime: 'local',
-        localAuthMode: CodexLocalAuthMode.api,
-      ),
+      status: const CodexStatus(connected: true, ready: true, runtime: 'local'),
       overrideModel: null,
       activeModel: 'input-selected',
       scopedModel: 'api-scoped',
-      configuredApiModel: 'api-current',
       activeModelSourceMatches: true,
     );
 
     expect(model, 'input-selected');
   });
 
-  test('local API requests fall back to the configured model', () {
+  test('local Agent requests do not read a separate Codex API model', () {
     final model = selectCodexRequestModel(
-      status: const CodexStatus(
-        connected: true,
-        ready: true,
-        runtime: 'local',
-        localAuthMode: CodexLocalAuthMode.api,
-      ),
+      status: const CodexStatus(connected: true, ready: true, runtime: 'local'),
       overrideModel: null,
       activeModel: null,
       scopedModel: null,
-      configuredApiModel: 'api-current',
       activeModelSourceMatches: true,
     );
 
-    expect(model, 'api-current');
+    expect(model, isNull);
   });
 
   test('model load results are rejected after source changes', () {

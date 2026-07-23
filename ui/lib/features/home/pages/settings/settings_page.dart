@@ -339,10 +339,18 @@ class _SettingsPageState extends State<SettingsPage> {
             },
           ),
           _SettingItem(
+            icon: Icons.hub_outlined,
+            title: context.trLegacy('Agent 模式'),
+            subtitle: context.trLegacy('管理 ACP Agent、可用状态与统一模型绑定'),
+            onTap: () {
+              GoRouterManager.push('/home/agent_mode_setting');
+            },
+          ),
+          _SettingItem(
             icon: Icons.terminal_rounded,
             iconSvg: 'assets/home/chat/codex.svg',
-            title: 'Codex',
-            subtitle: context.trLegacy('本地终端环境与远程 PC Bridge'),
+            title: context.trLegacy('远程 PC Bridge'),
+            subtitle: context.trLegacy('仅配置远程 Codex app-server 连接'),
             onTap: () {
               GoRouterManager.push('/home/codex_setting');
             },

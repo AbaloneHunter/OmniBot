@@ -7,6 +7,49 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CodexAppServerProtocolPayloadTest {
+    @Test
+    fun managedAcpCatalogIncludesSupportedAgentsWithoutGemini() {
+        assertEquals(
+            listOf("Codex", "Claude Code", "OpenCode"),
+            AcpAgentProfileStore.OFFICIAL_AGENTS.map { it.name }
+        )
+        assertTrue(AcpAgentProfileStore.OFFICIAL_AGENTS.all { it.builtIn })
+        val codex = AcpAgentProfileStore.OFFICIAL_AGENTS.first()
+        assertEquals(
+            "codex",
+            AcpAgentProfileStore.officialRuntime(codex)?.discoveryCommand
+        )
+        assertEquals(
+            "@agentclientprotocol/codex-acp@1.1.7",
+            AcpAgentProfileStore.officialRuntime(codex)?.managedAdapterPackage
+        )
+    }
+
+    @Test
+    fun acpStreamReadFailureIsSuppressedWhileConnectionIsClosing() {
+        assertTrue(
+            shouldSuppressAcpStreamReadFailure(
+                closing = true,
+                currentProcess = true,
+                processAlive = true
+            )
+        )
+        assertTrue(
+            shouldSuppressAcpStreamReadFailure(
+                closing = false,
+                currentProcess = false,
+                processAlive = true
+            )
+        )
+        assertFalse(
+            shouldSuppressAcpStreamReadFailure(
+                closing = false,
+                currentProcess = true,
+                processAlive = true
+            )
+        )
+    }
+
 
     @Test
     fun sanitizeCodexAbsolutePathKeepsLastCleanAbsolutePath() {
@@ -317,24 +360,8 @@ class CodexAppServerProtocolPayloadTest {
     }
 
     @Test
-    fun buildChatGptCodexConfigUsesBuiltInOpenAiProvider() {
+    fun buildUnifiedProviderCodexConfigUsesDedicatedEnvironmentKey() {
         val config = buildCodexConfigToml(
-            authMode = CodexLocalAuthMode.CHATGPT,
-            baseUrl = "",
-            model = "gpt-5.5"
-        )
-
-        assertTrue(config.contains("model_provider = \"openai\""))
-        assertTrue(config.contains("model = \"gpt-5.5\""))
-        assertTrue(config.contains("cli_auth_credentials_store = \"file\""))
-        assertFalse(config.contains("[model_providers.omnimind]"))
-        assertFalse(config.contains("OMNIBOT_CODEX_API_KEY"))
-    }
-
-    @Test
-    fun buildCustomApiCodexConfigUsesDedicatedEnvironmentKey() {
-        val config = buildCodexConfigToml(
-            authMode = CodexLocalAuthMode.API,
             baseUrl = "https://example.com/v1",
             model = "custom-codex"
         )
@@ -344,204 +371,5 @@ class CodexAppServerProtocolPayloadTest {
         assertTrue(config.contains("base_url = \"https://example.com/v1\""))
         assertTrue(config.contains("env_key = \"OMNIBOT_CODEX_API_KEY\""))
         assertTrue(config.contains("requires_openai_auth = false"))
-    }
-
-    @Test
-    fun buildLocalCodexEnvironmentOnlyExposesCustomApiKeyInApiMode() {
-        assertEquals(
-            mapOf("OMNIBOT_CODEX_API_KEY" to "secret"),
-            buildCodexLocalEnvironment(
-                authMode = CodexLocalAuthMode.API,
-                apiKey = " secret "
-            )
-        )
-        assertTrue(
-            buildCodexLocalEnvironment(
-                authMode = CodexLocalAuthMode.CHATGPT,
-                apiKey = "secret"
-            ).isEmpty()
-        )
-    }
-
-    @Test
-    fun localApiConfigMustBeCompleteBeforeStartingCodex() {
-        val error = runCatching {
-            requireLocalCodexConfig(
-                CodexLocalConfig(
-                    authMode = CodexLocalAuthMode.API,
-                    baseUrl = "https://example.com/v1",
-                    apiModel = "",
-                    apiKey = "secret"
-                )
-            )
-        }.exceptionOrNull()
-
-        assertTrue(error is IllegalArgumentException)
-        assertTrue(error?.message.orEmpty().contains("model"))
-        requireLocalCodexConfig(
-            CodexLocalConfig(
-                authMode = CodexLocalAuthMode.API,
-                baseUrl = "https://example.com/v1",
-                apiModel = "custom-codex",
-                apiKey = "secret"
-            )
-        )
-    }
-
-    @Test
-    fun localApiModelCatalogUsesStoredCredentialsWhenRequestHasNoOverrides() {
-        val source = resolveLocalApiModelSource(
-            args = emptyMap(),
-            storedConfig = CodexLocalConfig(
-                authMode = CodexLocalAuthMode.API,
-                baseUrl = " https://stored.example/v1 ",
-                apiModel = "custom-codex",
-                apiKey = " stored-secret "
-            )
-        )
-
-        assertEquals("https://stored.example/v1", source.baseUrl)
-        assertEquals("stored-secret", source.apiKey)
-    }
-
-    @Test
-    fun localApiModelCatalogPrefersExplicitSettingsCredentials() {
-        val source = resolveLocalApiModelSource(
-            args = mapOf(
-                "baseUrl" to " https://edited.example/v1 ",
-                "apiKey" to " edited-secret "
-            ),
-            storedConfig = CodexLocalConfig(
-                authMode = CodexLocalAuthMode.API,
-                baseUrl = "https://stored.example/v1",
-                apiModel = "custom-codex",
-                apiKey = "stored-secret"
-            )
-        )
-
-        assertEquals("https://edited.example/v1", source.baseUrl)
-        assertEquals("edited-secret", source.apiKey)
-    }
-
-    @Test
-    fun storedLocalModelOverridesMissingAppServerRunConfig() {
-        val merged = mergeStoredLocalRunConfig(
-            response = mapOf("config" to emptyMap<String, Any?>()),
-            localConfig = CodexLocalConfig(
-                authMode = CodexLocalAuthMode.API,
-                baseUrl = "https://example.com/v1",
-                apiModel = "custom-codex",
-                apiKey = "secret"
-            )
-        )
-
-        assertEquals("custom-codex", merged["model"])
-        assertEquals("xhigh", merged["modelReasoningEffort"])
-    }
-
-    @Test
-    fun migrateLegacyCodexConfigRecognizesChatGptTokensWithoutConfigToml() {
-        val config = migrateLegacyCodexLocalConfig(
-            configToml = "",
-            authJson = """
-                {
-                  "OPENAI_API_KEY": null,
-                  "tokens": {
-                    "access_token": "access-token",
-                    "refresh_token": "refresh-token"
-                  }
-                }
-            """.trimIndent()
-        )
-
-        assertEquals(CodexLocalAuthMode.CHATGPT, config.authMode)
-        assertEquals("", config.apiKey)
-    }
-
-    @Test
-    fun migrateLegacyCodexConfigKeepsCustomApiProviderAndKey() {
-        val legacyConfigToml = """
-                model_provider = "omnimind"
-                model = " custom-model "
-
-                [model_providers.omnimind]
-                base_url = " https://example.com/v1 "
-            """.trimIndent()
-        val config = migrateLegacyCodexLocalConfig(
-            configToml = legacyConfigToml,
-            authJson = """
-                {
-                  "OPENAI_API_KEY": " custom-key ",
-                  "tokens": {"access_token": "stale-chatgpt-token"}
-                }
-            """.trimIndent()
-        )
-
-        assertEquals(CodexLocalAuthMode.API, config.authMode)
-        assertEquals("https://example.com/v1", config.baseUrl)
-        assertEquals("custom-model", config.apiModel)
-        assertEquals("custom-key", config.apiKey)
-        assertTrue(shouldRewriteMigratedCustomApiConfig(legacyConfigToml, config))
-        assertFalse(
-            shouldRewriteMigratedCustomApiConfig(
-                buildCodexConfigToml(
-                    authMode = config.authMode,
-                    baseUrl = config.baseUrl,
-                    model = config.apiModel
-                ),
-                config
-            )
-        )
-    }
-
-    @Test
-    fun migrateLegacyCodexConfigIgnoresUnusedProviderBaseUrl() {
-        val config = migrateLegacyCodexLocalConfig(
-            configToml = """
-                model_provider = "openai"
-                model = "gpt-5.5-codex"
-
-                [model_providers.omnimind]
-                base_url = "https://unused.example.com/v1"
-            """.trimIndent(),
-            authJson = """
-                {"tokens":{"access_token":"chatgpt-token"}}
-            """.trimIndent()
-        )
-
-        assertEquals(CodexLocalAuthMode.CHATGPT, config.authMode)
-        assertEquals("", config.baseUrl)
-        assertEquals("gpt-5.5-codex", config.officialModel)
-    }
-
-    @Test
-    fun removeLegacyOpenAiApiKeyPreservesChatGptTokens() {
-        val sanitized = removeLegacyOpenAiApiKey(
-            """
-                {
-                  "OPENAI_API_KEY": "legacy-key",
-                  "tokens": {
-                    "access_token": "access-token",
-                    "refresh_token": "refresh-token"
-                  },
-                  "last_refresh": "2026-07-10T00:00:00Z"
-                }
-            """.trimIndent()
-        )
-
-        assertTrue(sanitized != null)
-        assertFalse(sanitized!!.contains("OPENAI_API_KEY"))
-        assertTrue(sanitized.contains("access-token"))
-        assertTrue(sanitized.contains("refresh-token"))
-        assertTrue(sanitized.contains("last_refresh"))
-    }
-
-    @Test
-    fun removeLegacyOpenAiApiKeySkipsAuthWithoutApiKey() {
-        assertNull(
-            removeLegacyOpenAiApiKey(
-                """{"tokens":{"access_token":"access-token"}}"""
-            )
-        )
     }
 }

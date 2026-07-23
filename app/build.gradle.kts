@@ -213,6 +213,7 @@ tasks.named("preBuild").configure {
     dependsOn(syncWebChatBundle)
 }
 dependencies {
+    implementation(libs.agent.client.protocol)
     implementation(project(":flutter"))
     implementation(project(":uikit"))
     implementation(project(":baselib"))

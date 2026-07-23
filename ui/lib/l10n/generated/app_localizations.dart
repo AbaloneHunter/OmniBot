@@ -2507,8 +2507,20 @@ abstract class AppLocalizations {
   /// No description provided for @alpineCodex.
   ///
   /// In zh, this message translates to:
-  /// **'OpenAI Codex CLI 与 app-server 桥接'**
+  /// **'OpenAI Codex CLI（供 ACP Agent 使用）'**
   String get alpineCodex;
+
+  /// No description provided for @alpineClaudeCode.
+  ///
+  /// In zh, this message translates to:
+  /// **'Anthropic Claude Code CLI（供 ACP Agent 使用）'**
+  String get alpineClaudeCode;
+
+  /// No description provided for @alpineOpenCode.
+  ///
+  /// In zh, this message translates to:
+  /// **'OpenCode CLI（内置 ACP 支持）'**
+  String get alpineOpenCode;
 
   /// No description provided for @alpineSshClient.
   ///

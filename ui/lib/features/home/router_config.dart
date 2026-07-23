@@ -7,6 +7,7 @@ import 'package:ui/features/home/pages/alarm_setting/alarm_setting_page.dart';
 import 'package:ui/features/home/pages/authorize_setting/authorize_setting_page.dart';
 import 'package:ui/features/home/pages/codex/codex_setting_page.dart';
 import 'package:ui/features/home/pages/codex/codex_sessions_page.dart';
+import 'package:ui/features/home/pages/codex/agent_mode_setting_page.dart';
 import 'package:ui/features/home/pages/chat_history/chat_history_page.dart';
 import 'package:ui/features/home/pages/permission_guide/permission_guide_detail_page.dart';
 import 'package:ui/features/home/pages/permission_guide/permission_guide_page.dart';
@@ -160,6 +161,15 @@ List<GoRoute> homeRoutes = [
       key: state.pageKey,
       name: 'home/codex_sessions',
       child: const CodexSessionsPage(),
+    ),
+  ),
+  GoRoute(
+    path: '/home/agent_mode_setting',
+    name: 'home/agent_mode_setting',
+    pageBuilder: (context, state) => GoRouterManager.buildActivitySlidePage(
+      key: state.pageKey,
+      name: 'home/agent_mode_setting',
+      child: const AgentModeSettingPage(),
     ),
   ),
   GoRoute(

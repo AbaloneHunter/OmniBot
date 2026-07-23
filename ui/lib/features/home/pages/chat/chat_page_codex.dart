@@ -95,7 +95,12 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
         GoRouterManager.push('/home/codex_setting');
         return;
       }
-      GoRouterManager.push('/home/termux_setting?focus=codex');
+      _showSnackBar(
+        LegacyTextLocalizer.isEnglish
+            ? 'The selected ACP Agent is unavailable'
+            : '所选 ACP Agent 当前不可用',
+      );
+      GoRouterManager.push('/home/agent_mode_setting');
       return;
     }
 
@@ -135,9 +140,9 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
     if (!_codexStatus.remoteEnabled) {
       return;
     }
-    CodexLocalConfig config;
+    CodexRemoteBridgeConfig config;
     try {
-      config = await CodexAppServerService.readLocalConfig();
+      config = await CodexAppServerService.readRemoteBridgeConfig();
     } catch (error) {
       showToast(
         LegacyTextLocalizer.isEnglish
@@ -171,10 +176,7 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
       return;
     }
     try {
-      await CodexAppServerService.writeLocalConfig(
-        baseUrl: config.baseUrl,
-        model: config.model,
-        apiKey: config.apiKey,
+      await CodexAppServerService.writeRemoteBridgeConfig(
         remoteEnabled: true,
         remoteBridgeUrl: config.remoteBridgeUrl,
         remoteBridgeToken: config.remoteBridgeToken,
@@ -302,6 +304,9 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
     if (!mounted || !status.connected) {
       return;
     }
+    if (status.runtime != 'remote' && !status.remoteEnabled) {
+      await _loadCodexAgentCatalog();
+    }
     final sourceKey = codexModelSourceKey(status);
     if ((!force &&
             _loadedCodexModelSourceKey == sourceKey &&
@@ -313,6 +318,32 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
       return;
     }
     await _loadCodexModelOptions(force: true);
+  }
+
+  Future<void> _loadCodexAgentCatalog({bool force = false}) async {
+    if (_isCodexAgentCatalogLoading ||
+        (!force && _codexAgentCatalog?.agents.isNotEmpty == true)) {
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _isCodexAgentCatalogLoading = true;
+    });
+    try {
+      final catalog = await CodexAppServerService.listAgents();
+      if (!mounted) return;
+      setState(() {
+        _codexAgentCatalog = catalog;
+      });
+    } catch (error) {
+      debugPrint('Load ACP agent catalog failed: $error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCodexAgentCatalogLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -495,6 +526,46 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
     if (clearComposer) {
       _messageController.clear();
       _hideSlashCommandPanel();
+    }
+  }
+
+  @override
+  Future<void> _selectCodexAgent(String agentId) async {
+    final normalized = agentId.trim();
+    if (normalized.isEmpty ||
+        normalized ==
+            (_codexStatus.activeAgentId ??
+                _codexAgentCatalog?.selectedAgentId)) {
+      return;
+    }
+    try {
+      final catalog = await CodexAppServerService.selectAgent(normalized);
+      var status = await CodexAppServerService.status();
+      if (status.ready && !status.connected) {
+        status = await CodexAppServerService.connect();
+      }
+      if (!mounted) return;
+      setState(() {
+        _codexAgentCatalog = catalog;
+        _codexStatus = status;
+        _activeCodexThreadId = null;
+        _activeCodexTurnId = null;
+        _activeCodexModelId = null;
+        _codexModelOptions = const <String>[];
+        _loadedCodexModelSourceKey = null;
+        _loadingCodexModelSourceKey = null;
+        _codexModelListError = null;
+        _codexModelListRequestId++;
+      });
+      await _loadCodexModelOptions(force: true);
+    } catch (error) {
+      if (!mounted) return;
+      showToast(
+        LegacyTextLocalizer.isEnglish
+            ? 'Failed to switch ACP agent: $error'
+            : '切换 ACP Agent 失败：$error',
+        type: ToastType.error,
+      );
     }
   }
 
@@ -893,6 +964,9 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
     // do not show up while pwd/ls/cat run, the events are being dropped
     // upstream (codex app-server -> codex-bridge -> Kotlin -> EventChannel).
     debugPrint('[Codex/E] $diagnosticMethod');
+    if (diagnosticMethod == 'acp/configOptions/updated') {
+      unawaited(_loadCodexModelOptions(force: true));
+    }
     final totalEvents = _codexEventDiagnosticCounter.values.fold<int>(
       0,
       (sum, count) => sum + count,
@@ -1637,6 +1711,9 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
   }
 
   Future<void> _showCodexAccountStatus() async {
+    if (_codexStatus.runtime != 'remote' && !_codexStatus.remoteEnabled) {
+      return;
+    }
     try {
       final account = await CodexAppServerService.readAccount();
       final accountMap = account['account'];
@@ -1721,19 +1798,11 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
       _kCodexModelPreferenceKey,
       conversationId: _currentConversationIdByMode[ChatPageMode.codex],
     );
-    final localApiMode =
-        status.runtime != 'remote' &&
-        !status.remoteEnabled &&
-        status.localAuthMode == CodexLocalAuthMode.api;
-    final configuredApiModel = localApiMode
-        ? (await _readCodexRunSettingsFromServerConfig()).modelId
-        : null;
     return selectCodexRequestModel(
       status: status,
       overrideModel: overrideModel,
       activeModel: _activeCodexModelId,
       scopedModel: scopedModel,
-      configuredApiModel: configuredApiModel,
       activeModelSourceMatches: _loadedCodexModelSourceKey == sourceKey,
     );
   }

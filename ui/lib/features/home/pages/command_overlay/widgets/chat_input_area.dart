@@ -42,12 +42,26 @@ const String _kCodexPermissionFullAccessIconAsset =
 enum CodexPermissionMode { defaultMode, autoReview, fullAccess }
 
 typedef CodexRunSettingsChanged =
-    FutureOr<void> Function({String? modelId, String? reasoningEffort});
+    FutureOr<void> Function({
+      String? agentId,
+      String? modelId,
+      String? reasoningEffort,
+    });
+
+class CodexAgentOption {
+  const CodexAgentOption({required this.id, required this.name});
+
+  final String id;
+  final String name;
+}
 
 class CodexRunSettings {
   const CodexRunSettings({
     required this.modelId,
     required this.reasoningEffort,
+    this.agentId = '',
+    this.agentName = '',
+    this.agentOptions = const <CodexAgentOption>[],
     this.modelOptions = const <String>[],
     this.reasoningEffortOptions = const <String>[],
     this.isLoadingModels = false,
@@ -56,6 +70,9 @@ class CodexRunSettings {
 
   final String modelId;
   final String reasoningEffort;
+  final String agentId;
+  final String agentName;
+  final List<CodexAgentOption> agentOptions;
   final List<String> modelOptions;
   final List<String> reasoningEffortOptions;
   final bool isLoadingModels;

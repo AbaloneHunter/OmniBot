@@ -1340,6 +1340,28 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                           : null,
                       codexRunSettings: _activeMode == ChatPageMode.codex
                           ? CodexRunSettings(
+                              agentId:
+                                  _codexStatus.activeAgentId ??
+                                  _codexAgentCatalog?.selectedAgentId ??
+                                  '',
+                              agentName:
+                                  _codexStatus.activeAgentName ??
+                                  _codexAgentCatalog?.selectedAgent?.name ??
+                                  '',
+                              agentOptions: [
+                                for (final agent
+                                    in _codexAgentCatalog?.agents ??
+                                        const <AcpAgentProfile>[])
+                                  if (agent.enabled &&
+                                      (agent.status == 'online' ||
+                                          agent.id ==
+                                              _codexAgentCatalog
+                                                  ?.selectedAgentId))
+                                    CodexAgentOption(
+                                      id: agent.id,
+                                      name: agent.name,
+                                    ),
+                              ],
                               modelId: _activeCodexModelId ?? '',
                               reasoningEffort:
                                   _activeCodexReasoningEffort ?? 'xhigh',
@@ -1356,7 +1378,14 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                           : null,
                       onCodexRunSettingsChanged:
                           _activeMode == ChatPageMode.codex
-                          ? ({String? modelId, String? reasoningEffort}) {
+                          ? ({
+                              String? agentId,
+                              String? modelId,
+                              String? reasoningEffort,
+                            }) {
+                              if (agentId != null) {
+                                unawaited(_selectCodexAgent(agentId));
+                              }
                               if (modelId != null) {
                                 unawaited(
                                   _selectCodexModel(

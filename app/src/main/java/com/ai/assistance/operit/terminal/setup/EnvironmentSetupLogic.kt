@@ -19,6 +19,8 @@ object EnvironmentSetupLogic {
         PackageDefinition("uv", "uv --version", "dev"),
         PackageDefinition("pip", "pip3 --version", "dev"),
         PackageDefinition("codex", "codex --version", "ai"),
+        PackageDefinition("claude_code", "claude --version", "ai"),
+        PackageDefinition("opencode", "opencode --version", "ai"),
         PackageDefinition("ssh_client", "ssh -V 2>&1", "ssh"),
         PackageDefinition("sshpass", "sshpass -V 2>&1", "ssh"),
         PackageDefinition("openssh_server", "sshd -V 2>&1", "ssh")
@@ -44,6 +46,8 @@ object EnvironmentSetupLogic {
         "npm" to listOf("npm"),
         "git" to listOf("git"),
         "codex" to listOf("nodejs", "npm", "git", "bash", "curl", "ripgrep"),
+        "claude_code" to listOf("nodejs", "npm", "git", "bash", "curl", "ripgrep"),
+        "opencode" to listOf("nodejs", "npm", "git", "bash", "curl", "ripgrep"),
         "python" to listOf("python3"),
         "pip" to listOf("py3-pip"),
         "uv" to listOf("python3", "py3-pip"),
@@ -62,6 +66,8 @@ object EnvironmentSetupLogic {
         "npm" to listOf("nodejs"),
         "git" to listOf("git"),
         "codex" to listOf("nodejs", "git", "bash", "curl", "ripgrep"),
+        "claude_code" to listOf("nodejs", "git", "bash", "curl", "ripgrep"),
+        "opencode" to listOf("nodejs", "git", "bash", "curl", "ripgrep"),
         "python" to listOf("python3"),
         "pip" to listOf("python3-pip"),
         "uv" to listOf("python3", "python3-pip"),
@@ -108,7 +114,7 @@ object EnvironmentSetupLogic {
         }
         if (
             workingMode == WorkingMode.UBUNTU &&
-            requested.any { it == "nodejs" || it == "npm" || it == "codex" }
+            requested.any { it == "nodejs" || it == "npm" || it in NPM_AGENT_PACKAGE_IDS }
         ) {
             commands += UbuntuRepositoryManager.buildNodeRepositorySetupCommand()
         }
@@ -133,12 +139,22 @@ object EnvironmentSetupLogic {
                 "if ! apk add --no-cache uv; then python3 -m pip install --break-system-packages --upgrade uv; fi"
             }
         }
-        if ("codex" in requested) {
+        if (requested.any { it in NPM_AGENT_PACKAGE_IDS }) {
             commands += "mkdir -p /root/.npm-global/bin"
             commands += "npm config set prefix /root/.npm-global"
             commands += "export PATH=\"/root/.npm-global/bin:${'$'}PATH\""
-            commands += "npm install -g @openai/codex@latest"
+        }
+        if ("codex" in requested) {
+            commands += "npm install -g --no-audit --no-fund @openai/codex@latest"
             commands += "ln -sf /root/.npm-global/bin/codex /usr/local/bin/codex || true"
+        }
+        if ("claude_code" in requested) {
+            commands += "npm install -g --no-audit --no-fund @anthropic-ai/claude-code@latest"
+            commands += "ln -sf /root/.npm-global/bin/claude /usr/local/bin/claude || true"
+        }
+        if ("opencode" in requested) {
+            commands += "npm install -g --no-audit --no-fund opencode-ai@latest"
+            commands += "ln -sf /root/.npm-global/bin/opencode /usr/local/bin/opencode || true"
         }
         if ("openssh_server" in requested) {
             commands += "mkdir -p /var/run/sshd /etc/ssh"
@@ -245,8 +261,18 @@ object EnvironmentSetupLogic {
                 )
                 "codex" -> buildProbeSnippet(
                     packageId = packageId,
-                    commandCheck = "PATH=\"/root/.npm-global/bin:${'$'}PATH\"; export PATH; command -v codex >/dev/null 2>&1 && codex app-server --help >/dev/null 2>&1",
+                    commandCheck = "PATH=\"/root/.npm-global/bin:${'$'}PATH\"; export PATH; command -v codex >/dev/null 2>&1 && codex --version >/dev/null 2>&1",
                     versionCommand = "codex --version"
+                )
+                "claude_code" -> buildProbeSnippet(
+                    packageId = packageId,
+                    commandCheck = "PATH=\"/root/.npm-global/bin:${'$'}PATH\"; export PATH; command -v claude >/dev/null 2>&1 && claude --version >/dev/null 2>&1",
+                    versionCommand = "claude --version"
+                )
+                "opencode" -> buildProbeSnippet(
+                    packageId = packageId,
+                    commandCheck = "PATH=\"/root/.npm-global/bin:${'$'}PATH\"; export PATH; command -v opencode >/dev/null 2>&1 && opencode --version >/dev/null 2>&1",
+                    versionCommand = "opencode --version"
                 )
                 "ssh_client" -> buildProbeSnippet(
                     packageId = packageId,
@@ -299,7 +325,9 @@ object EnvironmentSetupLogic {
             "python" -> "command -v python3 && python3 -c 'import os; os.getcwd()'"
             "pip" -> "command -v pip3 && pip3 --version"
             "uv" -> "command -v uv && uv --version"
-            "codex" -> "PATH=\"/root/.npm-global/bin:${'$'}PATH\"; export PATH; command -v codex && codex app-server --help"
+            "codex" -> "PATH=\"/root/.npm-global/bin:${'$'}PATH\"; export PATH; command -v codex && codex --version"
+            "claude_code" -> "PATH=\"/root/.npm-global/bin:${'$'}PATH\"; export PATH; command -v claude && claude --version"
+            "opencode" -> "PATH=\"/root/.npm-global/bin:${'$'}PATH\"; export PATH; command -v opencode && opencode --version"
             "ripgrep" -> "command -v rg"
             "tmux" -> "command -v tmux"
             "xz" -> "command -v xz"
@@ -324,6 +352,7 @@ object EnvironmentSetupLogic {
             "ssh" -> "ssh_client"
             "openssh_client" -> "ssh_client"
             "ssh_server" -> "openssh_server"
+            "claude", "claude-code" -> "claude_code"
             else -> packageId.trim()
         }
     }
@@ -349,16 +378,20 @@ object EnvironmentSetupLogic {
             checks.putIfAbsent(label, command)
         }
 
-        if (requested.any { it == "nodejs" || it == "npm" || it == "codex" }) {
+        if (
+            requested.any {
+                it == "nodejs" || it == "npm" || it in NPM_AGENT_PACKAGE_IDS
+            }
+        ) {
             add(
                 "Node.js 22+",
                 "node -e 'process.cwd(); if (Number(process.versions.node.split(\".\")[0]) < 22) process.exit(1)' >/dev/null 2>&1"
             )
         }
-        if (requested.any { it == "npm" || it == "codex" }) {
+        if (requested.any { it == "npm" || it in NPM_AGENT_PACKAGE_IDS }) {
             add("npm", "npm --version >/dev/null 2>&1")
         }
-        if ("git" in requested || "codex" in requested) {
+        if ("git" in requested || requested.any { it in NPM_AGENT_PACKAGE_IDS }) {
             add("Git", "git --version >/dev/null 2>&1")
         }
         if (requested.any { it == "python" || it == "pip" || it == "uv" }) {
@@ -373,7 +406,19 @@ object EnvironmentSetupLogic {
         if ("codex" in requested) {
             add(
                 "Codex CLI",
-                "PATH=\"/root/.npm-global/bin:${'$'}PATH\"; export PATH; codex app-server --help >/dev/null 2>&1"
+                "PATH=\"/root/.npm-global/bin:${'$'}PATH\"; export PATH; codex --version >/dev/null 2>&1"
+            )
+        }
+        if ("claude_code" in requested) {
+            add(
+                "Claude Code CLI",
+                "PATH=\"/root/.npm-global/bin:${'$'}PATH\"; export PATH; claude --version >/dev/null 2>&1"
+            )
+        }
+        if ("opencode" in requested) {
+            add(
+                "OpenCode CLI",
+                "PATH=\"/root/.npm-global/bin:${'$'}PATH\"; export PATH; opencode --version >/dev/null 2>&1"
             )
         }
         if ("ssh_client" in requested) {
@@ -416,4 +461,6 @@ object EnvironmentSetupLogic {
     private fun buildMissingProbeSnippet(packageId: String): String {
         return "printf '__OMNI_ENV__\\t%s\\tMISSING\\t\\n' '$packageId'"
     }
+
+    private val NPM_AGENT_PACKAGE_IDS = setOf("codex", "claude_code", "opencode")
 }

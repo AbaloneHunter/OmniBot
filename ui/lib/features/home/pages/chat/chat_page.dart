@@ -392,6 +392,8 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   String _remoteCodexActivityContentSignature = '';
   int? _remoteCodexLastContentChangeAtMs;
   CodexStatus _codexStatus = CodexStatus.disconnected;
+  AcpAgentCatalog? _codexAgentCatalog;
+  bool _isCodexAgentCatalogLoading = false;
   bool _isCodexStatusLoading = false;
   int? _activeCodexRemoteRuntimeId;
   String? _activeCodexThreadId;
@@ -1646,6 +1648,8 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   Future<void> _loadCodexCollaborationModes({bool force = false});
 
   Future<void> _selectCodexModel(String modelId, {bool clearComposer = true});
+
+  Future<void> _selectCodexAgent(String agentId);
 
   Future<void> _selectCodexReasoningEffort(String effort);
 

@@ -178,6 +178,7 @@ void main() {
   testWidgets('codex run settings selector selects model and effort', (
     tester,
   ) async {
+    String? selectedAgent;
     String? selectedModel;
     String? selectedEffort;
     await tester.pumpWidget(
@@ -185,12 +186,19 @@ void main() {
         contextUsageRatio: null,
         useLargeComposerStyle: true,
         codexRunSettings: const CodexRunSettings(
+          agentId: 'codex-acp',
+          agentName: 'Codex',
+          agentOptions: <CodexAgentOption>[
+            CodexAgentOption(id: 'codex-acp', name: 'Codex'),
+            CodexAgentOption(id: 'custom-agent', name: 'Custom Agent'),
+          ],
           modelId: 'gpt-5-codex',
           reasoningEffort: 'high',
           modelOptions: <String>['gpt-5-codex', 'gpt-5.1-codex'],
           reasoningEffortOptions: <String>['low', 'high', 'xhigh'],
         ),
-        onCodexRunSettingsChanged: ({modelId, reasoningEffort}) {
+        onCodexRunSettingsChanged: ({agentId, modelId, reasoningEffort}) {
+          selectedAgent = agentId;
           selectedModel = modelId;
           selectedEffort = reasoningEffort;
         },
@@ -211,7 +219,21 @@ void main() {
       find.byKey(const ValueKey('conversation-model-selector-search')),
       findsNothing,
     );
-    expect(find.text('Codex'), findsNothing);
+    expect(find.text('Codex'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey(
+          'chat-input-codex-run-settings-option-agent-custom-agent',
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(selectedAgent, 'custom-agent');
+
+    await tester.tap(settingsButton);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     await tester.tap(
       find.byKey(
@@ -272,7 +294,8 @@ void main() {
                     );
                   });
                 },
-                onCodexRunSettingsChanged: ({modelId, reasoningEffort}) {},
+                onCodexRunSettingsChanged:
+                    ({agentId, modelId, reasoningEffort}) {},
               );
             },
           ),
@@ -447,7 +470,7 @@ void main() {
           modelOptions: <String>['gpt-5-codex', 'gpt-5.1-codex'],
           reasoningEffortOptions: <String>['low', 'high', 'xhigh'],
         ),
-        onCodexRunSettingsChanged: ({modelId, reasoningEffort}) {},
+        onCodexRunSettingsChanged: ({agentId, modelId, reasoningEffort}) {},
         codexPermissionMode: CodexPermissionMode.fullAccess,
         onCodexPermissionModeChanged: (_) {},
       ),
