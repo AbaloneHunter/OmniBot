@@ -158,13 +158,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'When enabled, Enter creates a new line; when disabled, Enter sends the message directly';
 
   @override
-  String get settingsAutoBackTitle => 'Return to Chat After Tasks';
-
-  @override
-  String get settingsAutoBackSubtitle =>
-      'When disabled, the task result page stays open after completion';
-
-  @override
   String get settingsHabitualHandTitle => 'Dominant Hand';
 
   @override
@@ -185,14 +178,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsSaveFailed => 'Failed to save settings';
-
-  @override
-  String get settingsAutoBackEnabledToast =>
-      'The app will return to chat after tasks finish';
-
-  @override
-  String get settingsAutoBackDisabledToast =>
-      'The app will stay on the current page after tasks finish';
 
   @override
   String settingsMcpEnabledToast(Object endpoint) {

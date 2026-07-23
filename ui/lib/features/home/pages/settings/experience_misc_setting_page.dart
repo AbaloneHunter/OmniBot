@@ -28,7 +28,6 @@ class _ExperienceMiscSettingPageState
     extends ConsumerState<ExperienceMiscSettingPage> {
   bool _hideFromRecentsEnabled = false;
   bool _vibrationEnabled = true;
-  bool _autoBackToChatAfterTaskEnabled = true;
   bool _preventScreenSleepDuringTasksEnabled = true;
   bool _taskCompletionNotificationEnabled = true;
   bool _useIndependentChatSendButton = true;
@@ -37,12 +36,6 @@ class _ExperienceMiscSettingPageState
   @override
   void initState() {
     super.initState();
-    _autoBackToChatAfterTaskEnabled =
-        StorageService.getBool(
-          StorageService.kAutoBackToChatAfterTaskKey,
-          defaultValue: true,
-        ) ??
-        true;
     _preventScreenSleepDuringTasksEnabled =
         StorageService.getBool(
           StorageService.kPreventScreenSleepDuringTasksKey,
@@ -62,7 +55,6 @@ class _ExperienceMiscSettingPageState
     _chatStartupBehavior = StorageService.getChatStartupBehavior();
     _loadHideFromRecentsState();
     _loadVibrationState();
-    _loadAutoBackToChatAfterTaskState();
     _loadRuntimeTaskState();
   }
 
@@ -92,18 +84,6 @@ class _ExperienceMiscSettingPageState
       });
     } catch (e) {
       debugPrint('Error loading vibration state: $e');
-    }
-  }
-
-  Future<void> _loadAutoBackToChatAfterTaskState() async {
-    try {
-      final enabled = await StorageService.isAutoBackToChatAfterTaskEnabled();
-      if (!mounted) return;
-      setState(() {
-        _autoBackToChatAfterTaskEnabled = enabled;
-      });
-    } catch (e) {
-      debugPrint('Error loading auto back to chat setting: $e');
     }
   }
 
@@ -149,29 +129,6 @@ class _ExperienceMiscSettingPageState
         _hideFromRecentsEnabled = !value;
       });
       showToast(context.l10n.settingsHideRecentsFailed, type: ToastType.error);
-    }
-  }
-
-  Future<void> _onAutoBackToChatAfterTaskChanged(bool value) async {
-    try {
-      await StorageService.setAutoBackToChatAfterTaskEnabled(value);
-      final synced =
-          await AssistsMessageService.setAutoBackToChatAfterTaskEnabled(value);
-      if (!synced) {
-        throw Exception('native_sync_failed');
-      }
-      if (!mounted) return;
-      setState(() {
-        _autoBackToChatAfterTaskEnabled = value;
-      });
-      showToast(
-        value
-            ? context.l10n.settingsAutoBackEnabledToast
-            : context.l10n.settingsAutoBackDisabledToast,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      showToast(context.l10n.settingsSaveFailed, type: ToastType.error);
     }
   }
 
@@ -321,16 +278,6 @@ class _ExperienceMiscSettingPageState
             trailing: _buildSwitchTrailing(
               value: _useIndependentChatSendButton,
               onToggle: _onIndependentChatSendButtonChanged,
-            ),
-          ),
-          _SettingItem(
-            icon: Icons.chat_outlined,
-            iconSvg: 'assets/home/auto_back_chat_setting_icon.svg',
-            title: context.l10n.settingsAutoBackTitle,
-            subtitle: context.l10n.settingsAutoBackSubtitle,
-            trailing: _buildSwitchTrailing(
-              value: _autoBackToChatAfterTaskEnabled,
-              onToggle: _onAutoBackToChatAfterTaskChanged,
             ),
           ),
           _SettingItem(

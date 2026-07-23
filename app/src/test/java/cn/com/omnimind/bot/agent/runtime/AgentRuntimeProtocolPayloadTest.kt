@@ -164,6 +164,37 @@ class AgentRuntimeProtocolPayloadTest {
     }
 
     @Test
+    fun localAcpPermissionBehaviorFollowsComposerPolicy() {
+        assertEquals(
+            AcpPermissionBehavior.ALLOW_WITHOUT_PROMPT,
+            resolveAcpPermissionBehavior(
+                mapOf(
+                    "approvalPolicy" to "never",
+                    "sandboxPolicy" to mapOf("type" to "dangerFullAccess")
+                )
+            )
+        )
+        assertEquals(
+            AcpPermissionBehavior.ASK_USER,
+            resolveAcpPermissionBehavior(
+                mapOf(
+                    "approvalPolicy" to "on-request",
+                    "approvalsReviewer" to "user"
+                )
+            )
+        )
+        assertEquals(
+            AcpPermissionBehavior.ASK_USER,
+            resolveAcpPermissionBehavior(
+                mapOf(
+                    "approvalPolicy" to "on-request",
+                    "approvalsReviewer" to "auto_review"
+                )
+            )
+        )
+    }
+
+    @Test
     fun reviewThreadSettingsKeepSelectedFullAccessPolicy() {
         val params = buildAgentThreadSettingsUpdateParams(
             args = mapOf(

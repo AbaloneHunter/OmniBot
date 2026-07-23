@@ -145,12 +145,6 @@ class AppLocalizationsZh extends AppLocalizations {
       '开启后，聊天页键盘回车为换行；关闭后，回车直接发送';
 
   @override
-  String get settingsAutoBackTitle => '任务完成后自动回聊天';
-
-  @override
-  String get settingsAutoBackSubtitle => '关闭后，任务结束将停留在当前完成页面';
-
-  @override
   String get settingsHabitualHandTitle => '惯用手';
 
   @override
@@ -170,12 +164,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsSaveFailed => '设置失败';
-
-  @override
-  String get settingsAutoBackEnabledToast => '任务完成后将自动返回聊天';
-
-  @override
-  String get settingsAutoBackDisabledToast => '任务完成后将停留在当前页面';
 
   @override
   String settingsMcpEnabledToast(Object endpoint) {

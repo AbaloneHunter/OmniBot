@@ -1148,20 +1148,6 @@ class AssistsMessageService {
     }
   }
 
-  /// 同步“任务完成后自动回聊天”设置到原生层
-  static Future<bool> setAutoBackToChatAfterTaskEnabled(bool enabled) async {
-    try {
-      final result = await assistCore.invokeMethod<String>(
-        'setAutoBackToChatAfterTaskEnabled',
-        {'enabled': enabled},
-      );
-      return result == 'SUCCESS';
-    } on PlatformException catch (e) {
-      print('同步自动回聊天设置失败: ${e.message}');
-      return false;
-    }
-  }
-
   static Future<bool> setPreventScreenSleepDuringTasksEnabled(
     bool enabled,
   ) async {

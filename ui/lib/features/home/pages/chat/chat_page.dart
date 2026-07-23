@@ -413,12 +413,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   String? _loadingAgentModelSourceKey;
   int _agentModelListRequestId = 0;
   List<String> _agentModelOptions = const <String>[];
-  List<String> _agentReasoningEffortOptions = const <String>[
-    'low',
-    'medium',
-    'high',
-    'xhigh',
-  ];
+  List<String> _agentReasoningEffortOptions = const <String>[];
   List<String> _agentCollaborationModes = const <String>[];
   AgentPermissionMode _agentPermissionMode = AgentPermissionMode.fullAccess;
   ChatBrowserSessionSnapshot? _liveBrowserSessionSnapshot;

@@ -368,18 +368,6 @@ abstract class AppLocalizations {
   /// **'开启后，聊天页键盘回车为换行；关闭后，回车直接发送'**
   String get settingsIndependentSendButtonSubtitle;
 
-  /// No description provided for @settingsAutoBackTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'任务完成后自动回聊天'**
-  String get settingsAutoBackTitle;
-
-  /// No description provided for @settingsAutoBackSubtitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'关闭后，任务结束将停留在当前完成页面'**
-  String get settingsAutoBackSubtitle;
-
   /// No description provided for @settingsHabitualHandTitle.
   ///
   /// In zh, this message translates to:
@@ -421,18 +409,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'设置失败'**
   String get settingsSaveFailed;
-
-  /// No description provided for @settingsAutoBackEnabledToast.
-  ///
-  /// In zh, this message translates to:
-  /// **'任务完成后将自动返回聊天'**
-  String get settingsAutoBackEnabledToast;
-
-  /// No description provided for @settingsAutoBackDisabledToast.
-  ///
-  /// In zh, this message translates to:
-  /// **'任务完成后将停留在当前页面'**
-  String get settingsAutoBackDisabledToast;
 
   /// No description provided for @settingsMcpEnabledToast.
   ///

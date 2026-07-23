@@ -2676,6 +2676,7 @@ class ChatInputWrapper extends StatelessWidget {
   final AgentRunSettingsChanged? onAgentRunSettingsChanged;
   final FutureOr<void> Function()? onAgentRunSettingsOpened;
   final AgentPermissionMode? agentPermissionMode;
+  final List<AgentPermissionMode> agentPermissionModes;
   final ValueChanged<AgentPermissionMode>? onAgentPermissionModeChanged;
   final bool useIndependentSendButton;
   final bool translucent;
@@ -2713,6 +2714,7 @@ class ChatInputWrapper extends StatelessWidget {
     this.onAgentRunSettingsChanged,
     this.onAgentRunSettingsOpened,
     this.agentPermissionMode,
+    this.agentPermissionModes = AgentPermissionMode.values,
     this.onAgentPermissionModeChanged,
     this.useIndependentSendButton = true,
     this.translucent = false,
@@ -2758,6 +2760,7 @@ class ChatInputWrapper extends StatelessWidget {
             onAgentRunSettingsChanged: onAgentRunSettingsChanged,
             onAgentRunSettingsOpened: onAgentRunSettingsOpened,
             agentPermissionMode: agentPermissionMode,
+            agentPermissionModes: agentPermissionModes,
             onAgentPermissionModeChanged: onAgentPermissionModeChanged,
             onInputHeightChanged: onInputHeightChanged,
             useIndependentSendButton: useIndependentSendButton,

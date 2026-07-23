@@ -121,6 +121,128 @@ void main() {
     expect(calls.first.arguments, {'limit': 100});
   });
 
+  test('ACP model extraction keeps config categories separate', () {
+    final response = <String, dynamic>{
+      'models': <Map<String, dynamic>>[
+        <String, dynamic>{'id': 'gpt-5.2-codex'},
+        <String, dynamic>{'id': 'claude-sonnet-4-5'},
+      ],
+      'configOptions': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'id': 'model',
+          'category': 'model',
+          'type': 'select',
+          'options': <Map<String, dynamic>>[
+            <String, dynamic>{'value': 'gpt-5.2-codex'},
+            <String, dynamic>{'value': 'claude-sonnet-4-5'},
+          ],
+        },
+        <String, dynamic>{
+          'id': 'mode',
+          'category': 'mode',
+          'type': 'select',
+          'options': <Map<String, dynamic>>[
+            <String, dynamic>{'value': 'read-only'},
+            <String, dynamic>{'value': 'agent'},
+            <String, dynamic>{'value': 'agent-full-access'},
+            <String, dynamic>{'value': 'default'},
+            <String, dynamic>{'value': 'plan'},
+            <String, dynamic>{'value': 'acceptEdits'},
+            <String, dynamic>{'value': 'dontAsk'},
+          ],
+        },
+        <String, dynamic>{
+          'id': 'reasoning_effort',
+          'category': 'thought_level',
+          'type': 'select',
+          'options': <Map<String, dynamic>>[
+            <String, dynamic>{'value': 'low'},
+            <String, dynamic>{'value': 'medium'},
+            <String, dynamic>{'value': 'high'},
+            <String, dynamic>{'value': 'xhigh'},
+            <String, dynamic>{'value': 'max'},
+          ],
+        },
+        <String, dynamic>{
+          'id': 'interactive',
+          'type': 'select',
+          'options': <Map<String, dynamic>>[
+            <String, dynamic>{'value': 'off'},
+            <String, dynamic>{'value': 'on'},
+          ],
+        },
+      ],
+    };
+
+    expect(extractAcpModelIds(response), <String>[
+      'gpt-5.2-codex',
+      'claude-sonnet-4-5',
+    ]);
+    expect(extractAcpReasoningEffortIds(response), <String>[
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+    ]);
+  });
+
+  test('ACP model extraction supports category-only config responses', () {
+    final response = <String, dynamic>{
+      'result': <String, dynamic>{
+        'config_options': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 'model',
+            'category': 'model',
+            'option_type': 'select',
+            'options': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'value': 'claude-opus-4-1',
+                'name': 'Claude Opus 4.1',
+              },
+            ],
+          },
+          <String, dynamic>{
+            'id': 'mode',
+            'category': 'mode',
+            'option_type': 'select',
+            'options': <Map<String, dynamic>>[
+              <String, dynamic>{'value': 'plan'},
+            ],
+          },
+        ],
+      },
+    };
+
+    expect(extractAcpModelIds(response), <String>['claude-opus-4-1']);
+  });
+
+  test('ACP model extraction rejects generic config option lists', () {
+    final response = <String, dynamic>{
+      'data': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'id': 'mode',
+          'category': 'mode',
+          'type': 'select',
+          'options': <Map<String, dynamic>>[
+            <String, dynamic>{'value': 'read-only'},
+            <String, dynamic>{'value': 'plan'},
+          ],
+        },
+        <String, dynamic>{
+          'id': 'interactive',
+          'type': 'select',
+          'options': <Map<String, dynamic>>[
+            <String, dynamic>{'value': 'off'},
+            <String, dynamic>{'value': 'on'},
+          ],
+        },
+      ],
+    };
+
+    expect(extractAcpModelIds(response), isEmpty);
+  });
+
   test(
     'reads and writes Agent-owned configuration without trimming content',
     () async {

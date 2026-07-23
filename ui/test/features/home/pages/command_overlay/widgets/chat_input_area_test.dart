@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/features/home/pages/command_overlay/widgets/chat_input_area.dart';
 import 'package:ui/widgets/glass_popup.dart';
 import 'package:ui/widgets/provider_vendor_icon.dart';
@@ -175,10 +177,51 @@ void main() {
     expect(selected, AgentPermissionMode.autoReview);
   });
 
-  testWidgets('agent run settings selector selects model and effort', (
+  testWidgets('local ACP permission selector hides unsupported auto review', (
     tester,
   ) async {
-    String? selectedAgent;
+    await tester.pumpWidget(
+      _buildTestApp(
+        contextUsageRatio: null,
+        useLargeComposerStyle: true,
+        agentPermissionMode: AgentPermissionMode.defaultMode,
+        agentPermissionModes: const <AgentPermissionMode>[
+          AgentPermissionMode.defaultMode,
+          AgentPermissionMode.fullAccess,
+        ],
+        onAgentPermissionModeChanged: (_) {},
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(
+      find.byKey(const ValueKey('chat-input-agent-permission-button')),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(
+        const ValueKey('chat-input-agent-permission-option-defaultMode'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('chat-input-agent-permission-option-fullAccess'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('chat-input-agent-permission-option-autoReview'),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('agent run settings selector omits agent switching', (
+    tester,
+  ) async {
     String? selectedModel;
     String? selectedEffort;
     await tester.pumpWidget(
@@ -186,19 +229,13 @@ void main() {
         contextUsageRatio: null,
         useLargeComposerStyle: true,
         agentRunSettings: const AgentRunSettings(
-          agentId: 'agent-acp',
-          agentName: 'Agent',
-          agentOptions: <AgentOption>[
-            AgentOption(id: 'agent-acp', name: 'Agent'),
-            AgentOption(id: 'custom-agent', name: 'Custom Agent'),
-          ],
+          agentName: 'Active Agent',
           modelId: 'gpt-5-agent',
           reasoningEffort: 'high',
           modelOptions: <String>['gpt-5-agent', 'gpt-5.1-agent'],
           reasoningEffortOptions: <String>['low', 'high', 'xhigh'],
         ),
-        onAgentRunSettingsChanged: ({agentId, modelId, reasoningEffort}) {
-          selectedAgent = agentId;
+        onAgentRunSettingsChanged: ({modelId, reasoningEffort}) {
           selectedModel = modelId;
           selectedEffort = reasoningEffort;
         },
@@ -210,6 +247,26 @@ void main() {
       const ValueKey('chat-input-agent-run-settings-button'),
     );
     expect(settingsButton, findsOneWidget);
+    expect(
+      find.descendant(
+        of: settingsButton,
+        matching: find.byKey(
+          const ValueKey('chat-input-agent-run-settings-package-icon'),
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: settingsButton,
+        matching: find.byType(RotationTransition),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: settingsButton, matching: find.text('gpt-5-agent')),
+      findsNothing,
+    );
 
     await tester.tap(settingsButton);
     await tester.pump();
@@ -219,22 +276,40 @@ void main() {
       find.byKey(const ValueKey('conversation-model-selector-search')),
       findsNothing,
     );
-    expect(find.text('Agent'), findsOneWidget);
-
-    await tester.tap(
+    expect(find.text('Agent 模式'), findsNothing);
+    expect(
       find.byKey(
         const ValueKey(
           'chat-input-agent-run-settings-option-agent-custom-agent',
         ),
       ),
+      findsNothing,
     );
-    await tester.pump(const Duration(milliseconds: 700));
-    expect(selectedAgent, 'custom-agent');
+    expect(
+      find.byKey(const ValueKey('chat-input-agent-run-settings-group-model')),
+      findsOneWidget,
+    );
+    expect(find.byIcon(LucideIcons.sparkles), findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey('chat-input-agent-run-settings-group-reasoning'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byIcon(LucideIcons.brain), findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey(
+          'chat-input-agent-run-settings-option-model-gpt-5.1-agent',
+        ),
+      ),
+      findsNothing,
+    );
 
-    await tester.tap(settingsButton);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-
+    await tester.tap(
+      find.byKey(const ValueKey('chat-input-agent-run-settings-group-model')),
+    );
+    await tester.pump(const Duration(milliseconds: 200));
     await tester.tap(
       find.byKey(
         const ValueKey(
@@ -251,6 +326,12 @@ void main() {
 
     await tester.tap(
       find.byKey(
+        const ValueKey('chat-input-agent-run-settings-group-reasoning'),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(
+      find.byKey(
         const ValueKey('chat-input-agent-run-settings-option-effort-xhigh'),
       ),
     );
@@ -258,46 +339,83 @@ void main() {
     expect(selectedEffort, 'xhigh');
   });
 
-  testWidgets('agent run settings waits for models before opening', (
+  testWidgets('agent run settings hides unsupported reasoning control', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildTestApp(
+        contextUsageRatio: null,
+        useLargeComposerStyle: true,
+        agentRunSettings: const AgentRunSettings(
+          modelId: 'model-without-effort',
+          reasoningEffort: '',
+          modelOptions: <String>['model-without-effort'],
+        ),
+        onAgentRunSettingsChanged: ({modelId, reasoningEffort}) {},
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(
+      find.byKey(const ValueKey('chat-input-agent-run-settings-button')),
+    );
+    await tester.pump();
+
+    expect(find.text('推理强度'), findsNothing);
+    expect(
+      find.byKey(
+        const ValueKey('chat-input-agent-run-settings-group-reasoning'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.byKey(
+        const ValueKey(
+          'chat-input-agent-run-settings-option-model-model-without-effort',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('chat-input-agent-run-settings-option-effort-xhigh'),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('agent run settings opens immediately while models refresh', (
     tester,
   ) async {
     final controller = TextEditingController();
     final focusNode = FocusNode();
+    final refreshCompleter = Completer<void>();
     addTearDown(controller.dispose);
     addTearDown(focusNode.dispose);
-    var settings = const AgentRunSettings(
-      modelId: '',
+    addTearDown(() {
+      if (!refreshCompleter.isCompleted) {
+        refreshCompleter.complete();
+      }
+    });
+    const settings = AgentRunSettings(
+      modelId: 'cached-agent',
       reasoningEffort: 'xhigh',
+      modelOptions: <String>['cached-agent'],
+      reasoningEffortOptions: <String>['high', 'xhigh'],
     );
-    late StateSetter rebuild;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: StatefulBuilder(
-            builder: (context, setState) {
-              rebuild = setState;
-              return ChatInputArea(
-                controller: controller,
-                focusNode: focusNode,
-                isProcessing: false,
-                onSendMessage: () {},
-                onCancelTask: () {},
-                useLargeComposerStyle: true,
-                agentRunSettings: settings,
-                onAgentRunSettingsOpened: () async {
-                  await Future<void>.delayed(const Duration(milliseconds: 10));
-                  rebuild(() {
-                    settings = const AgentRunSettings(
-                      modelId: 'custom-agent',
-                      reasoningEffort: 'xhigh',
-                      modelOptions: <String>['custom-agent'],
-                    );
-                  });
-                },
-                onAgentRunSettingsChanged:
-                    ({agentId, modelId, reasoningEffort}) {},
-              );
-            },
+          body: ChatInputArea(
+            controller: controller,
+            focusNode: focusNode,
+            isProcessing: false,
+            onSendMessage: () {},
+            onCancelTask: () {},
+            useLargeComposerStyle: true,
+            agentRunSettings: settings,
+            onAgentRunSettingsOpened: () => refreshCompleter.future,
+            onAgentRunSettingsChanged: ({modelId, reasoningEffort}) {},
           ),
         ),
       ),
@@ -309,26 +427,25 @@ void main() {
     );
     await tester.pump();
     expect(
-      find.byKey(
-        const ValueKey(
-          'chat-input-agent-run-settings-option-model-custom-agent',
-        ),
-      ),
-      findsNothing,
+      find.byKey(const ValueKey('chat-input-agent-run-settings-group-model')),
+      findsOneWidget,
     );
 
-    await tester.pump(const Duration(milliseconds: 20));
-    await tester.pump();
-
-    expect(find.text('未获取到可用模型'), findsNothing);
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(
+      find.byKey(const ValueKey('chat-input-agent-run-settings-group-model')),
+    );
+    await tester.pump(const Duration(milliseconds: 200));
     expect(
       find.byKey(
         const ValueKey(
-          'chat-input-agent-run-settings-option-model-custom-agent',
+          'chat-input-agent-run-settings-option-model-cached-agent',
         ),
       ),
       findsOneWidget,
     );
+
+    refreshCompleter.complete();
   });
 
   testWidgets('normal chat model picker renders inside input actions', (
@@ -470,7 +587,7 @@ void main() {
           modelOptions: <String>['gpt-5-agent', 'gpt-5.1-agent'],
           reasoningEffortOptions: <String>['low', 'high', 'xhigh'],
         ),
-        onAgentRunSettingsChanged: ({agentId, modelId, reasoningEffort}) {},
+        onAgentRunSettingsChanged: ({modelId, reasoningEffort}) {},
         agentPermissionMode: AgentPermissionMode.fullAccess,
         onAgentPermissionModeChanged: (_) {},
       ),
@@ -645,6 +762,7 @@ Widget _buildTestApp({
   VoidCallback? onTriggerSlashCommand,
   bool useLargeComposerStyle = false,
   AgentPermissionMode? agentPermissionMode,
+  List<AgentPermissionMode> agentPermissionModes = AgentPermissionMode.values,
   ValueChanged<AgentPermissionMode>? onAgentPermissionModeChanged,
   AgentRunSettings? agentRunSettings,
   AgentRunSettingsChanged? onAgentRunSettingsChanged,
@@ -673,6 +791,7 @@ Widget _buildTestApp({
           agentRunSettings: agentRunSettings,
           onAgentRunSettingsChanged: onAgentRunSettingsChanged,
           agentPermissionMode: agentPermissionMode,
+          agentPermissionModes: agentPermissionModes,
           onAgentPermissionModeChanged: onAgentPermissionModeChanged,
         ),
       ),

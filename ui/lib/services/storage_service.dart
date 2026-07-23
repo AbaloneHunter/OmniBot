@@ -151,8 +151,6 @@ class StorageService {
     return true;
   }
 
-  static const String kAutoBackToChatAfterTaskKey =
-      'auto_back_to_chat_after_task';
   static const String kPreventScreenSleepDuringTasksKey =
       'prevent_screen_sleep_during_tasks';
   static const String kTaskCompletionNotificationEnabledKey =
@@ -204,15 +202,6 @@ class StorageService {
     if (value is int) return value;
     if (value is num) return value.toInt();
     return null;
-  }
-
-  static Future<bool> isAutoBackToChatAfterTaskEnabled() async {
-    final enabled = getBool(kAutoBackToChatAfterTaskKey, defaultValue: true);
-    return enabled ?? true;
-  }
-
-  static Future<void> setAutoBackToChatAfterTaskEnabled(bool enabled) async {
-    await setBool(kAutoBackToChatAfterTaskKey, enabled);
   }
 
   static Future<bool> isPreventScreenSleepDuringTasksEnabled() async {

@@ -1347,27 +1347,13 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                           : null,
                       agentRunSettings: _activeMode == ChatPageMode.agent
                           ? AgentRunSettings(
-                              agentId:
-                                  _agentRuntimeStatus.activeAgentId ??
-                                  _agentCatalog?.selectedAgentId ??
-                                  '',
                               agentName:
                                   _agentRuntimeStatus.activeAgentName ??
                                   _agentCatalog?.selectedAgent?.name ??
                                   '',
-                              agentOptions: [
-                                for (final agent
-                                    in _agentCatalog?.agents ??
-                                        const <AcpAgentProfile>[])
-                                  if (agent.enabled &&
-                                      (agent.status == 'online' ||
-                                          agent.id ==
-                                              _agentCatalog?.selectedAgentId))
-                                    AgentOption(id: agent.id, name: agent.name),
-                              ],
                               modelId: _activeAgentModelId ?? '',
                               reasoningEffort:
-                                  _activeAgentReasoningEffort ?? 'xhigh',
+                                  _activeAgentReasoningEffort ?? '',
                               modelOptions: _agentModelOptions,
                               reasoningEffortOptions:
                                   _agentReasoningEffortOptions,
@@ -1377,18 +1363,11 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                           : null,
                       onAgentRunSettingsOpened:
                           _activeMode == ChatPageMode.agent
-                          ? () => _loadAgentModelOptionsWhenReady(force: true)
+                          ? _loadAgentModelOptionsWhenReady
                           : null,
                       onAgentRunSettingsChanged:
                           _activeMode == ChatPageMode.agent
-                          ? ({
-                              String? agentId,
-                              String? modelId,
-                              String? reasoningEffort,
-                            }) {
-                              if (agentId != null) {
-                                unawaited(_selectAgent(agentId));
-                              }
+                          ? ({String? modelId, String? reasoningEffort}) {
                               if (modelId != null) {
                                 unawaited(
                                   _selectAgentModel(
@@ -1407,6 +1386,15 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                       agentPermissionMode: _activeMode == ChatPageMode.agent
                           ? _agentPermissionMode
                           : null,
+                      agentPermissionModes:
+                          _activeMode == ChatPageMode.agent &&
+                              _agentRuntimeStatus.runtime != 'remote' &&
+                              !_agentRuntimeStatus.remoteEnabled
+                          ? const <AgentPermissionMode>[
+                              AgentPermissionMode.defaultMode,
+                              AgentPermissionMode.fullAccess,
+                            ]
+                          : AgentPermissionMode.values,
                       onAgentPermissionModeChanged:
                           _activeMode == ChatPageMode.agent
                           ? (mode) {

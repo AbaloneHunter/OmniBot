@@ -100,6 +100,209 @@ String agentModelSourceKey(AgentRuntimeStatus status) {
   return 'local-${status.activeAgentId ?? 'agent'}';
 }
 
+/// Extracts only model choices from an ACP model/config response.
+///
+/// ACP `configOptions` can also contain mode, permission, boolean, and
+/// thought-level choices. Those values must never be treated as models.
+List<String> extractAcpModelIds(Map<String, dynamic> response) {
+  final rawItems = <dynamic>[];
+  _collectAcpExplicitLists(response, const <String>{
+    'models',
+    'modeloptions',
+    'availablemodels',
+    'modelids',
+  }, rawItems);
+  _collectAcpCategorizedConfigChoices(
+    response,
+    categories: const <String>{'model'},
+    fallbackIds: const <String>{'model'},
+    output: rawItems,
+  );
+  if (rawItems.isEmpty) {
+    _collectAcpRootModelListFallback(response, rawItems);
+  }
+  return _uniqueAcpChoiceIds(rawItems);
+}
+
+/// Extracts only ACP thought-level/reasoning choices.
+List<String> extractAcpReasoningEffortIds(Map<String, dynamic> response) {
+  final rawItems = <dynamic>[];
+  _collectAcpExplicitLists(response, const <String>{
+    'reasoningefforts',
+    'efforts',
+    'modelreasoningefforts',
+    'supportedreasoningefforts',
+  }, rawItems);
+  _collectAcpCategorizedConfigChoices(
+    response,
+    categories: const <String>{'thoughtlevel'},
+    fallbackIds: const <String>{'thoughtlevel', 'reasoningeffort'},
+    output: rawItems,
+  );
+  return _uniqueAcpChoiceIds(rawItems);
+}
+
+void _collectAcpExplicitLists(
+  Map<dynamic, dynamic> source,
+  Set<String> listKeys,
+  List<dynamic> output,
+) {
+  for (final entry in source.entries) {
+    final key = _normalizeAcpConfigKey(entry.key.toString());
+    final value = entry.value;
+    if (value is List) {
+      if (listKeys.contains(key)) {
+        output.addAll(value);
+      }
+      for (final item in value) {
+        final nested = _normalizeMap(item);
+        if (nested != null) {
+          _collectAcpExplicitLists(nested, listKeys, output);
+        }
+      }
+      continue;
+    }
+    final nested = _normalizeMap(value);
+    if (nested != null) {
+      _collectAcpExplicitLists(nested, listKeys, output);
+    }
+  }
+}
+
+void _collectAcpCategorizedConfigChoices(
+  Map<dynamic, dynamic> source, {
+  required Set<String> categories,
+  required Set<String> fallbackIds,
+  required List<dynamic> output,
+}) {
+  for (final entry in source.entries) {
+    final key = _normalizeAcpConfigKey(entry.key.toString());
+    final value = entry.value;
+    if (value is List) {
+      if (key == 'configoptions') {
+        for (final item in value) {
+          final option = _normalizeMap(item);
+          if (option == null) {
+            continue;
+          }
+          final category = _normalizeAcpConfigKey(
+            option['category']?.toString() ?? '',
+          );
+          final id = _normalizeAcpConfigKey(option['id']?.toString() ?? '');
+          final isMatchingOption =
+              categories.contains(category) || fallbackIds.contains(id);
+          final choices = option['options'];
+          if (isMatchingOption && choices is List) {
+            output.addAll(choices);
+          }
+        }
+      }
+      for (final item in value) {
+        final nested = _normalizeMap(item);
+        if (nested != null) {
+          _collectAcpCategorizedConfigChoices(
+            nested,
+            categories: categories,
+            fallbackIds: fallbackIds,
+            output: output,
+          );
+        }
+      }
+      continue;
+    }
+    final nested = _normalizeMap(value);
+    if (nested != null) {
+      _collectAcpCategorizedConfigChoices(
+        nested,
+        categories: categories,
+        fallbackIds: fallbackIds,
+        output: output,
+      );
+    }
+  }
+}
+
+void _collectAcpRootModelListFallback(
+  Map<dynamic, dynamic> source,
+  List<dynamic> output, {
+  int depth = 0,
+}) {
+  if (depth > 3) {
+    return;
+  }
+  for (final entry in source.entries) {
+    final key = _normalizeAcpConfigKey(entry.key.toString());
+    final value = entry.value;
+    if (value is List &&
+        const <String>{'items', 'data', 'options'}.contains(key) &&
+        !_looksLikeAcpConfigOptionList(value)) {
+      output.addAll(value);
+      continue;
+    }
+    if (value is Map &&
+        const <String>{'data', 'result', 'response', 'payload'}.contains(key)) {
+      _collectAcpRootModelListFallback(value, output, depth: depth + 1);
+    }
+  }
+}
+
+bool _looksLikeAcpConfigOptionList(List<dynamic> values) {
+  return values.any((item) {
+    final map = _normalizeMap(item);
+    if (map == null || map['options'] is! List) {
+      return false;
+    }
+    return map.containsKey('category') ||
+        map.containsKey('type') ||
+        map.containsKey('option_type') ||
+        map.containsKey('currentValue') ||
+        map.containsKey('current_value');
+  });
+}
+
+List<String> _uniqueAcpChoiceIds(List<dynamic> rawItems) {
+  final seen = <String>{};
+  final result = <String>[];
+  for (final item in rawItems) {
+    final id = _acpChoiceId(item);
+    if (id == null || !seen.add(id)) {
+      continue;
+    }
+    result.add(id);
+  }
+  return result;
+}
+
+String? _acpChoiceId(dynamic item) {
+  if (item is String) {
+    final value = item.trim();
+    return value.isEmpty ? null : value;
+  }
+  final map = _normalizeMap(item);
+  if (map == null) {
+    return null;
+  }
+  for (final key in const <String>[
+    'id',
+    'modelId',
+    'model_id',
+    'slug',
+    'value',
+    'model',
+    'name',
+  ]) {
+    final value = map[key]?.toString().trim() ?? '';
+    if (value.isNotEmpty) {
+      return value;
+    }
+  }
+  return null;
+}
+
+String _normalizeAcpConfigKey(String key) {
+  return key.toLowerCase().replaceAll(RegExp(r'[_-]'), '');
+}
+
 class AcpAgentProfile {
   const AcpAgentProfile({
     required this.id,

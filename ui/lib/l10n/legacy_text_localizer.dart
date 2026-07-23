@@ -80,7 +80,6 @@ class LegacyTextLocalizer {
     '后台隐藏': 'Hide from Recents',
     '闹钟设置': 'Alarm Settings',
     '振动反馈': 'Vibration Feedback',
-    '任务完成后自动回聊天': 'Return to Chat After Tasks',
     '杂项': 'Misc',
     '首页设置': 'Home Settings',
     '启动时': 'On Startup',
@@ -108,7 +107,6 @@ class LegacyTextLocalizer {
     '最多固定两个快捷指令': 'Pin up to two quick prompts',
     '首页、后台隐藏、闹钟、振动与打开方式':
         'Home, Hide from Recents, alarms, vibration, and open behavior',
-    '闹钟、振动、自动回聊天与打开方式': 'Alarms, vibration, return-to-chat, and open behavior',
     '后台隐藏、闹钟、振动与打开方式':
         'Hide from Recents, alarms, vibration, and open behavior',
     '使用小万打开': 'Open with Omnibot',
@@ -481,14 +479,6 @@ class LegacyTextLocalizer {
   static final List<(RegExp, _TextRewriter)>
   _regexEn = <(RegExp, _TextRewriter)>[
     (RegExp(r'^MCP 已开启：(.+)$'), (match) => 'MCP enabled: ${match.group(1)!}'),
-    (
-      RegExp(r'^任务完成后将自动返回聊天$'),
-      (_) => 'The app will return to chat after tasks finish',
-    ),
-    (
-      RegExp(r'^任务完成后将停留在当前页面$'),
-      (_) => 'The app will stay on the current page after tasks finish',
-    ),
     (
       RegExp(r'^会话 (\d+) · 任务 (\d+)$'),
       (match) => 'Sessions ${match.group(1)!} · Tasks ${match.group(2)!}',

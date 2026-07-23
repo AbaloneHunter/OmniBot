@@ -6,19 +6,15 @@ const String _kAgentCollaborationModePreferenceKey = 'collaboration_mode';
 const String _kAgentPreferenceStoragePrefix = 'chat_agent_command_preference';
 const String _kLegacyAgentPreferenceStoragePrefix =
     'chat_codex_command_preference';
-const String _kDefaultAgentReasoningEffort = 'xhigh';
 const Duration _remoteCodexExternalActiveGrace = Duration(seconds: 6);
 const List<String> _kAgentModelListResponseKeys = <String>[
   'models',
-  'items',
-  'data',
   'modelOptions',
   'model_options',
   'availableModels',
   'available_models',
   'modelIds',
   'model_ids',
-  'options',
 ];
 const String _kAgentInitPrompt = '''
 Please analyze this repository and create or update an AGENTS.md file that acts as a contributor guide for future coding agents.
@@ -325,6 +321,18 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
 
   @override
   Future<void> _loadAgentModelOptionsWhenReady({bool force = false}) async {
+    final currentSourceKey = agentModelSourceKey(_agentRuntimeStatus);
+    final hasResolvedEffort =
+        _agentReasoningEffortOptions.isEmpty ||
+        (_activeAgentReasoningEffort ?? '').trim().isNotEmpty;
+    if (!force &&
+        _agentRuntimeStatus.connected &&
+        _loadedAgentModelSourceKey == currentSourceKey &&
+        _agentModelOptions.isNotEmpty &&
+        (_activeAgentModelId ?? '').trim().isNotEmpty &&
+        hasResolvedEffort) {
+      return;
+    }
     late AgentRuntimeStatus status;
     try {
       status = await AgentRuntimeService.status();
@@ -351,7 +359,8 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
             _loadedAgentModelSourceKey == sourceKey &&
             _agentModelOptions.isNotEmpty &&
             (_activeAgentModelId ?? '').trim().isNotEmpty &&
-            (_activeAgentReasoningEffort ?? '').trim().isNotEmpty) ||
+            (_agentReasoningEffortOptions.isEmpty ||
+                (_activeAgentReasoningEffort ?? '').trim().isNotEmpty)) ||
         (_isAgentModelListLoading &&
             _loadingAgentModelSourceKey == sourceKey)) {
       return;
@@ -410,20 +419,23 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
       final response = await AgentRuntimeService.listModelsForStatus(
         statusForRequest,
       );
-      final models = _extractAgentOptionIds(
-        response,
-        _kAgentModelListResponseKeys,
-      );
+      final models = extractAcpModelIds(response);
       if (models.isEmpty) {
         debugPrint(
           '[Agent] model catalog returned no parseable models: ${jsonEncode(response)}',
         );
       }
-      final preferredModel =
+      final reportedPreferredModel =
           configSettings.modelId ??
           _extractAgentPreferredOptionId(response) ??
           _extractAgentDefaultModelId(response) ??
           (models.isNotEmpty ? models.first : null);
+      final preferredModel =
+          models.isNotEmpty &&
+              (reportedPreferredModel == null ||
+                  !models.contains(reportedPreferredModel))
+          ? models.first
+          : reportedPreferredModel;
       final conversationId = _currentConversationIdByMode[ChatPageMode.agent];
       final scopedModel = _readAgentPreference(
         _kAgentModelPreferenceKey,
@@ -435,7 +447,9 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
                   : scopedModel)
               ?.trim() ??
           '';
-      final effectiveModel = activeModel.isNotEmpty
+      final effectiveModel =
+          activeModel.isNotEmpty &&
+              (models.isEmpty || models.contains(activeModel))
           ? activeModel
           : preferredModel;
       final modelOptions = _mergeAgentOptionIds(
@@ -447,9 +461,10 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
         response,
         effectiveModel,
       );
+      final serverEffort = configSettings.reasoningEffort ?? modelDefaultEffort;
       final effortOptions = _mergeAgentReasoningEffortOptions(
-        current: configSettings.reasoningEffort ?? modelDefaultEffort,
-        options: _extractAgentReasoningEffortOptions(response),
+        current: serverEffort,
+        options: extractAcpReasoningEffortIds(response),
       );
       if (!mounted ||
           !isCurrentAgentModelLoad(
@@ -464,14 +479,19 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
         _loadedAgentModelSourceKey = sourceKey;
         _agentModelOptions = modelOptions;
         _activeAgentModelId = effectiveModel;
-        if ((_activeAgentReasoningEffort ?? '').trim().isEmpty) {
-          _activeAgentReasoningEffort =
-              configSettings.reasoningEffort ??
-              modelDefaultEffort ??
-              (effortOptions.isNotEmpty
-                  ? effortOptions.last
-                  : _kDefaultAgentReasoningEffort);
-        }
+        final selectedEffort = _normalizeAgentReasoningEffort(
+          _activeAgentReasoningEffort,
+        );
+        final normalizedServerEffort = _normalizeAgentReasoningEffort(
+          serverEffort,
+        );
+        _activeAgentReasoningEffort =
+            selectedEffort != null && effortOptions.contains(selectedEffort)
+            ? selectedEffort
+            : normalizedServerEffort != null &&
+                  effortOptions.contains(normalizedServerEffort)
+            ? normalizedServerEffort
+            : effortOptions.firstOrNull;
         _agentReasoningEffortOptions = effortOptions;
         _agentModelListError = null;
       });
@@ -692,7 +712,8 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
   @override
   Future<void> _selectAgentReasoningEffort(String effort) async {
     final normalized = _normalizeAgentReasoningEffort(effort);
-    if (normalized == null) {
+    if (normalized == null ||
+        !_agentReasoningEffortOptions.contains(normalized)) {
       return;
     }
     if (!mounted) return;
@@ -1923,6 +1944,11 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
     if (!mounted) return;
     setState(() {
       _agentRuntimeStatus = status;
+      if (status.runtime != 'remote' &&
+          !status.remoteEnabled &&
+          _agentPermissionMode == AgentPermissionMode.autoReview) {
+        _agentPermissionMode = AgentPermissionMode.defaultMode;
+      }
       if (sourceChanged) {
         _activeAgentThreadId = null;
         _activeAgentTurnId = null;
@@ -4739,8 +4765,9 @@ List<String> _mergeAgentOptionIds({
 
 List<dynamic> _collectAgentListItems(
   Map<String, dynamic> response,
-  List<String> listKeys,
-) {
+  List<String> listKeys, {
+  bool allowUnkeyedFallback = true,
+}) {
   final normalizedKeys = listKeys.map(_normalizeAgentResponseKey).toSet();
   final rawItems = <dynamic>[];
 
@@ -4768,7 +4795,7 @@ List<dynamic> _collectAgentListItems(
   }
 
   visitMap(response);
-  if (rawItems.isEmpty) {
+  if (allowUnkeyedFallback && rawItems.isEmpty) {
     for (final value in response.values) {
       if (value is List) {
         rawItems.addAll(value);
@@ -4821,6 +4848,7 @@ String? _extractAgentDefaultModelId(Map<String, dynamic> response) {
   for (final item in _collectAgentListItems(
     response,
     _kAgentModelListResponseKeys,
+    allowUnkeyedFallback: false,
   )) {
     final map = _asAgentMap(item);
     if (map == null) {
@@ -4846,6 +4874,7 @@ String? _extractAgentModelDefaultReasoningEffort(
   for (final item in _collectAgentListItems(
     response,
     _kAgentModelListResponseKeys,
+    allowUnkeyedFallback: false,
   )) {
     final map = _asAgentMap(item);
     if (map == null) {
@@ -4955,72 +4984,6 @@ String? _extractAgentConfigReasoningEffort(Map<String, dynamic> response) {
   return null;
 }
 
-List<String> _extractAgentReasoningEffortOptions(
-  Map<String, dynamic> response,
-) {
-  final rawItems = <dynamic>[];
-  for (final key in const <String>[
-    'reasoningEfforts',
-    'reasoning_efforts',
-    'efforts',
-    'modelReasoningEfforts',
-    'model_reasoning_efforts',
-  ]) {
-    final value = response[key];
-    if (value is List) {
-      rawItems.addAll(value);
-    }
-  }
-  for (final value in response.values) {
-    if (value is Map) {
-      rawItems.addAll(
-        _extractAgentReasoningEffortOptions(
-          value.map(
-            (key, nestedValue) => MapEntry(key.toString(), nestedValue),
-          ),
-        ),
-      );
-    } else if (value is List) {
-      for (final item in value) {
-        if (item is! Map) {
-          continue;
-        }
-        for (final key in const <String>[
-          'reasoningEfforts',
-          'reasoning_efforts',
-          'supportedReasoningEfforts',
-          'supported_reasoning_efforts',
-          'efforts',
-        ]) {
-          final nested = item[key];
-          if (nested is List) {
-            rawItems.addAll(nested);
-          }
-        }
-      }
-    }
-  }
-  final seen = <String>{};
-  final result = <String>[];
-  for (final item in rawItems) {
-    final normalized = _normalizeAgentReasoningEffort(
-      item is Map
-          ? (item['id'] ??
-                item['value'] ??
-                item['name'] ??
-                item['effort'] ??
-                item['reasoningEffort'] ??
-                item['reasoning_effort'])
-          : item,
-    );
-    if (normalized == null || !seen.add(normalized)) {
-      continue;
-    }
-    result.add(normalized);
-  }
-  return result;
-}
-
 List<String> _mergeAgentReasoningEffortOptions({
   String? current,
   required List<String> options,
@@ -5037,14 +5000,6 @@ List<String> _mergeAgentReasoningEffortOptions({
 
   add(current);
   for (final option in options) {
-    add(option);
-  }
-  for (final option in const <String>[
-    'low',
-    'medium',
-    'high',
-    _kDefaultAgentReasoningEffort,
-  ]) {
     add(option);
   }
   return result;

@@ -18,25 +18,13 @@ const List<Color> _kDarkComposerFlowGradientColors = <Color>[
   Color(0xFF8C775D),
 ];
 
-const List<String> _kDefaultAgentReasoningEfforts = <String>[
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-];
-
-const String _kAgentRunSettingsProviderId = '__agent_run_settings__';
-
-enum _AgentRunSettingsMenuKind { agent, model, effort }
+enum _AgentRunSettingsMenuKind { model, effort }
 
 class _AgentRunSettingsMenuAction {
   const _AgentRunSettingsMenuAction._(this.kind, this.value);
 
   const _AgentRunSettingsMenuAction.model(String value)
     : this._(_AgentRunSettingsMenuKind.model, value);
-
-  const _AgentRunSettingsMenuAction.agent(String value)
-    : this._(_AgentRunSettingsMenuKind.agent, value);
 
   const _AgentRunSettingsMenuAction.effort(String value)
     : this._(_AgentRunSettingsMenuKind.effort, value);
@@ -842,20 +830,6 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
     final effort = settings.reasoningEffort.trim();
     final agentName = settings.agentName.trim();
     final english = Localizations.localeOf(context).languageCode == 'en';
-    final displayModel = modelId.isEmpty
-        ? (settings.isLoadingModels
-              ? (english ? 'Loading' : '加载中')
-              : (english ? 'Model' : '模型'))
-        : _shortModelLabel(modelId);
-    final displayEffort = effort.isEmpty
-        ? ''
-        : _agentReasoningEffortLabel(effort, compact: true);
-    final modelAndEffort = displayEffort.isEmpty
-        ? displayModel
-        : '$displayModel · $displayEffort';
-    final displayText = agentName.isNotEmpty
-        ? '$agentName · $modelAndEffort'
-        : modelAndEffort;
     final selectedColor = palette.accentPrimary;
     final menuTextColor = context.isDarkTheme
         ? palette.textPrimary
@@ -873,15 +847,19 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
         _isOpeningAgentRunSettingsMenu = false;
         return;
       }
+      _modelPickerSpinController.forward(from: 0);
       final opened = widget.onAgentRunSettingsOpened;
-      try {
-        if (opened != null) {
-          await Future<void>.sync(opened);
-          await WidgetsBinding.instance.endOfFrame;
-        }
-      } finally {
-        _isOpeningAgentRunSettingsMenu = false;
+      if (opened != null) {
+        unawaited(
+          Future<void>.sync(opened).catchError((
+            Object error,
+            StackTrace stackTrace,
+          ) {
+            debugPrint('Refresh Agent run settings failed: $error');
+          }),
+        );
       }
+      _isOpeningAgentRunSettingsMenu = false;
       if (!mounted) {
         return;
       }
@@ -896,96 +874,46 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
       final refreshedSettings = widget.agentRunSettings ?? settings;
       final refreshedModelId = refreshedSettings.modelId.trim();
       final refreshedEffort = refreshedSettings.reasoningEffort.trim();
-      final refreshedAgentId = refreshedSettings.agentId.trim();
       final modelOptions = _agentRunSettingsOptions(
         current: refreshedModelId,
         options: refreshedSettings.modelOptions,
       );
-      final effortOptions = _agentRunSettingsOptions(
-        current: refreshedEffort,
-        options: refreshedSettings.reasoningEffortOptions.isEmpty
-            ? _kDefaultAgentReasoningEfforts
-            : refreshedSettings.reasoningEffortOptions,
-      );
+      final effortOptions = refreshedSettings.reasoningEffortOptions;
       final disabledModelLabel = refreshedSettings.isLoadingModels
           ? (english ? 'Loading...' : '正在获取模型...')
           : (refreshedSettings.modelListError?.trim().isNotEmpty ?? false)
           ? (english ? 'Load failed' : '模型获取失败')
           : (english ? 'No models available' : '未获取到可用模型');
-      final models = [
-        for (final option in modelOptions)
-          ProviderModelOption(id: option, displayName: option),
-      ];
-      final currentSelection = refreshedModelId.isEmpty
-          ? null
-          : ConversationModelSelection(
-              providerProfileId: _kAgentRunSettingsProviderId,
-              modelId: refreshedModelId,
-            );
       final handle = showOverlayGlassPopup<_AgentRunSettingsMenuAction>(
         context: anchorContext,
         anchor: anchor,
         reverseTransitionDuration: Duration.zero,
         dismissOnBackButton: false,
-        builder: (handle) => ConversationModelSelectorContent(
+        builder: (handle) => _AgentRunSettingsMenuContent(
           width: 280,
           maxHeight: 420,
-          profiles: [
-            ModelProviderProfileSummary(
-              id: _kAgentRunSettingsProviderId,
-              name: refreshedSettings.agentName.trim().isNotEmpty
-                  ? refreshedSettings.agentName.trim()
-                  : 'Agent',
-              baseUrl: '',
-              apiKey: '',
-              customHeaders: const <String, String>{},
-              sourceType: 'agent',
-              readOnly: true,
-              ready: true,
-              statusText: '',
-              configured: true,
-            ),
-          ],
-          providerModelsByProfileId: {_kAgentRunSettingsProviderId: models},
-          currentSelection: currentSelection,
-          showSearchField: false,
-          showProfileHeaders: false,
-          allowProfileCollapse: false,
+          modelHeader: english ? 'Model' : '模型',
+          reasoningHeader: english ? 'Reasoning' : '推理强度',
+          searchHint: english ? 'Search models' : '搜索模型',
+          noMatchesLabel: english ? 'No matching models' : '没有匹配的模型',
           emptyModelsLabel: disabledModelLabel,
-          modelRowKeyPrefix: 'chat-input-agent-run-settings-option-model',
-          onSelect: (selection) {
+          modelOptions: modelOptions,
+          currentModelId: refreshedModelId,
+          reasoningOptions: effortOptions,
+          currentReasoningEffort: refreshedEffort,
+          effortLabelBuilder: _agentReasoningEffortLabel,
+          selectedColor: selectedColor,
+          textColor: menuTextColor,
+          onSelectModel: (modelId) {
             unawaited(
-              handle.dismiss(
-                _AgentRunSettingsMenuAction.model(selection.modelId),
-              ),
+              handle.dismiss(_AgentRunSettingsMenuAction.model(modelId)),
             );
           },
-          footer: _AgentReasoningEffortSelectorFooter(
-            agentHeader: english ? 'Agent' : 'Agent 模式',
-            agents: refreshedSettings.agentOptions,
-            selectedAgentId: refreshedAgentId,
-            onSelectAgent: (value) {
-              unawaited(
-                handle.dismiss(_AgentRunSettingsMenuAction.agent(value)),
-              );
-            },
-            header: english ? 'Reasoning' : '推理强度',
-            options: [
-              for (final option in effortOptions)
-                _AgentRunSettingsOptionData(
-                  value: option,
-                  label: _agentReasoningEffortLabel(option),
-                ),
-            ],
-            selectedEffort: refreshedEffort,
-            selectedColor: selectedColor,
-            textColor: menuTextColor,
-            onSelect: (value) {
-              unawaited(
-                handle.dismiss(_AgentRunSettingsMenuAction.effort(value)),
-              );
-            },
-          ),
+          onSelectReasoning: (effort) {
+            unawaited(
+              handle.dismiss(_AgentRunSettingsMenuAction.effort(effort)),
+            );
+          },
         ),
       );
       _agentRunSettingsMenuHandle = handle;
@@ -996,9 +924,6 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
         if (changed == null) return;
         unawaited(
           Future<void>.sync(() {
-            if (action.kind == _AgentRunSettingsMenuKind.agent) {
-              return changed(agentId: action.value);
-            }
             if (action.kind == _AgentRunSettingsMenuKind.model) {
               return changed(modelId: action.value);
             }
@@ -1015,7 +940,7 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
     return TextFieldTapRegion(
       child: SizedBox(
         key: buttonKey,
-        width: compact ? 92 : 118,
+        width: compact ? 24 : 28,
         height: compact ? 24 : 28,
         child: Tooltip(
           message: [
@@ -1031,35 +956,24 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
             child: AnimatedContainer(
               duration: _buttonAnimationDuration,
               curve: _buttonAnimationCurve,
+              width: compact ? 24 : 28,
               height: compact ? 24 : 28,
-              padding: EdgeInsets.only(
-                left: compact ? 4 : 6,
-                right: compact ? 2 : 4,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Expanded(
-                    child: Text(
-                      displayText,
-                      textAlign: TextAlign.right,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: selectedColor,
-                        fontSize: compact ? 11 : 12,
-                        height: 1.1,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+              alignment: Alignment.center,
+              child: RepaintBoundary(
+                child: RotationTransition(
+                  turns: CurvedAnimation(
+                    parent: _modelPickerSpinController,
+                    curve: Curves.easeOutCubic,
                   ),
-                  const SizedBox(width: 2),
-                  Icon(
-                    Icons.expand_more_rounded,
-                    size: compact ? 14 : 16,
+                  child: Icon(
+                    LucideIcons.package,
+                    key: const ValueKey(
+                      'chat-input-agent-run-settings-package-icon',
+                    ),
+                    size: compact ? 20 : 22,
                     color: selectedColor,
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -1084,24 +998,6 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
       'very-high' => english ? 'XHigh' : '超高',
       _ => effort.trim().isEmpty ? (english ? 'Reasoning' : '推理') : effort,
     };
-  }
-
-  String _shortModelLabel(String modelId, {int maxLength = 22}) {
-    final normalized = modelId.trim();
-    if (normalized.length <= maxLength) {
-      return normalized;
-    }
-    final parts = normalized.split(RegExp(r'[-_/]'));
-    if (parts.length >= 3) {
-      final compact = parts.take(4).join('-');
-      if (compact.length <= maxLength) {
-        return compact;
-      }
-    }
-    final prefix = normalized
-        .substring(0, math.max(1, maxLength - 3))
-        .replaceFirst(RegExp(r'[-_/]+$'), '');
-    return '$prefix...';
   }
 
   List<String> _agentRunSettingsOptions({
@@ -1165,7 +1061,7 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
               ? palette.textPrimary
               : const Color(0xFF232D3D),
           options: [
-            for (final mode in AgentPermissionMode.values)
+            for (final mode in widget.agentPermissionModes)
               _AgentPermissionOptionData(
                 mode: mode,
                 label: _agentPermissionLabel(mode),
@@ -1637,126 +1533,158 @@ class _AgentPermissionGlassMenuContentState
   }
 }
 
-class _AgentRunSettingsOptionData {
-  const _AgentRunSettingsOptionData({required this.value, required this.label});
+enum _AgentRunSettingsMenuPage { overview, models, reasoning }
 
-  final String value;
-  final String label;
-}
-
-class _AgentReasoningEffortSelectorFooter extends StatelessWidget {
-  const _AgentReasoningEffortSelectorFooter({
-    required this.agentHeader,
-    required this.agents,
-    required this.selectedAgentId,
-    required this.onSelectAgent,
-    required this.header,
-    required this.options,
-    required this.selectedEffort,
+class _AgentRunSettingsMenuContent extends StatefulWidget {
+  const _AgentRunSettingsMenuContent({
+    required this.width,
+    required this.maxHeight,
+    required this.modelHeader,
+    required this.reasoningHeader,
+    required this.searchHint,
+    required this.noMatchesLabel,
+    required this.emptyModelsLabel,
+    required this.modelOptions,
+    required this.currentModelId,
+    required this.reasoningOptions,
+    required this.currentReasoningEffort,
+    required this.effortLabelBuilder,
     required this.selectedColor,
     required this.textColor,
-    required this.onSelect,
+    required this.onSelectModel,
+    required this.onSelectReasoning,
   });
 
-  static const double _rowHeight = 34;
-  static const Duration _checkAnimationDuration = Duration(milliseconds: 160);
-
-  final String header;
-  final String agentHeader;
-  final List<AgentOption> agents;
-  final String selectedAgentId;
-  final ValueChanged<String> onSelectAgent;
-  final List<_AgentRunSettingsOptionData> options;
-  final String selectedEffort;
+  final double width;
+  final double maxHeight;
+  final String modelHeader;
+  final String reasoningHeader;
+  final String searchHint;
+  final String noMatchesLabel;
+  final String emptyModelsLabel;
+  final List<String> modelOptions;
+  final String currentModelId;
+  final List<String> reasoningOptions;
+  final String currentReasoningEffort;
+  final String Function(String) effortLabelBuilder;
   final Color selectedColor;
   final Color textColor;
-  final ValueChanged<String> onSelect;
+  final ValueChanged<String> onSelectModel;
+  final ValueChanged<String> onSelectReasoning;
 
-  Widget _buildHeader(BuildContext context, {String? text}) {
-    final palette = context.omniPalette;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 9, 14, 5),
-      child: Text(
-        text ?? header,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: context.isDarkTheme
-              ? palette.textSecondary
-              : const Color(0xFF66758E),
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          height: 1.1,
-        ),
-      ),
-    );
+  @override
+  State<_AgentRunSettingsMenuContent> createState() =>
+      _AgentRunSettingsMenuContentState();
+}
+
+class _AgentRunSettingsMenuContentState
+    extends State<_AgentRunSettingsMenuContent> {
+  static const int _searchThreshold = 5;
+  static const Duration _pageAnimationDuration = Duration(milliseconds: 150);
+
+  final TextEditingController _searchController = TextEditingController();
+  late _AgentRunSettingsMenuPage _page;
+
+  @override
+  void initState() {
+    super.initState();
+    _page = widget.reasoningOptions.isEmpty
+        ? _AgentRunSettingsMenuPage.models
+        : _AgentRunSettingsMenuPage.overview;
+    _searchController.addListener(_handleSearchChanged);
   }
 
-  Widget _buildOption({
-    required BuildContext context,
-    required String keySuffix,
+  @override
+  void dispose() {
+    _searchController
+      ..removeListener(_handleSearchChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleSearchChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  List<String> get _filteredModels {
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      return widget.modelOptions;
+    }
+    return widget.modelOptions
+        .where((model) => model.toLowerCase().contains(query))
+        .toList(growable: false);
+  }
+
+  void _showPage(_AgentRunSettingsMenuPage page) {
+    if (_page == page) {
+      return;
+    }
+    setState(() {
+      _page = page;
+      if (page != _AgentRunSettingsMenuPage.models) {
+        _searchController.clear();
+      }
+    });
+  }
+
+  Widget _buildOverviewRow({
+    required Key key,
+    required IconData icon,
     required String label,
-    required bool selected,
     required String value,
-    ValueChanged<String>? onSelected,
+    required VoidCallback onTap,
   }) {
     final palette = context.omniPalette;
     final isDark = context.isDarkTheme;
-    final selectedBackground = isDark
-        ? Color.alphaBlend(
-            selectedColor.withValues(alpha: 0.18),
-            palette.surfaceSecondary.withValues(alpha: 0.52),
-          )
-        : selectedColor.withValues(alpha: 0.10);
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
       child: InkWell(
-        key: ValueKey('chat-input-agent-run-settings-option-$keySuffix'),
-        onTap: () => (onSelected ?? onSelect)(value),
+        key: key,
+        onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        child: AnimatedContainer(
-          duration: _checkAnimationDuration,
-          curve: Curves.easeOutCubic,
-          constraints: const BoxConstraints(minHeight: _rowHeight),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: selected ? selectedBackground : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-            border: selected
-                ? Border.all(
-                    color: selectedColor.withValues(
-                      alpha: isDark ? 0.30 : 0.20,
-                    ),
-                  )
-                : null,
-          ),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 46),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
+              Icon(
+                icon,
+                size: 16,
+                color: isDark ? palette.textSecondary : const Color(0xFF66758E),
+              ),
+              const SizedBox(width: 9),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: widget.textColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  label,
+                  value.isEmpty ? '—' : value,
+                  textAlign: TextAlign.end,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 12,
-                    height: 1.1,
-                    color: selected
-                        ? (isDark ? palette.textPrimary : textColor)
-                        : textColor,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: isDark
+                        ? palette.textTertiary
+                        : const Color(0xFF8490A3),
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              AnimatedOpacity(
-                duration: _checkAnimationDuration,
-                opacity: selected ? 1 : 0,
-                child: Icon(
-                  Icons.check_rounded,
-                  size: 15,
-                  color: selectedColor,
-                ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: isDark ? palette.textTertiary : const Color(0xFF9AA4B6),
               ),
             ],
           ),
@@ -1765,48 +1693,333 @@ class _AgentReasoningEffortSelectorFooter extends StatelessWidget {
     );
   }
 
-  Widget _buildDivider(BuildContext context) {
+  Widget _buildOverview() {
+    return Padding(
+      key: const ValueKey('agent-run-settings-overview'),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildOverviewRow(
+            key: const ValueKey('chat-input-agent-run-settings-group-model'),
+            icon: LucideIcons.sparkles,
+            label: widget.modelHeader,
+            value: widget.currentModelId,
+            onTap: () => _showPage(_AgentRunSettingsMenuPage.models),
+          ),
+          _buildOverviewRow(
+            key: const ValueKey(
+              'chat-input-agent-run-settings-group-reasoning',
+            ),
+            icon: LucideIcons.brain,
+            label: widget.reasoningHeader,
+            value: widget.effortLabelBuilder(widget.currentReasoningEffort),
+            onTap: () => _showPage(_AgentRunSettingsMenuPage.reasoning),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSubmenuHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 7, 10, 3),
+      child: Row(
+        children: [
+          InkWell(
+            key: const ValueKey('chat-input-agent-run-settings-back'),
+            onTap: () => _showPage(_AgentRunSettingsMenuPage.overview),
+            borderRadius: BorderRadius.circular(10),
+            child: const SizedBox(
+              width: 34,
+              height: 34,
+              child: Icon(Icons.chevron_left_rounded, size: 20),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                color: widget.textColor,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearch() {
     final palette = context.omniPalette;
-    return Container(
-      height: 1,
-      margin: const EdgeInsets.fromLTRB(14, 6, 14, 2),
-      color: context.isDarkTheme
-          ? palette.borderSubtle.withValues(alpha: 0.56)
-          : Colors.white.withValues(alpha: 0.64),
+    final isDark = context.isDarkTheme;
+    return Padding(
+      key: const ValueKey('chat-input-agent-run-settings-model-search'),
+      padding: const EdgeInsets.fromLTRB(10, 5, 10, 6),
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: isDark
+              ? palette.surfaceSecondary.withValues(alpha: 0.58)
+              : Colors.white.withValues(alpha: 0.42),
+          borderRadius: BorderRadius.circular(11),
+          border: Border.all(
+            color: isDark
+                ? palette.borderSubtle.withValues(alpha: 0.60)
+                : Colors.white.withValues(alpha: 0.66),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.search_rounded,
+              size: 17,
+              color: isDark ? palette.textTertiary : const Color(0xFF929EB0),
+            ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: TextField(
+                controller: _searchController,
+                autofocus: false,
+                scrollPadding: EdgeInsets.zero,
+                cursorColor: widget.selectedColor,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: widget.textColor,
+                  fontWeight: FontWeight.w500,
+                ),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: widget.searchHint,
+                  hintStyle: TextStyle(
+                    fontSize: 12,
+                    color: isDark
+                        ? palette.textTertiary
+                        : const Color(0xFF929EB0),
+                    fontWeight: FontWeight.w500,
+                  ),
+                  border: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChoiceRow({
+    required String keySuffix,
+    required String value,
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+    bool showVendorIcon = false,
+  }) {
+    final palette = context.omniPalette;
+    final isDark = context.isDarkTheme;
+    final selectedBackground = isDark
+        ? Color.alphaBlend(
+            widget.selectedColor.withValues(alpha: 0.18),
+            palette.surfaceSecondary.withValues(alpha: 0.52),
+          )
+        : widget.selectedColor.withValues(alpha: 0.10);
+    final row = Padding(
+      padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
+      child: InkWell(
+        key: ValueKey('chat-input-agent-run-settings-option-$keySuffix'),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: _pageAnimationDuration,
+          curve: Curves.easeOutCubic,
+          constraints: const BoxConstraints(minHeight: 42),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: selected ? selectedBackground : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              if (showVendorIcon) ...[
+                ProviderVendorIcon(
+                  vendor: ModelVendorCatalog.resolve(value),
+                  size: 14,
+                ),
+                const SizedBox(width: 7),
+              ],
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.1,
+                    color: widget.textColor,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 16,
+                child: selected
+                    ? Icon(
+                        Icons.check_rounded,
+                        size: 16,
+                        color: widget.selectedColor,
+                      )
+                    : null,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!showVendorIcon) {
+      return row;
+    }
+    return Tooltip(
+      message: value,
+      triggerMode: TooltipTriggerMode.longPress,
+      waitDuration: Duration.zero,
+      preferBelow: false,
+      child: row,
+    );
+  }
+
+  Widget _buildModelList() {
+    final models = _filteredModels;
+    final showBack = widget.reasoningOptions.isNotEmpty;
+    final showSearch = widget.modelOptions.length > _searchThreshold;
+    return Column(
+      key: const ValueKey('agent-run-settings-models'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showBack) _buildSubmenuHeader(widget.modelHeader),
+        if (showSearch) _buildSearch(),
+        if (widget.modelOptions.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+            child: Text(
+              widget.emptyModelsLabel,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: context.isDarkTheme
+                    ? context.omniPalette.textTertiary
+                    : const Color(0xFF929EB0),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          )
+        else if (models.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+            child: Text(
+              widget.noMatchesLabel,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: context.isDarkTheme
+                    ? context.omniPalette.textTertiary
+                    : const Color(0xFF929EB0),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          )
+        else
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              padding: const EdgeInsets.only(top: 3, bottom: 8),
+              itemCount: models.length,
+              itemBuilder: (context, index) {
+                final model = models[index];
+                return _buildChoiceRow(
+                  keySuffix: 'model-$model',
+                  value: model,
+                  label: model,
+                  selected: model == widget.currentModelId,
+                  showVendorIcon: true,
+                  onTap: () => widget.onSelectModel(model),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildReasoningList() {
+    return Column(
+      key: const ValueKey('agent-run-settings-reasoning'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSubmenuHeader(widget.reasoningHeader),
+        Flexible(
+          child: ListView.builder(
+            shrinkWrap: true,
+            padding: const EdgeInsets.only(top: 3, bottom: 8),
+            itemCount: widget.reasoningOptions.length,
+            itemBuilder: (context, index) {
+              final effort = widget.reasoningOptions[index];
+              return _buildChoiceRow(
+                keySuffix: 'effort-$effort',
+                value: effort,
+                label: widget.effortLabelBuilder(effort),
+                selected: effort == widget.currentReasoningEffort,
+                onTap: () => widget.onSelectReasoning(effort),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildDivider(context),
-        if (agents.isNotEmpty) ...[
-          _buildHeader(context, text: agentHeader),
-          for (final agent in agents)
-            _buildOption(
-              context: context,
-              keySuffix: 'agent-${agent.id}',
-              label: agent.name,
-              selected: agent.id == selectedAgentId,
-              value: agent.id,
-              onSelected: onSelectAgent,
+    final mediaQuery = MediaQuery.of(context);
+    final dynamicMaxHeight =
+        (mediaQuery.size.height - mediaQuery.viewInsets.bottom - 96)
+            .clamp(180.0, widget.maxHeight)
+            .toDouble();
+    final body = switch (_page) {
+      _AgentRunSettingsMenuPage.overview => _buildOverview(),
+      _AgentRunSettingsMenuPage.models => _buildModelList(),
+      _AgentRunSettingsMenuPage.reasoning => _buildReasoningList(),
+    };
+    return SizedBox(
+      width: widget.width,
+      child: OmniGlassPanel(
+        width: widget.width,
+        borderRadius: BorderRadius.circular(18),
+        child: Material(
+          color: Colors.transparent,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: dynamicMaxHeight),
+            child: AnimatedSwitcher(
+              duration: _pageAnimationDuration,
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: body,
             ),
-          _buildDivider(context),
-        ],
-        _buildHeader(context),
-        for (final option in options)
-          _buildOption(
-            context: context,
-            keySuffix: 'effort-${option.value}',
-            label: option.label,
-            selected: option.value == selectedEffort,
-            value: option.value,
           ),
-        const SizedBox(height: 6),
-      ],
+        ),
+      ),
     );
   }
 }

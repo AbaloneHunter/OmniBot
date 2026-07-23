@@ -5,12 +5,11 @@ import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/material.dart';
-import 'package:ui/services/model_provider_config_service.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/services/model_vendor_catalog.dart';
 import 'package:ui/services/special_permission.dart';
 import 'package:ui/services/storage_service.dart';
 import 'package:ui/theme/theme_context.dart';
-import 'package:ui/widgets/conversation_model_selector.dart';
 import 'package:ui/widgets/provider_vendor_icon.dart';
 import 'package:ui/widgets/glass_popup.dart';
 import 'package:ui/widgets/image_preview_overlay.dart';
@@ -42,26 +41,13 @@ const String _kAgentPermissionFullAccessIconAsset =
 enum AgentPermissionMode { defaultMode, autoReview, fullAccess }
 
 typedef AgentRunSettingsChanged =
-    FutureOr<void> Function({
-      String? agentId,
-      String? modelId,
-      String? reasoningEffort,
-    });
-
-class AgentOption {
-  const AgentOption({required this.id, required this.name});
-
-  final String id;
-  final String name;
-}
+    FutureOr<void> Function({String? modelId, String? reasoningEffort});
 
 class AgentRunSettings {
   const AgentRunSettings({
     required this.modelId,
     required this.reasoningEffort,
-    this.agentId = '',
     this.agentName = '',
-    this.agentOptions = const <AgentOption>[],
     this.modelOptions = const <String>[],
     this.reasoningEffortOptions = const <String>[],
     this.isLoadingModels = false,
@@ -70,9 +56,7 @@ class AgentRunSettings {
 
   final String modelId;
   final String reasoningEffort;
-  final String agentId;
   final String agentName;
-  final List<AgentOption> agentOptions;
   final List<String> modelOptions;
   final List<String> reasoningEffortOptions;
   final bool isLoadingModels;
@@ -162,6 +146,7 @@ class ChatInputArea extends StatefulWidget {
   final AgentRunSettingsChanged? onAgentRunSettingsChanged;
   final FutureOr<void> Function()? onAgentRunSettingsOpened;
   final AgentPermissionMode? agentPermissionMode;
+  final List<AgentPermissionMode> agentPermissionModes;
   final ValueChanged<AgentPermissionMode>? onAgentPermissionModeChanged;
   final bool useIndependentSendButton;
 
@@ -197,6 +182,7 @@ class ChatInputArea extends StatefulWidget {
     this.onAgentRunSettingsChanged,
     this.onAgentRunSettingsOpened,
     this.agentPermissionMode,
+    this.agentPermissionModes = AgentPermissionMode.values,
     this.onAgentPermissionModeChanged,
     this.useIndependentSendButton = true,
   });

@@ -237,9 +237,6 @@ class AssistsCoreChannel {
                 "getDeskTopPackageName"->{
                     assistsCoreManager!!.getDeskTopPackageName( call, result)
                 }
-                "setAutoBackToChatAfterTaskEnabled" -> {
-                    assistsCoreManager!!.setAutoBackToChatAfterTaskEnabled(call, result)
-                }
                 "setPreventScreenSleepDuringTasksEnabled" -> {
                     assistsCoreManager!!.setPreventScreenSleepDuringTasksEnabled(call, result)
                 }

@@ -6403,44 +6403,6 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
         return (this[key] as? Number)?.toInt()
     }
 
-    /**
-     * 跳转回聊天页面
-     */
-    private fun navigateBackToChatIfNeeded() {
-        if (TaskCompletionNavigator.isAutoBackToChatAfterTaskEnabled(context)) {
-            TaskCompletionNavigator.navigateBackToChat(
-                context,
-                currentConversationId,
-                currentConversationMode
-            )
-        } else {
-            OmniLog.d(TAG, "任务完成后停留当前页面（已关闭自动返回聊天）")
-        }
-    }
-
-    fun setAutoBackToChatAfterTaskEnabled(
-        call: MethodCall,
-        result: MethodChannel.Result
-    ) {
-        val enabled = call.argument<Boolean>("enabled") ?: true
-        try {
-            val success = TaskCompletionNavigator.setAutoBackToChatAfterTaskEnabled(
-                context,
-                enabled
-            )
-
-            if (success) {
-                OmniLog.d(TAG, "自动返回聊天设置已同步到原生: $enabled")
-                result.success("SUCCESS")
-            } else {
-                result.error("SAVE_AUTO_BACK_SETTING_FAILED", "保存自动返回聊天设置失败", null)
-            }
-        } catch (e: Exception) {
-            OmniLog.e(TAG, "保存自动返回聊天设置失败: ${e.message}")
-            result.error("SAVE_AUTO_BACK_SETTING_FAILED", e.message, null)
-        }
-    }
-
     fun setPreventScreenSleepDuringTasksEnabled(
         call: MethodCall,
         result: MethodChannel.Result

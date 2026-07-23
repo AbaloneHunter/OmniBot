@@ -95,6 +95,8 @@ internal class LocalAcpRuntime(
     private val promptJobs = ConcurrentHashMap<String, Job>()
     private val pendingPermissions =
         ConcurrentHashMap<String, PendingPermissionRequest>()
+    private val sessionPermissionBehaviors =
+        ConcurrentHashMap<String, AcpPermissionBehavior>()
 
     @Volatile
     private var connection: AcpProcessConnection? = null
@@ -285,6 +287,7 @@ internal class LocalAcpRuntime(
         pendingPermissions.clear()
         sessions.clear()
         sessionCwds.clear()
+        sessionPermissionBehaviors.clear()
         catalogSessionId = null
         activeTurnIds.clear()
         protocol?.close()
@@ -662,6 +665,7 @@ internal class LocalAcpRuntime(
         if (archived && requireAgentInfo().capabilities.sessionCapabilities.close != null) {
             sessions.remove(threadId)?.close()
             sessionCwds.remove(threadId)
+            sessionPermissionBehaviors.remove(threadId)
         }
         bindingRepository.setArchived(threadId, archived)
         emit(
@@ -967,6 +971,8 @@ internal class LocalAcpRuntime(
         session: ClientSession,
         args: Map<String, Any?>
     ) {
+        sessionPermissionBehaviors[session.sessionId.value] =
+            resolveAcpPermissionBehavior(args)
         val requested = linkedMapOf<String, Any?>(
             "model" to args.stringValue("model"),
             "reasoning_effort" to (
@@ -1118,6 +1124,21 @@ internal class LocalAcpRuntime(
             permissions: List<PermissionOption>,
             _meta: JsonElement?
         ): RequestPermissionResponse {
+            if (
+                sessionPermissionBehaviors[threadId] ==
+                AcpPermissionBehavior.ALLOW_WITHOUT_PROMPT
+            ) {
+                val selected = permissions.firstOrNull {
+                    it.kind == PermissionOptionKind.ALLOW_ALWAYS
+                } ?: permissions.firstOrNull {
+                    it.kind == PermissionOptionKind.ALLOW_ONCE
+                }
+                return RequestPermissionResponse(
+                    outcome = selected?.let {
+                        RequestPermissionOutcome.Selected(it.optionId)
+                    } ?: RequestPermissionOutcome.Cancelled
+                )
+            }
             val requestId = UUID.randomUUID().toString()
             val pending = PendingPermissionRequest(
                 options = permissions,
@@ -1475,6 +1496,30 @@ internal class LocalAcpRuntime(
         private const val INITIALIZE_TIMEOUT_MS = 90_000L
         private const val COMMAND_PROBE_TIMEOUT_MS = 20_000L
         private const val MAX_FILE_LINES = 20_000
+    }
+}
+
+internal enum class AcpPermissionBehavior {
+    ASK_USER,
+    ALLOW_WITHOUT_PROMPT
+}
+
+internal fun resolveAcpPermissionBehavior(
+    args: Map<String, Any?>
+): AcpPermissionBehavior {
+    val approvalPolicy = args.stringValue("approvalPolicy")
+        ?.lowercase()
+        ?.replace("-", "")
+        ?.replace("_", "")
+    val sandboxType = args.mapValue("sandboxPolicy")
+        .stringValue("type")
+        ?.lowercase()
+        ?.replace("-", "")
+        ?.replace("_", "")
+    return if (approvalPolicy == "never" || sandboxType == "dangerfullaccess") {
+        AcpPermissionBehavior.ALLOW_WITHOUT_PROMPT
+    } else {
+        AcpPermissionBehavior.ASK_USER
     }
 }
 
