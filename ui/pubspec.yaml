@@ -125,6 +125,7 @@ flutter:
     - assets/loading/
     - assets/chatbot/
     - assets/provider_icons/
+    - assets/agents/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -7,6 +7,7 @@ import 'package:ui/services/model_provider_config_service.dart';
 import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
+import 'package:ui/widgets/agent_brand_icon.dart';
 import 'package:ui/widgets/common_app_bar.dart';
 import 'package:ui/widgets/settings_section_title.dart';
 
@@ -805,10 +806,10 @@ class _AgentCard extends StatelessWidget {
                   color: palette.surfaceSecondary,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(
-                  Icons.smart_toy_outlined,
+                child: AgentBrandIcon(
+                  agentId: agent.id,
                   size: 20,
-                  color: palette.accentPrimary,
+                  fallbackColor: palette.accentPrimary,
                 ),
               ),
               const SizedBox(width: 10),
