@@ -32,36 +32,36 @@ const String _kLucideCommandSvg =
     '<path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/>'
     '</svg>';
 
-const String _kCodexPermissionDefaultIconAsset =
+const String _kAgentPermissionDefaultIconAsset =
     'assets/home/chat/permission_hand.svg';
-const String _kCodexPermissionAutoReviewIconAsset =
-    'assets/home/chat/codex.svg';
-const String _kCodexPermissionFullAccessIconAsset =
+const String _kAgentPermissionAutoReviewIconAsset =
+    'assets/home/chat/agent.svg';
+const String _kAgentPermissionFullAccessIconAsset =
     'assets/home/chat/permission_shield_alert.svg';
 
-enum CodexPermissionMode { defaultMode, autoReview, fullAccess }
+enum AgentPermissionMode { defaultMode, autoReview, fullAccess }
 
-typedef CodexRunSettingsChanged =
+typedef AgentRunSettingsChanged =
     FutureOr<void> Function({
       String? agentId,
       String? modelId,
       String? reasoningEffort,
     });
 
-class CodexAgentOption {
-  const CodexAgentOption({required this.id, required this.name});
+class AgentOption {
+  const AgentOption({required this.id, required this.name});
 
   final String id;
   final String name;
 }
 
-class CodexRunSettings {
-  const CodexRunSettings({
+class AgentRunSettings {
+  const AgentRunSettings({
     required this.modelId,
     required this.reasoningEffort,
     this.agentId = '',
     this.agentName = '',
-    this.agentOptions = const <CodexAgentOption>[],
+    this.agentOptions = const <AgentOption>[],
     this.modelOptions = const <String>[],
     this.reasoningEffortOptions = const <String>[],
     this.isLoadingModels = false,
@@ -72,7 +72,7 @@ class CodexRunSettings {
   final String reasoningEffort;
   final String agentId;
   final String agentName;
-  final List<CodexAgentOption> agentOptions;
+  final List<AgentOption> agentOptions;
   final List<String> modelOptions;
   final List<String> reasoningEffortOptions;
   final bool isLoadingModels;
@@ -158,11 +158,11 @@ class ChatInputArea extends StatefulWidget {
   final String? contextUsageTooltipMessage;
   final VoidCallback? onLongPressContextUsageRing;
   final ChatModelPickerSettings? modelPickerSettings;
-  final CodexRunSettings? codexRunSettings;
-  final CodexRunSettingsChanged? onCodexRunSettingsChanged;
-  final FutureOr<void> Function()? onCodexRunSettingsOpened;
-  final CodexPermissionMode? codexPermissionMode;
-  final ValueChanged<CodexPermissionMode>? onCodexPermissionModeChanged;
+  final AgentRunSettings? agentRunSettings;
+  final AgentRunSettingsChanged? onAgentRunSettingsChanged;
+  final FutureOr<void> Function()? onAgentRunSettingsOpened;
+  final AgentPermissionMode? agentPermissionMode;
+  final ValueChanged<AgentPermissionMode>? onAgentPermissionModeChanged;
   final bool useIndependentSendButton;
 
   const ChatInputArea({
@@ -193,11 +193,11 @@ class ChatInputArea extends StatefulWidget {
     this.contextUsageTooltipMessage,
     this.onLongPressContextUsageRing,
     this.modelPickerSettings,
-    this.codexRunSettings,
-    this.onCodexRunSettingsChanged,
-    this.onCodexRunSettingsOpened,
-    this.codexPermissionMode,
-    this.onCodexPermissionModeChanged,
+    this.agentRunSettings,
+    this.onAgentRunSettingsChanged,
+    this.onAgentRunSettingsOpened,
+    this.agentPermissionMode,
+    this.onAgentPermissionModeChanged,
     this.useIndependentSendButton = true,
   });
 

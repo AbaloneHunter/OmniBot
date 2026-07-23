@@ -9,6 +9,7 @@ import 'package:ui/features/home/pages/command_overlay/widgets/message_bubble.da
 import 'package:ui/models/chat_message_model.dart';
 import 'package:ui/services/agent_avatar_service.dart';
 import 'package:ui/services/app_background_service.dart';
+import 'package:ui/services/agent_message_kinds.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/widgets/agent_brand_icon.dart';
 import 'package:ui/widgets/agent_avatar.dart';
@@ -328,8 +329,8 @@ bool _isAgentToolSummaryMessage(ChatMessageModel message) {
       kAgentToolSummaryCardType;
 }
 
-/// ACP 消息沿用旧的 codex reducer/entry id 以兼容历史数据，但头像必须按
-/// 消息记录的 Agent 身份渲染。旧消息没有身份时才回退到 Codex。
+/// 头像始终按消息记录的 Agent 身份渲染；无法从旧历史记录恢复身份时使用
+/// 通用 Agent 图标，避免把 Claude Code、OpenCode 等错误标成 Codex。
 String? _agentRunGroupAcpAgentId(AgentRunTimelineGroup group) {
   for (final message in group.processMessagesNewestFirst) {
     if (message.agentId != null) return message.agentId;
@@ -338,20 +339,20 @@ String? _agentRunGroupAcpAgentId(AgentRunTimelineGroup group) {
     if (message.agentId != null) return message.agentId;
   }
   for (final message in group.processMessagesNewestFirst) {
-    if (_isAcpRunMessage(message)) return 'codex-acp';
+    if (_isAcpRunMessage(message)) return 'generic-agent';
   }
   for (final message in group.visibleMessagesNewestFirst) {
-    if (_isAcpRunMessage(message)) return 'codex-acp';
+    if (_isAcpRunMessage(message)) return 'generic-agent';
   }
   return null;
 }
 
 bool _isAcpRunMessage(ChatMessageModel message) {
   final cardData = message.cardData;
-  if ((cardData?['uiStyle'] ?? '').toString().trim() == 'codex_tool') {
+  if (isAgentToolUiStyle(cardData?['uiStyle'])) {
     return true;
   }
-  if ((cardData?['type'] ?? '').toString().trim() == 'codex_request') {
+  if (isAgentRequestCardType(cardData?['type'])) {
     return true;
   }
   for (final rawId in <Object?>[
@@ -361,7 +362,7 @@ bool _isAcpRunMessage(ChatMessageModel message) {
     cardData?['cardId'],
   ]) {
     final id = rawId?.toString().trim() ?? '';
-    if (id.contains('-codex-')) {
+    if (id.contains('-agent-') || id.contains('-codex-')) {
       return true;
     }
   }

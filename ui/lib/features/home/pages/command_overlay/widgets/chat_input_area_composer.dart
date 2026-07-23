@@ -18,54 +18,54 @@ const List<Color> _kDarkComposerFlowGradientColors = <Color>[
   Color(0xFF8C775D),
 ];
 
-const List<String> _kDefaultCodexReasoningEfforts = <String>[
+const List<String> _kDefaultAgentReasoningEfforts = <String>[
   'low',
   'medium',
   'high',
   'xhigh',
 ];
 
-const String _kCodexRunSettingsProviderId = '__codex_run_settings__';
+const String _kAgentRunSettingsProviderId = '__agent_run_settings__';
 
-enum _CodexRunSettingsMenuKind { agent, model, effort }
+enum _AgentRunSettingsMenuKind { agent, model, effort }
 
-class _CodexRunSettingsMenuAction {
-  const _CodexRunSettingsMenuAction._(this.kind, this.value);
+class _AgentRunSettingsMenuAction {
+  const _AgentRunSettingsMenuAction._(this.kind, this.value);
 
-  const _CodexRunSettingsMenuAction.model(String value)
-    : this._(_CodexRunSettingsMenuKind.model, value);
+  const _AgentRunSettingsMenuAction.model(String value)
+    : this._(_AgentRunSettingsMenuKind.model, value);
 
-  const _CodexRunSettingsMenuAction.agent(String value)
-    : this._(_CodexRunSettingsMenuKind.agent, value);
+  const _AgentRunSettingsMenuAction.agent(String value)
+    : this._(_AgentRunSettingsMenuKind.agent, value);
 
-  const _CodexRunSettingsMenuAction.effort(String value)
-    : this._(_CodexRunSettingsMenuKind.effort, value);
+  const _AgentRunSettingsMenuAction.effort(String value)
+    : this._(_AgentRunSettingsMenuKind.effort, value);
 
-  final _CodexRunSettingsMenuKind kind;
+  final _AgentRunSettingsMenuKind kind;
   final String value;
 }
 
 mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
-  final GlobalKey _codexRunSettingsButtonKey = GlobalKey(
-    debugLabel: 'codex-run-settings-button',
+  final GlobalKey _agentRunSettingsButtonKey = GlobalKey(
+    debugLabel: 'agent-run-settings-button',
   );
   final GlobalKey _modelPickerButtonKey = GlobalKey(
     debugLabel: 'chat-model-picker-button',
   );
-  final GlobalKey _codexPermissionButtonKey = GlobalKey(
-    debugLabel: 'codex-permission-button',
+  final GlobalKey _agentPermissionButtonKey = GlobalKey(
+    debugLabel: 'agent-permission-button',
   );
-  OverlayGlassPopupHandle<_CodexRunSettingsMenuAction>?
-  _codexRunSettingsMenuHandle;
-  bool _isOpeningCodexRunSettingsMenu = false;
-  OverlayGlassPopupHandle<CodexPermissionMode>? _codexPermissionMenuHandle;
+  OverlayGlassPopupHandle<_AgentRunSettingsMenuAction>?
+  _agentRunSettingsMenuHandle;
+  bool _isOpeningAgentRunSettingsMenu = false;
+  OverlayGlassPopupHandle<AgentPermissionMode>? _agentPermissionMenuHandle;
 
   @override
   void dispose() {
-    unawaited(_codexRunSettingsMenuHandle?.dismiss());
-    _codexRunSettingsMenuHandle = null;
-    unawaited(_codexPermissionMenuHandle?.dismiss());
-    _codexPermissionMenuHandle = null;
+    unawaited(_agentRunSettingsMenuHandle?.dismiss());
+    _agentRunSettingsMenuHandle = null;
+    unawaited(_agentPermissionMenuHandle?.dismiss());
+    _agentPermissionMenuHandle = null;
     super.dispose();
   }
 
@@ -218,19 +218,19 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
         ),
         const SizedBox(width: 4),
       ],
-      if (_shouldShowCodexRunSettingsSelector) ...[
-        _buildCodexRunSettingsButton(compact: false),
+      if (_shouldShowAgentRunSettingsSelector) ...[
+        _buildAgentRunSettingsButton(compact: false),
         const SizedBox(width: 4),
       ],
       if (_shouldShowModelPicker) ...[
         _buildModelPickerButton(compact: false),
         const SizedBox(width: 4),
       ],
-      if (_shouldShowCodexPermissionSelector) ...[
+      if (_shouldShowAgentPermissionSelector) ...[
         SizedBox(
           width: 28,
           height: 28,
-          child: _buildCodexPermissionButton(iconSize: 20),
+          child: _buildAgentPermissionButton(iconSize: 20),
         ),
         const SizedBox(width: 4),
       ],
@@ -738,19 +738,19 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
           ),
           const SizedBox(width: 4),
         ],
-        if (_shouldShowCodexRunSettingsSelector) ...[
-          _buildCodexRunSettingsButton(compact: true),
+        if (_shouldShowAgentRunSettingsSelector) ...[
+          _buildAgentRunSettingsButton(compact: true),
           const SizedBox(width: 2),
         ],
         if (_shouldShowModelPicker) ...[
           _buildModelPickerButton(compact: true),
           const SizedBox(width: 2),
         ],
-        if (_shouldShowCodexPermissionSelector) ...[
+        if (_shouldShowAgentPermissionSelector) ...[
           SizedBox(
             width: 24,
             height: 24,
-            child: _buildCodexPermissionButton(iconSize: 18),
+            child: _buildAgentPermissionButton(iconSize: 18),
           ),
           const SizedBox(width: 2),
         ],
@@ -766,13 +766,13 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
     );
   }
 
-  bool get _shouldShowCodexPermissionSelector =>
-      widget.codexPermissionMode != null &&
-      widget.onCodexPermissionModeChanged != null;
+  bool get _shouldShowAgentPermissionSelector =>
+      widget.agentPermissionMode != null &&
+      widget.onAgentPermissionModeChanged != null;
 
-  bool get _shouldShowCodexRunSettingsSelector =>
-      widget.codexRunSettings != null &&
-      widget.onCodexRunSettingsChanged != null;
+  bool get _shouldShowAgentRunSettingsSelector =>
+      widget.agentRunSettings != null &&
+      widget.onAgentRunSettingsChanged != null;
 
   bool get _shouldShowModelPicker => widget.modelPickerSettings != null;
 
@@ -835,8 +835,8 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
     );
   }
 
-  Widget _buildCodexRunSettingsButton({required bool compact}) {
-    final settings = widget.codexRunSettings!;
+  Widget _buildAgentRunSettingsButton({required bool compact}) {
+    final settings = widget.agentRunSettings!;
     final palette = context.omniPalette;
     final modelId = settings.modelId.trim();
     final effort = settings.reasoningEffort.trim();
@@ -849,12 +849,11 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
         : _shortModelLabel(modelId);
     final displayEffort = effort.isEmpty
         ? ''
-        : _codexReasoningEffortLabel(effort, compact: true);
+        : _agentReasoningEffortLabel(effort, compact: true);
     final modelAndEffort = displayEffort.isEmpty
         ? displayModel
         : '$displayModel · $displayEffort';
-    final displayText =
-        agentName.isNotEmpty && agentName.toLowerCase() != 'codex'
+    final displayText = agentName.isNotEmpty
         ? '$agentName · $modelAndEffort'
         : modelAndEffort;
     final selectedColor = palette.accentPrimary;
@@ -862,26 +861,26 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
         ? palette.textPrimary
         : const Color(0xFF26364D);
 
-    final buttonKey = _codexRunSettingsButtonKey;
+    final buttonKey = _agentRunSettingsButtonKey;
 
     Future<void> openMenu() async {
-      if (_codexRunSettingsMenuHandle != null ||
-          _isOpeningCodexRunSettingsMenu) {
+      if (_agentRunSettingsMenuHandle != null ||
+          _isOpeningAgentRunSettingsMenu) {
         return;
       }
-      _isOpeningCodexRunSettingsMenu = true;
+      _isOpeningAgentRunSettingsMenu = true;
       if (buttonKey.currentContext == null) {
-        _isOpeningCodexRunSettingsMenu = false;
+        _isOpeningAgentRunSettingsMenu = false;
         return;
       }
-      final opened = widget.onCodexRunSettingsOpened;
+      final opened = widget.onAgentRunSettingsOpened;
       try {
         if (opened != null) {
           await Future<void>.sync(opened);
           await WidgetsBinding.instance.endOfFrame;
         }
       } finally {
-        _isOpeningCodexRunSettingsMenu = false;
+        _isOpeningAgentRunSettingsMenu = false;
       }
       if (!mounted) {
         return;
@@ -894,18 +893,18 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
       if (anchor == null) {
         return;
       }
-      final refreshedSettings = widget.codexRunSettings ?? settings;
+      final refreshedSettings = widget.agentRunSettings ?? settings;
       final refreshedModelId = refreshedSettings.modelId.trim();
       final refreshedEffort = refreshedSettings.reasoningEffort.trim();
       final refreshedAgentId = refreshedSettings.agentId.trim();
-      final modelOptions = _codexRunSettingsOptions(
+      final modelOptions = _agentRunSettingsOptions(
         current: refreshedModelId,
         options: refreshedSettings.modelOptions,
       );
-      final effortOptions = _codexRunSettingsOptions(
+      final effortOptions = _agentRunSettingsOptions(
         current: refreshedEffort,
         options: refreshedSettings.reasoningEffortOptions.isEmpty
-            ? _kDefaultCodexReasoningEfforts
+            ? _kDefaultAgentReasoningEfforts
             : refreshedSettings.reasoningEffortOptions,
       );
       final disabledModelLabel = refreshedSettings.isLoadingModels
@@ -920,10 +919,10 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
       final currentSelection = refreshedModelId.isEmpty
           ? null
           : ConversationModelSelection(
-              providerProfileId: _kCodexRunSettingsProviderId,
+              providerProfileId: _kAgentRunSettingsProviderId,
               modelId: refreshedModelId,
             );
-      final handle = showOverlayGlassPopup<_CodexRunSettingsMenuAction>(
+      final handle = showOverlayGlassPopup<_AgentRunSettingsMenuAction>(
         context: anchorContext,
         anchor: anchor,
         reverseTransitionDuration: Duration.zero,
@@ -933,49 +932,49 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
           maxHeight: 420,
           profiles: [
             ModelProviderProfileSummary(
-              id: _kCodexRunSettingsProviderId,
+              id: _kAgentRunSettingsProviderId,
               name: refreshedSettings.agentName.trim().isNotEmpty
                   ? refreshedSettings.agentName.trim()
                   : 'Agent',
               baseUrl: '',
               apiKey: '',
               customHeaders: const <String, String>{},
-              sourceType: 'codex',
+              sourceType: 'agent',
               readOnly: true,
               ready: true,
               statusText: '',
               configured: true,
             ),
           ],
-          providerModelsByProfileId: {_kCodexRunSettingsProviderId: models},
+          providerModelsByProfileId: {_kAgentRunSettingsProviderId: models},
           currentSelection: currentSelection,
           showSearchField: false,
           showProfileHeaders: false,
           allowProfileCollapse: false,
           emptyModelsLabel: disabledModelLabel,
-          modelRowKeyPrefix: 'chat-input-codex-run-settings-option-model',
+          modelRowKeyPrefix: 'chat-input-agent-run-settings-option-model',
           onSelect: (selection) {
             unawaited(
               handle.dismiss(
-                _CodexRunSettingsMenuAction.model(selection.modelId),
+                _AgentRunSettingsMenuAction.model(selection.modelId),
               ),
             );
           },
-          footer: _CodexReasoningEffortSelectorFooter(
+          footer: _AgentReasoningEffortSelectorFooter(
             agentHeader: english ? 'Agent' : 'Agent 模式',
             agents: refreshedSettings.agentOptions,
             selectedAgentId: refreshedAgentId,
             onSelectAgent: (value) {
               unawaited(
-                handle.dismiss(_CodexRunSettingsMenuAction.agent(value)),
+                handle.dismiss(_AgentRunSettingsMenuAction.agent(value)),
               );
             },
             header: english ? 'Reasoning' : '推理强度',
             options: [
               for (final option in effortOptions)
-                _CodexRunSettingsOptionData(
+                _AgentRunSettingsOptionData(
                   value: option,
-                  label: _codexReasoningEffortLabel(option),
+                  label: _agentReasoningEffortLabel(option),
                 ),
             ],
             selectedEffort: refreshedEffort,
@@ -983,32 +982,32 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
             textColor: menuTextColor,
             onSelect: (value) {
               unawaited(
-                handle.dismiss(_CodexRunSettingsMenuAction.effort(value)),
+                handle.dismiss(_AgentRunSettingsMenuAction.effort(value)),
               );
             },
           ),
         ),
       );
-      _codexRunSettingsMenuHandle = handle;
+      _agentRunSettingsMenuHandle = handle;
       try {
         final action = await handle.future;
         if (action == null) return;
-        final changed = widget.onCodexRunSettingsChanged;
+        final changed = widget.onAgentRunSettingsChanged;
         if (changed == null) return;
         unawaited(
           Future<void>.sync(() {
-            if (action.kind == _CodexRunSettingsMenuKind.agent) {
+            if (action.kind == _AgentRunSettingsMenuKind.agent) {
               return changed(agentId: action.value);
             }
-            if (action.kind == _CodexRunSettingsMenuKind.model) {
+            if (action.kind == _AgentRunSettingsMenuKind.model) {
               return changed(modelId: action.value);
             }
             return changed(reasoningEffort: action.value);
           }),
         );
       } finally {
-        if (_codexRunSettingsMenuHandle == handle) {
-          _codexRunSettingsMenuHandle = null;
+        if (_agentRunSettingsMenuHandle == handle) {
+          _agentRunSettingsMenuHandle = null;
         }
       }
     }
@@ -1022,11 +1021,11 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
           message: [
             if (modelId.isNotEmpty) modelId,
             if (agentName.isNotEmpty) agentName,
-            if (effort.isNotEmpty) _codexReasoningEffortLabel(effort),
+            if (effort.isNotEmpty) _agentReasoningEffortLabel(effort),
           ].join(' · '),
           waitDuration: const Duration(milliseconds: 400),
           child: InkWell(
-            key: const ValueKey('chat-input-codex-run-settings-button'),
+            key: const ValueKey('chat-input-agent-run-settings-button'),
             borderRadius: BorderRadius.circular(8),
             onTap: openMenu,
             child: AnimatedContainer(
@@ -1069,7 +1068,7 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
     );
   }
 
-  String _codexReasoningEffortLabel(String effort, {bool compact = false}) {
+  String _agentReasoningEffortLabel(String effort, {bool compact = false}) {
     final normalized = effort.trim().toLowerCase();
     final english = Localizations.localeOf(context).languageCode == 'en';
     return switch (normalized) {
@@ -1105,7 +1104,7 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
     return '$prefix...';
   }
 
-  List<String> _codexRunSettingsOptions({
+  List<String> _agentRunSettingsOptions({
     required String current,
     required List<String> options,
   }) {
@@ -1126,9 +1125,9 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
     return result;
   }
 
-  Widget _buildCodexPermissionButton({required double iconSize}) {
+  Widget _buildAgentPermissionButton({required double iconSize}) {
     final selected =
-        widget.codexPermissionMode ?? CodexPermissionMode.fullAccess;
+        widget.agentPermissionMode ?? AgentPermissionMode.fullAccess;
     final palette = context.omniPalette;
     final selectedColor = context.isDarkTheme
         ? palette.accentPrimary
@@ -1137,10 +1136,10 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
         ? palette.textSecondary
         : const Color(0xFF5E6C84);
 
-    final buttonKey = _codexPermissionButtonKey;
+    final buttonKey = _agentPermissionButtonKey;
 
     Future<void> openMenu() async {
-      if (_codexPermissionMenuHandle != null) {
+      if (_agentPermissionMenuHandle != null) {
         return;
       }
       final anchorContext = buttonKey.currentContext;
@@ -1151,13 +1150,13 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
       if (anchor == null) {
         return;
       }
-      final handle = showOverlayGlassPopup<CodexPermissionMode>(
+      final handle = showOverlayGlassPopup<AgentPermissionMode>(
         context: anchorContext,
         anchor: anchor,
         preferBelow: false,
         reverseTransitionDuration: Duration.zero,
         dismissOnBackButton: false,
-        builder: (handle) => _CodexPermissionGlassMenuContent(
+        builder: (handle) => _AgentPermissionGlassMenuContent(
           width: 196,
           selected: selected,
           selectedColor: selectedColor,
@@ -1166,34 +1165,34 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
               ? palette.textPrimary
               : const Color(0xFF232D3D),
           options: [
-            for (final mode in CodexPermissionMode.values)
-              _CodexPermissionOptionData(
+            for (final mode in AgentPermissionMode.values)
+              _AgentPermissionOptionData(
                 mode: mode,
-                label: _codexPermissionLabel(mode),
-                iconAsset: _codexPermissionIconAsset(mode),
+                label: _agentPermissionLabel(mode),
+                iconAsset: _agentPermissionIconAsset(mode),
               ),
           ],
           onSelect: (mode) => unawaited(handle.dismiss(mode)),
         ),
       );
-      _codexPermissionMenuHandle = handle;
+      _agentPermissionMenuHandle = handle;
       try {
         final mode = await handle.future;
         if (mode == null) return;
-        widget.onCodexPermissionModeChanged?.call(mode);
+        widget.onAgentPermissionModeChanged?.call(mode);
       } finally {
-        if (_codexPermissionMenuHandle == handle) {
-          _codexPermissionMenuHandle = null;
+        if (_agentPermissionMenuHandle == handle) {
+          _agentPermissionMenuHandle = null;
         }
       }
     }
 
     return TextFieldTapRegion(
       child: Tooltip(
-        message: _codexPermissionTooltip(),
+        message: _agentPermissionTooltip(),
         waitDuration: const Duration(milliseconds: 400),
         child: InkWell(
-          key: const ValueKey('chat-input-codex-permission-button'),
+          key: const ValueKey('chat-input-agent-permission-button'),
           borderRadius: BorderRadius.circular(999),
           onTap: openMenu,
           child: AnimatedContainer(
@@ -1209,7 +1208,7 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
               shape: BoxShape.circle,
             ),
             child: Center(
-              child: _buildCodexPermissionIcon(
+              child: _buildAgentPermissionIcon(
                 selected,
                 size: iconSize,
                 color: selectedColor,
@@ -1221,39 +1220,39 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
     );
   }
 
-  String _codexPermissionTooltip() {
-    final agentName = widget.codexRunSettings?.agentName.trim() ?? '';
+  String _agentPermissionTooltip() {
+    final agentName = widget.agentRunSettings?.agentName.trim() ?? '';
     final displayName = agentName.isNotEmpty ? agentName : 'Agent';
     return Localizations.localeOf(context).languageCode == 'en'
         ? '$displayName permissions'
         : '$displayName 权限';
   }
 
-  String _codexPermissionLabel(CodexPermissionMode mode) {
+  String _agentPermissionLabel(AgentPermissionMode mode) {
     final english = Localizations.localeOf(context).languageCode == 'en';
     return switch (mode) {
-      CodexPermissionMode.defaultMode =>
+      AgentPermissionMode.defaultMode =>
         english ? 'Default permissions' : '默认权限',
-      CodexPermissionMode.autoReview => english ? 'Auto review' : '自动审查',
-      CodexPermissionMode.fullAccess => english ? 'Full access' : '完全访问权限',
+      AgentPermissionMode.autoReview => english ? 'Auto review' : '自动审查',
+      AgentPermissionMode.fullAccess => english ? 'Full access' : '完全访问权限',
     };
   }
 
-  String _codexPermissionIconAsset(CodexPermissionMode mode) {
+  String _agentPermissionIconAsset(AgentPermissionMode mode) {
     return switch (mode) {
-      CodexPermissionMode.defaultMode => _kCodexPermissionDefaultIconAsset,
-      CodexPermissionMode.autoReview => _kCodexPermissionAutoReviewIconAsset,
-      CodexPermissionMode.fullAccess => _kCodexPermissionFullAccessIconAsset,
+      AgentPermissionMode.defaultMode => _kAgentPermissionDefaultIconAsset,
+      AgentPermissionMode.autoReview => _kAgentPermissionAutoReviewIconAsset,
+      AgentPermissionMode.fullAccess => _kAgentPermissionFullAccessIconAsset,
     };
   }
 
-  Widget _buildCodexPermissionIcon(
-    CodexPermissionMode mode, {
+  Widget _buildAgentPermissionIcon(
+    AgentPermissionMode mode, {
     required double size,
     required Color color,
   }) {
     return SvgPicture.asset(
-      _codexPermissionIconAsset(mode),
+      _agentPermissionIconAsset(mode),
       width: size,
       height: size,
       colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
@@ -1486,20 +1485,20 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
   }
 }
 
-class _CodexPermissionOptionData {
-  const _CodexPermissionOptionData({
+class _AgentPermissionOptionData {
+  const _AgentPermissionOptionData({
     required this.mode,
     required this.label,
     required this.iconAsset,
   });
 
-  final CodexPermissionMode mode;
+  final AgentPermissionMode mode;
   final String label;
   final String iconAsset;
 }
 
-class _CodexPermissionGlassMenuContent extends StatefulWidget {
-  const _CodexPermissionGlassMenuContent({
+class _AgentPermissionGlassMenuContent extends StatefulWidget {
+  const _AgentPermissionGlassMenuContent({
     required this.width,
     required this.options,
     required this.selected,
@@ -1512,27 +1511,27 @@ class _CodexPermissionGlassMenuContent extends StatefulWidget {
   static const double _rowHeight = 42;
 
   final double width;
-  final List<_CodexPermissionOptionData> options;
-  final CodexPermissionMode selected;
+  final List<_AgentPermissionOptionData> options;
+  final AgentPermissionMode selected;
   final Color selectedColor;
   final Color inactiveColor;
   final Color textColor;
-  final ValueChanged<CodexPermissionMode> onSelect;
+  final ValueChanged<AgentPermissionMode> onSelect;
 
   @override
-  State<_CodexPermissionGlassMenuContent> createState() =>
-      _CodexPermissionGlassMenuContentState();
+  State<_AgentPermissionGlassMenuContent> createState() =>
+      _AgentPermissionGlassMenuContentState();
 }
 
-class _CodexPermissionGlassMenuContentState
-    extends State<_CodexPermissionGlassMenuContent> {
+class _AgentPermissionGlassMenuContentState
+    extends State<_AgentPermissionGlassMenuContent> {
   static const Duration _selectionDuration = Duration(milliseconds: 160);
 
-  void _select(CodexPermissionMode mode) {
+  void _select(AgentPermissionMode mode) {
     widget.onSelect(mode);
   }
 
-  Widget _buildIcon(_CodexPermissionOptionData option, bool selected) {
+  Widget _buildIcon(_AgentPermissionOptionData option, bool selected) {
     return SvgPicture.asset(
       option.iconAsset,
       width: 18,
@@ -1544,7 +1543,7 @@ class _CodexPermissionGlassMenuContentState
     );
   }
 
-  Widget _buildRow(_CodexPermissionOptionData option) {
+  Widget _buildRow(_AgentPermissionOptionData option) {
     final isSelected = option.mode == widget.selected;
     final palette = context.omniPalette;
     final isDark = context.isDarkTheme;
@@ -1557,14 +1556,14 @@ class _CodexPermissionGlassMenuContentState
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
       child: InkWell(
-        key: ValueKey('chat-input-codex-permission-option-${option.mode.name}'),
+        key: ValueKey('chat-input-agent-permission-option-${option.mode.name}'),
         onTap: () => _select(option.mode),
         borderRadius: BorderRadius.circular(12),
         child: AnimatedContainer(
           duration: _selectionDuration,
           curve: Curves.easeOutCubic,
           constraints: const BoxConstraints(
-            minHeight: _CodexPermissionGlassMenuContent._rowHeight,
+            minHeight: _AgentPermissionGlassMenuContent._rowHeight,
           ),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
           decoration: BoxDecoration(
@@ -1638,15 +1637,15 @@ class _CodexPermissionGlassMenuContentState
   }
 }
 
-class _CodexRunSettingsOptionData {
-  const _CodexRunSettingsOptionData({required this.value, required this.label});
+class _AgentRunSettingsOptionData {
+  const _AgentRunSettingsOptionData({required this.value, required this.label});
 
   final String value;
   final String label;
 }
 
-class _CodexReasoningEffortSelectorFooter extends StatelessWidget {
-  const _CodexReasoningEffortSelectorFooter({
+class _AgentReasoningEffortSelectorFooter extends StatelessWidget {
+  const _AgentReasoningEffortSelectorFooter({
     required this.agentHeader,
     required this.agents,
     required this.selectedAgentId,
@@ -1664,10 +1663,10 @@ class _CodexReasoningEffortSelectorFooter extends StatelessWidget {
 
   final String header;
   final String agentHeader;
-  final List<CodexAgentOption> agents;
+  final List<AgentOption> agents;
   final String selectedAgentId;
   final ValueChanged<String> onSelectAgent;
-  final List<_CodexRunSettingsOptionData> options;
+  final List<_AgentRunSettingsOptionData> options;
   final String selectedEffort;
   final Color selectedColor;
   final Color textColor;
@@ -1712,7 +1711,7 @@ class _CodexReasoningEffortSelectorFooter extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
       child: InkWell(
-        key: ValueKey('chat-input-codex-run-settings-option-$keySuffix'),
+        key: ValueKey('chat-input-agent-run-settings-option-$keySuffix'),
         onTap: () => (onSelected ?? onSelect)(value),
         borderRadius: BorderRadius.circular(12),
         child: AnimatedContainer(

@@ -1,7 +1,7 @@
 package cn.com.omnimind.bot.webchat
 
 import android.content.Context
-import cn.com.omnimind.bot.codex.CodexAppServerManager
+import cn.com.omnimind.bot.agent.runtime.AgentRuntimeManager
 import cn.com.omnimind.bot.manager.AssistsCoreManager
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -24,8 +24,8 @@ private data class WebAgentRunContext(
 private val WEB_CONVERSATION_MODES = setOf("normal", "codex", "chat_only")
 
 internal enum class WebConversationRunKind {
+    OMNIAI,
     AGENT,
-    CODEX,
     CHAT_ONLY
 }
 
@@ -41,9 +41,10 @@ internal fun resolveWebConversationMode(
 
 internal fun resolveWebConversationRunKind(mode: String?): WebConversationRunKind {
     return when (mode?.trim()?.lowercase()) {
-        "codex" -> WebConversationRunKind.CODEX
+        // `codex` is the legacy database value for the generic ACP Agent mode.
+        "codex" -> WebConversationRunKind.AGENT
         "chat_only" -> WebConversationRunKind.CHAT_ONLY
-        else -> WebConversationRunKind.AGENT
+        else -> WebConversationRunKind.OMNIAI
     }
 }
 
@@ -495,10 +496,10 @@ class AgentRunService(
     private val conversationService by lazy {
         ConversationDomainService(context.applicationContext)
     }
-    private val codexRunBridge by lazy {
-        WebCodexRunBridge(
+    private val agentRunBridge by lazy {
+        WebAgentRunBridge(
             context = context.applicationContext,
-            manager = CodexAppServerManager.getInstance(context)
+            manager = AgentRuntimeManager.getInstance(context)
         )
     }
 
@@ -507,7 +508,7 @@ class AgentRunService(
         conversationMode: String
     ): Boolean {
         return when (resolveWebConversationRunKind(conversationMode)) {
-            WebConversationRunKind.AGENT ->
+            WebConversationRunKind.OMNIAI ->
                 AssistsCoreManager.sharedInstanceOrCreate(context).hasActiveAgentRun(
                     conversationId = conversationId,
                     conversationMode = conversationMode
@@ -517,7 +518,7 @@ class AgentRunService(
                     conversationId = conversationId,
                     conversationMode = conversationMode
                 )
-            WebConversationRunKind.CODEX -> codexRunBridge.hasActiveRun(conversationId)
+            WebConversationRunKind.AGENT -> agentRunBridge.hasActiveRun(conversationId)
         }
     }
 
@@ -537,14 +538,14 @@ class AgentRunService(
         )
         val runKind = resolveWebConversationRunKind(conversationMode)
         when (runKind) {
-            WebConversationRunKind.AGENT -> if (manager.hasActiveAgentRuns()) {
+            WebConversationRunKind.OMNIAI -> if (manager.hasActiveAgentRuns()) {
                 throw IllegalStateException("设备当前已有运行中的 Agent 任务，请稍后重试")
             }
             WebConversationRunKind.CHAT_ONLY -> if (manager.hasActiveChatTasks()) {
                 throw IllegalStateException("设备当前已有运行中的纯聊天任务，请稍后重试")
             }
-            WebConversationRunKind.CODEX -> if (codexRunBridge.hasActiveRun(conversationId)) {
-                throw IllegalStateException("该 Codex 会话已有运行中的任务")
+            WebConversationRunKind.AGENT -> if (agentRunBridge.hasActiveRun(conversationId)) {
+                throw IllegalStateException("该 Agent 会话已有运行中的任务")
             }
         }
         val arguments = linkedMapOf<String, Any?>(
@@ -568,7 +569,7 @@ class AgentRunService(
             storedConversation
         }
         val runtimeResult = when (runKind) {
-            WebConversationRunKind.AGENT -> {
+            WebConversationRunKind.OMNIAI -> {
                 invokeManager("createAgentTask", arguments) {
                     manager.createAgentTask(it, this)
                 }
@@ -606,12 +607,15 @@ class AgentRunService(
                 }
                 emptyMap()
             }
-            WebConversationRunKind.CODEX -> codexRunBridge.startRun(
+            WebConversationRunKind.AGENT -> agentRunBridge.startRun(
                 taskId = taskId,
                 conversationId = conversationId,
                 userMessage = normalizedPayload.userMessage,
                 attachments = normalizedPayload.attachments,
-                cwd = storedConversation["codexCwd"]?.toString(),
+                cwd = (
+                    storedConversation["agentCwd"]
+                        ?: storedConversation["codexCwd"]
+                    )?.toString(),
                 userMessageCreatedAt = (request["userMessageCreatedAt"] as? Number)?.toLong()
             )
         }
@@ -632,7 +636,7 @@ class AgentRunService(
         val normalizedTaskId = taskId?.trim().takeUnless { it.isNullOrEmpty() }
         val runContext = normalizedTaskId?.let(runContexts::get)
         when (resolveWebConversationRunKind(runContext?.conversationMode)) {
-            WebConversationRunKind.AGENT -> invokeManager(
+            WebConversationRunKind.OMNIAI -> invokeManager(
                 method = "cancelRunningTask",
                 arguments = normalizedTaskId?.let { mapOf("taskId" to it) }
             ) {
@@ -644,9 +648,9 @@ class AgentRunService(
             ) {
                 manager.cancelChatTask(it, this)
             }
-            WebConversationRunKind.CODEX -> {
+            WebConversationRunKind.AGENT -> {
                 if (normalizedTaskId != null) {
-                    codexRunBridge.cancelRun(normalizedTaskId)
+                    agentRunBridge.cancelRun(normalizedTaskId)
                 }
             }
         }

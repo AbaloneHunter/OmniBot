@@ -106,16 +106,16 @@ void main() {
     expect(tapped, isTrue);
   });
 
-  testWidgets('codex permission selector opens menu and selects mode', (
+  testWidgets('agent permission selector opens menu and selects mode', (
     tester,
   ) async {
-    CodexPermissionMode? selected;
+    AgentPermissionMode? selected;
     await tester.pumpWidget(
       _buildTestApp(
         contextUsageRatio: null,
         useLargeComposerStyle: true,
-        codexPermissionMode: CodexPermissionMode.fullAccess,
-        onCodexPermissionModeChanged: (mode) {
+        agentPermissionMode: AgentPermissionMode.fullAccess,
+        onAgentPermissionModeChanged: (mode) {
           selected = mode;
         },
       ),
@@ -123,7 +123,7 @@ void main() {
     await tester.pump();
 
     final permissionButton = find.byKey(
-      const ValueKey('chat-input-codex-permission-button'),
+      const ValueKey('chat-input-agent-permission-button'),
     );
     expect(
       find.descendant(of: permissionButton, matching: find.byType(SvgPicture)),
@@ -136,27 +136,27 @@ void main() {
 
     expect(
       find.byKey(
-        const ValueKey('chat-input-codex-permission-option-defaultMode'),
+        const ValueKey('chat-input-agent-permission-option-defaultMode'),
       ),
       findsOneWidget,
     );
     expect(
       find.byKey(
-        const ValueKey('chat-input-codex-permission-option-autoReview'),
+        const ValueKey('chat-input-agent-permission-option-autoReview'),
       ),
       findsOneWidget,
     );
     expect(
       find.byKey(
-        const ValueKey('chat-input-codex-permission-option-fullAccess'),
+        const ValueKey('chat-input-agent-permission-option-fullAccess'),
       ),
       findsOneWidget,
     );
-    for (final mode in CodexPermissionMode.values) {
+    for (final mode in AgentPermissionMode.values) {
       expect(
         find.descendant(
           of: find.byKey(
-            ValueKey('chat-input-codex-permission-option-${mode.name}'),
+            ValueKey('chat-input-agent-permission-option-${mode.name}'),
           ),
           matching: find.byType(SvgPicture),
         ),
@@ -166,16 +166,16 @@ void main() {
 
     await tester.tap(
       find.byKey(
-        const ValueKey('chat-input-codex-permission-option-autoReview'),
+        const ValueKey('chat-input-agent-permission-option-autoReview'),
       ),
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(selected, CodexPermissionMode.autoReview);
+    expect(selected, AgentPermissionMode.autoReview);
   });
 
-  testWidgets('codex run settings selector selects model and effort', (
+  testWidgets('agent run settings selector selects model and effort', (
     tester,
   ) async {
     String? selectedAgent;
@@ -185,19 +185,19 @@ void main() {
       _buildTestApp(
         contextUsageRatio: null,
         useLargeComposerStyle: true,
-        codexRunSettings: const CodexRunSettings(
-          agentId: 'codex-acp',
-          agentName: 'Codex',
-          agentOptions: <CodexAgentOption>[
-            CodexAgentOption(id: 'codex-acp', name: 'Codex'),
-            CodexAgentOption(id: 'custom-agent', name: 'Custom Agent'),
+        agentRunSettings: const AgentRunSettings(
+          agentId: 'agent-acp',
+          agentName: 'Agent',
+          agentOptions: <AgentOption>[
+            AgentOption(id: 'agent-acp', name: 'Agent'),
+            AgentOption(id: 'custom-agent', name: 'Custom Agent'),
           ],
-          modelId: 'gpt-5-codex',
+          modelId: 'gpt-5-agent',
           reasoningEffort: 'high',
-          modelOptions: <String>['gpt-5-codex', 'gpt-5.1-codex'],
+          modelOptions: <String>['gpt-5-agent', 'gpt-5.1-agent'],
           reasoningEffortOptions: <String>['low', 'high', 'xhigh'],
         ),
-        onCodexRunSettingsChanged: ({agentId, modelId, reasoningEffort}) {
+        onAgentRunSettingsChanged: ({agentId, modelId, reasoningEffort}) {
           selectedAgent = agentId;
           selectedModel = modelId;
           selectedEffort = reasoningEffort;
@@ -207,7 +207,7 @@ void main() {
     await tester.pump();
 
     final settingsButton = find.byKey(
-      const ValueKey('chat-input-codex-run-settings-button'),
+      const ValueKey('chat-input-agent-run-settings-button'),
     );
     expect(settingsButton, findsOneWidget);
 
@@ -219,12 +219,12 @@ void main() {
       find.byKey(const ValueKey('conversation-model-selector-search')),
       findsNothing,
     );
-    expect(find.text('Codex'), findsOneWidget);
+    expect(find.text('Agent'), findsOneWidget);
 
     await tester.tap(
       find.byKey(
         const ValueKey(
-          'chat-input-codex-run-settings-option-agent-custom-agent',
+          'chat-input-agent-run-settings-option-agent-custom-agent',
         ),
       ),
     );
@@ -238,12 +238,12 @@ void main() {
     await tester.tap(
       find.byKey(
         const ValueKey(
-          'chat-input-codex-run-settings-option-model-gpt-5.1-codex',
+          'chat-input-agent-run-settings-option-model-gpt-5.1-agent',
         ),
       ),
     );
     await tester.pump(const Duration(milliseconds: 700));
-    expect(selectedModel, 'gpt-5.1-codex');
+    expect(selectedModel, 'gpt-5.1-agent');
 
     await tester.tap(settingsButton);
     await tester.pump();
@@ -251,21 +251,21 @@ void main() {
 
     await tester.tap(
       find.byKey(
-        const ValueKey('chat-input-codex-run-settings-option-effort-xhigh'),
+        const ValueKey('chat-input-agent-run-settings-option-effort-xhigh'),
       ),
     );
     await tester.pump(const Duration(milliseconds: 300));
     expect(selectedEffort, 'xhigh');
   });
 
-  testWidgets('codex run settings waits for models before opening', (
+  testWidgets('agent run settings waits for models before opening', (
     tester,
   ) async {
     final controller = TextEditingController();
     final focusNode = FocusNode();
     addTearDown(controller.dispose);
     addTearDown(focusNode.dispose);
-    var settings = const CodexRunSettings(
+    var settings = const AgentRunSettings(
       modelId: '',
       reasoningEffort: 'xhigh',
     );
@@ -283,18 +283,18 @@ void main() {
                 onSendMessage: () {},
                 onCancelTask: () {},
                 useLargeComposerStyle: true,
-                codexRunSettings: settings,
-                onCodexRunSettingsOpened: () async {
+                agentRunSettings: settings,
+                onAgentRunSettingsOpened: () async {
                   await Future<void>.delayed(const Duration(milliseconds: 10));
                   rebuild(() {
-                    settings = const CodexRunSettings(
-                      modelId: 'custom-codex',
+                    settings = const AgentRunSettings(
+                      modelId: 'custom-agent',
                       reasoningEffort: 'xhigh',
-                      modelOptions: <String>['custom-codex'],
+                      modelOptions: <String>['custom-agent'],
                     );
                   });
                 },
-                onCodexRunSettingsChanged:
+                onAgentRunSettingsChanged:
                     ({agentId, modelId, reasoningEffort}) {},
               );
             },
@@ -305,13 +305,13 @@ void main() {
     await tester.pump();
 
     await tester.tap(
-      find.byKey(const ValueKey('chat-input-codex-run-settings-button')),
+      find.byKey(const ValueKey('chat-input-agent-run-settings-button')),
     );
     await tester.pump();
     expect(
       find.byKey(
         const ValueKey(
-          'chat-input-codex-run-settings-option-model-custom-codex',
+          'chat-input-agent-run-settings-option-model-custom-agent',
         ),
       ),
       findsNothing,
@@ -324,7 +324,7 @@ void main() {
     expect(
       find.byKey(
         const ValueKey(
-          'chat-input-codex-run-settings-option-model-custom-codex',
+          'chat-input-agent-run-settings-option-model-custom-agent',
         ),
       ),
       findsOneWidget,
@@ -449,7 +449,7 @@ void main() {
     expect(focusNode.hasFocus, isTrue);
   });
 
-  testWidgets('large composer codex controls fit on narrow screens', (
+  testWidgets('large composer agent controls fit on narrow screens', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(300, 640);
@@ -464,26 +464,26 @@ void main() {
         contextUsageRatio: 0.72,
         useLargeComposerStyle: true,
         onTriggerSlashCommand: () {},
-        codexRunSettings: const CodexRunSettings(
-          modelId: 'gpt-5-codex',
+        agentRunSettings: const AgentRunSettings(
+          modelId: 'gpt-5-agent',
           reasoningEffort: 'xhigh',
-          modelOptions: <String>['gpt-5-codex', 'gpt-5.1-codex'],
+          modelOptions: <String>['gpt-5-agent', 'gpt-5.1-agent'],
           reasoningEffortOptions: <String>['low', 'high', 'xhigh'],
         ),
-        onCodexRunSettingsChanged: ({agentId, modelId, reasoningEffort}) {},
-        codexPermissionMode: CodexPermissionMode.fullAccess,
-        onCodexPermissionModeChanged: (_) {},
+        onAgentRunSettingsChanged: ({agentId, modelId, reasoningEffort}) {},
+        agentPermissionMode: AgentPermissionMode.fullAccess,
+        onAgentPermissionModeChanged: (_) {},
       ),
     );
     await tester.pump();
 
     expect(tester.takeException(), isNull);
     expect(
-      find.byKey(const ValueKey('chat-input-codex-run-settings-button')),
+      find.byKey(const ValueKey('chat-input-agent-run-settings-button')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('chat-input-codex-permission-button')),
+      find.byKey(const ValueKey('chat-input-agent-permission-button')),
       findsOneWidget,
     );
   });
@@ -644,10 +644,10 @@ Widget _buildTestApp({
   VoidCallback? onLongPressContextUsageRing,
   VoidCallback? onTriggerSlashCommand,
   bool useLargeComposerStyle = false,
-  CodexPermissionMode? codexPermissionMode,
-  ValueChanged<CodexPermissionMode>? onCodexPermissionModeChanged,
-  CodexRunSettings? codexRunSettings,
-  CodexRunSettingsChanged? onCodexRunSettingsChanged,
+  AgentPermissionMode? agentPermissionMode,
+  ValueChanged<AgentPermissionMode>? onAgentPermissionModeChanged,
+  AgentRunSettings? agentRunSettings,
+  AgentRunSettingsChanged? onAgentRunSettingsChanged,
   ChatModelPickerSettings? modelPickerSettings,
   String initialText = '',
   FocusNode? focusNode,
@@ -670,10 +670,10 @@ Widget _buildTestApp({
           onLongPressContextUsageRing: onLongPressContextUsageRing,
           onTriggerSlashCommand: onTriggerSlashCommand,
           modelPickerSettings: modelPickerSettings,
-          codexRunSettings: codexRunSettings,
-          onCodexRunSettingsChanged: onCodexRunSettingsChanged,
-          codexPermissionMode: codexPermissionMode,
-          onCodexPermissionModeChanged: onCodexPermissionModeChanged,
+          agentRunSettings: agentRunSettings,
+          onAgentRunSettingsChanged: onAgentRunSettingsChanged,
+          agentPermissionMode: agentPermissionMode,
+          onAgentPermissionModeChanged: onAgentPermissionModeChanged,
         ),
       ),
     ),

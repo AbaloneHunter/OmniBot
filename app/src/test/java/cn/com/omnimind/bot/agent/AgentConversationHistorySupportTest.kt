@@ -372,11 +372,16 @@ class AgentConversationHistorySupportTest {
             "user" to 3,
             "content" to mapOf(
                 "id" to "task-1-tool-1",
+                "agentId" to "claude-code-acp",
+                "agentName" to "Claude Code",
                 "cardData" to mapOf(
                     "type" to "agent_tool_summary",
+                    "uiStyle" to "agent_tool",
+                    "agentId" to "claude-code-acp",
+                    "agentName" to "Claude Code",
                     "taskId" to "task-1",
                     "cardId" to "task-1-tool-1",
-                    "toolName" to "browser_use",
+                    "toolName" to "codex.browser_use",
                     "displayName" to "浏览器自动化",
                     "toolType" to "builtin",
                     "status" to "success",
@@ -391,7 +396,10 @@ class AgentConversationHistorySupportTest {
 
         val restored = AgentConversationHistorySupport.restoreToolPayloadFromUiMessage(message)
 
-        assertEquals("browser_use", restored?.get("toolName"))
+        assertEquals("agent.browser_use", restored?.get("toolName"))
+        assertEquals("claude-code-acp", restored?.get("agentId"))
+        assertEquals("Claude Code", restored?.get("agentName"))
+        assertEquals("agent_tool", restored?.get("uiStyle"))
         assertEquals("success", restored?.get("status"))
         assertEquals("抓取成功", restored?.get("summary"))
         assertEquals(
@@ -423,8 +431,10 @@ class AgentConversationHistorySupportTest {
         )
         val payload = mapOf<String, Any?>(
             "taskId" to "task-1",
+            "agentId" to "claude-code-acp",
+            "agentName" to "Claude Code",
             "cardId" to "task-1-tool-1",
-            "toolName" to "terminal_execute",
+            "toolName" to "codex.terminal_execute",
             "displayName" to "执行命令",
             "toolType" to "terminal",
             "argsJson" to gson.toJson(mapOf("command" to longScript)),
@@ -444,6 +454,10 @@ class AgentConversationHistorySupportTest {
         )
 
         assertEquals("agent_tool_summary", cardData["type"])
+        assertEquals("agent_tool", cardData["uiStyle"])
+        assertEquals("claude-code-acp", cardData["agentId"])
+        assertEquals("Claude Code", cardData["agentName"])
+        assertEquals("agent.terminal_execute", cardData["toolName"])
         assertEquals(true, cardData["isHistorical"])
         assertEquals("compact", cardData["historyRenderMode"])
         assertEquals("", cardData["terminalOutputDelta"])
@@ -899,7 +913,9 @@ class AgentConversationHistorySupportTest {
             summary = "终端执行完成",
             payloadJson = gson.toJson(
                 mapOf(
-                    "toolName" to "terminal_execute",
+                    "agentId" to "claude-code-acp",
+                    "agentName" to "Claude Code",
+                    "toolName" to "codex.terminal_execute",
                     "displayName" to "执行命令",
                     "toolType" to "terminal",
                     "summary" to "终端执行完成",
@@ -918,7 +934,10 @@ class AgentConversationHistorySupportTest {
 
         assertTrue(stored.payloadJson.length <= AgentConversationHistorySupport.MAX_STORAGE_ENTRY_PAYLOAD_CHARS)
         assertEquals(true, payload["payloadCompacted"])
-        assertEquals("terminal_execute", payload["toolName"])
+        assertEquals("agent_tool", payload["uiStyle"])
+        assertEquals("claude-code-acp", payload["agentId"])
+        assertEquals("Claude Code", payload["agentName"])
+        assertEquals("agent.terminal_execute", payload["toolName"])
         assertTrue(payload["rawResultJson"].toString().length < longRaw.length)
         assertTrue(payload["terminalOutput"].toString().contains("line-5000"))
     }

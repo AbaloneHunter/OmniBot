@@ -9,7 +9,7 @@ class LegacyTextLocalizer {
 
   static final Map<String, String> _exactEn = <String, String>{
     '宠物': 'Pet',
-    '小万': 'Xiaowan',
+    '小万': 'OmniAi',
     '小万（OmniAi）': 'OmniAi',
     '默认的桌面悬浮窗宠物': 'Default desktop floating pet',
     '自定义宠物': 'Custom Pet',

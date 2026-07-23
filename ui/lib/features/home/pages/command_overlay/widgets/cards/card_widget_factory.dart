@@ -3,7 +3,8 @@ import 'package:ui/services/app_background_service.dart';
 import 'artifact_card.dart';
 import 'agent_tool_summary_card.dart';
 import 'context_compaction_marker_card.dart';
-import 'codex_request_card.dart';
+import 'agent_request_card.dart';
+import 'package:ui/services/agent_message_kinds.dart';
 import 'deep_thinking_card.dart';
 import 'permission_section_card.dart';
 import 'stage_hint_card.dart';
@@ -34,6 +35,9 @@ class CardWidgetFactory {
         AppBackgroundVisualProfile.defaultProfile,
   }) {
     final type = cardData['type'] as String? ?? 'unknown';
+    if (isAgentRequestCardType(type)) {
+      return AgentRequestCard(cardData: cardData);
+    }
 
     switch (type) {
       case 'deep_thinking':
@@ -102,8 +106,6 @@ class CardWidgetFactory {
         );
       case 'context_compaction_marker':
         return ContextCompactionMarkerCard(cardData: cardData);
-      case 'codex_request':
-        return CodexRequestCard(cardData: cardData);
       case 'history_omitted_card':
         return _HistoryOmittedCard(cardData: cardData);
       case 'artifact_card':

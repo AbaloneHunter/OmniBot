@@ -1,4 +1,5 @@
 import 'package:ui/models/chat_message_model.dart';
+import 'package:ui/services/agent_message_kinds.dart';
 
 class AgentRunTimelineEntry {
   const AgentRunTimelineEntry.message(this.message) : group = null;
@@ -144,7 +145,7 @@ AgentRunTimelineGroup? _buildTimelineGroup(
       .where(_isAgentRunCandidateMessage)
       .toList(growable: false);
   final requestMessages = taskMessages
-      .where(_isCodexRequestMessage)
+      .where(_isAgentRequestMessage)
       .toList(growable: false);
   if (taskMessages.length < 2 && requestMessages.isEmpty) {
     return null;
@@ -170,7 +171,7 @@ AgentRunTimelineGroup? _buildTimelineGroup(
           .toList(growable: false)
         ..sort((left, right) => _compareNewestFirst(left, right));
   if (processMessages.isEmpty && visibleMessages.length < 2) {
-    if (!_isCodexRequestMessage(primaryVisibleMessage)) {
+    if (!_isAgentRequestMessage(primaryVisibleMessage)) {
       return null;
     }
   }
@@ -199,7 +200,7 @@ bool _isAgentRunCandidateMessage(ChatMessageModel message) {
   return type == 'deep_thinking' ||
       type == 'agent_tool_summary' ||
       type == 'permission_section' ||
-      type == 'codex_request';
+      isAgentRequestCardType(type);
 }
 
 ChatMessageModel? _resolvePrimaryVisibleMessage(
@@ -299,12 +300,12 @@ List<ChatMessageModel> _resolveVisibleMessages(
   }
   if (primaryKind == 'clarify_required' ||
       primaryKind == 'permission_required' ||
-      _isCodexRequestMessage(primaryVisibleMessage)) {
+      _isAgentRequestMessage(primaryVisibleMessage)) {
     visibleMessages.addAll(
       taskMessages.where(
         (message) =>
             message.id != primaryVisibleMessage.id &&
-            _isCodexRequestMessage(message),
+            _isAgentRequestMessage(message),
       ),
     );
   }
@@ -313,8 +314,8 @@ List<ChatMessageModel> _resolveVisibleMessages(
   return orderedByNewest;
 }
 
-bool _isCodexRequestMessage(ChatMessageModel message) {
-  return _cardType(message) == 'codex_request';
+bool _isAgentRequestMessage(ChatMessageModel message) {
+  return isAgentRequestCardType(_cardType(message));
 }
 
 ChatMessageModel _newestBySequence(List<ChatMessageModel> messages) {

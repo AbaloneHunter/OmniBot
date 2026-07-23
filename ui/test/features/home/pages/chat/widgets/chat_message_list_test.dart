@@ -589,7 +589,7 @@ void main() {
     tester,
   ) async {
     final controller = ScrollController();
-    final messages = _buildCompletedCodexAgentRunMessages();
+    final messages = _buildCompletedAcpAgentRunMessages();
 
     await tester.pumpWidget(
       _buildLocalizedApp(
@@ -630,10 +630,76 @@ void main() {
   });
 
   testWidgets(
-    'legacy ACP text run falls back to Codex avatar when identity is absent',
+    'active Claude response shows its brand icon before text and keeps it after folding',
     (tester) async {
       final controller = ScrollController();
-      final messages = _buildCompletedCodexTextRunMessages();
+      final messages = _buildCompletedAcpAgentRunMessages();
+      var activeTaskIds = <String>{'task-1'};
+      late StateSetter setState;
+
+      await tester.pumpWidget(
+        _buildLocalizedApp(
+          child: StatefulBuilder(
+            builder: (context, stateSetter) {
+              setState = stateSetter;
+              return SizedBox(
+                width: 400,
+                height: 520,
+                child: ChatMessageList(
+                  messages: messages,
+                  activeAgentTaskIds: activeTaskIds,
+                  scrollController: controller,
+                  onBeforeTaskExecute: () async {},
+                ),
+              );
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final activeAvatar = find.byKey(
+        const ValueKey('acp-message-avatar-task-1-text'),
+      );
+      expect(activeAvatar, findsOneWidget);
+      final activeBrandIcon = tester.widget<AgentBrandIcon>(
+        find.descendant(
+          of: activeAvatar,
+          matching: find.byType(AgentBrandIcon),
+        ),
+      );
+      expect(activeBrandIcon.agentId, 'claude-code-acp');
+      expect(
+        tester.getTopLeft(activeAvatar).dy,
+        lessThan(tester.getTopLeft(find.text('最终回答')).dy),
+      );
+      expect(
+        find.byKey(const ValueKey('agent-run-summary-task-1')),
+        findsNothing,
+      );
+
+      setState(() {
+        activeTaskIds = <String>{};
+      });
+      await tester.pumpAndSettle();
+
+      expect(activeAvatar, findsNothing);
+      expect(
+        find.byKey(const ValueKey('agent-run-acp-avatar-task-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('agent-run-summary-task-1')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'legacy ACP text run falls back to generic Agent avatar when identity is absent',
+    (tester) async {
+      final controller = ScrollController();
+      final messages = _buildCompletedLegacyAcpTextRunMessages();
 
       await tester.pumpWidget(
         _buildLocalizedApp(
@@ -659,7 +725,14 @@ void main() {
         find.byKey(const ValueKey('agent-run-avatar-task-1')),
         findsNothing,
       );
-      expect(find.text('Codex 纯文本回答'), findsOneWidget);
+      final genericBrandIcon = tester.widget<AgentBrandIcon>(
+        find.descendant(
+          of: find.byKey(const ValueKey('agent-run-acp-avatar-task-1')),
+          matching: find.byType(AgentBrandIcon),
+        ),
+      );
+      expect(genericBrandIcon.agentId, 'generic-agent');
+      expect(find.text('旧 Agent 纯文本回答'), findsOneWidget);
     },
   );
 
@@ -1393,9 +1466,9 @@ List<ChatMessageModel> _buildCompletedAgentRunMessagesWithToolGroup() {
   ];
 }
 
-List<ChatMessageModel> _buildCompletedCodexAgentRunMessages() {
-  // ACP reducer keeps the legacy codex uiStyle for storage compatibility, but
-  // the persisted Agent identity drives the visible avatar.
+List<ChatMessageModel> _buildCompletedAcpAgentRunMessages() {
+  // Legacy snapshots remain readable, while the persisted Agent identity
+  // drives the visible avatar.
   return <ChatMessageModel>[
     ChatMessageModel(
       id: 'task-1-text',
@@ -1460,7 +1533,7 @@ List<ChatMessageModel> _buildCompletedCodexAgentRunMessages() {
         'type': 'deep_thinking',
         'agentId': 'claude-code-acp',
         'agentName': 'Claude Code',
-        'thinkingContent': 'codex 在思考',
+        'thinkingContent': 'Agent 在思考',
         'stage': 4,
         'isLoading': false,
         'taskID': 'task-1',
@@ -1479,14 +1552,14 @@ List<ChatMessageModel> _buildCompletedCodexAgentRunMessages() {
   ];
 }
 
-List<ChatMessageModel> _buildCompletedCodexTextRunMessages() {
+List<ChatMessageModel> _buildCompletedLegacyAcpTextRunMessages() {
   return <ChatMessageModel>[
     ChatMessageModel(
       id: 'task-1-codex-agent',
       type: 1,
       user: 2,
       content: const <String, dynamic>{
-        'text': 'Codex 纯文本回答',
+        'text': '旧 Agent 纯文本回答',
         'id': 'task-1-codex-agent',
       },
       streamMeta: const <String, dynamic>{
@@ -1500,7 +1573,7 @@ List<ChatMessageModel> _buildCompletedCodexTextRunMessages() {
     ChatMessageModel.cardMessage(
       <String, dynamic>{
         'type': 'deep_thinking',
-        'thinkingContent': 'codex 在思考',
+        'thinkingContent': '旧 Agent 在思考',
         'stage': 4,
         'isLoading': false,
         'taskID': 'task-1',

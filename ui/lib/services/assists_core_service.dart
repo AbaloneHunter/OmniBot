@@ -3,7 +3,8 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:ui/models/agent_stream_event.dart';
 import 'package:ui/services/agent_schedule_bridge_service.dart';
-import 'package:ui/services/codex_tool_call_parser.dart';
+import 'package:ui/services/agent_tool_call_parser.dart';
+import 'package:ui/services/agent_message_kinds.dart';
 
 // 卡片推送
 typedef CardPushCallback<T> = void Function(Map<String, dynamic> cardData);
@@ -148,7 +149,7 @@ class AgentToolEventData {
       ),
     );
     final itemType = _asNonEmptyString(raw['type']);
-    final normalized = normalizeCodexToolCall(
+    final normalized = normalizeAgentToolCall(
       raw,
       itemType: itemType,
       fallbackToolType: _asNonEmptyString(raw['toolType']) ?? 'builtin',
@@ -157,8 +158,8 @@ class AgentToolEventData {
           _asNonEmptyString(raw['displayName']),
       fallbackStatus: _asNonEmptyString(raw['status']) ?? '',
     );
-    final explicitStatus = codexToolStatusIsExplicit(raw);
-    final isCodexTool = itemType != null && isCodexToolItemType(itemType);
+    final explicitStatus = agentToolStatusIsExplicit(raw);
+    final isAgentTool = itemType != null && isAgentToolItemType(itemType);
     return AgentToolEventData(
       taskId: (raw['taskId'] ?? '').toString(),
       cardId: (raw['cardId'] ?? '').toString(),
@@ -172,7 +173,7 @@ class AgentToolEventData {
       uiStyle:
           _asNonEmptyString(raw['uiStyle']) ??
           _asNonEmptyString(raw['ui_style']) ??
-          (isCodexTool ? 'codex_tool' : ''),
+          (isAgentTool ? kAgentToolUiStyle : ''),
       serverName: _asNonEmptyString(raw['serverName']) ?? normalized.serverName,
       status: explicitStatus ? normalized.status : '',
       argsJson:

@@ -6,11 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/features/home/pages/chat/tool_activity_utils.dart';
 import 'package:ui/features/home/pages/command_overlay/widgets/cards/agent_tool_transcript.dart';
-import 'package:ui/features/home/pages/command_overlay/widgets/cards/codex_diff_viewer.dart';
+import 'package:ui/features/home/pages/command_overlay/widgets/cards/agent_diff_viewer.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
 import 'package:ui/services/app_background_service.dart';
-import 'package:ui/services/codex_diff_parser.dart';
-import 'package:ui/services/codex_tool_call_parser.dart';
+import 'package:ui/services/agent_diff_parser.dart';
+import 'package:ui/services/agent_tool_call_parser.dart';
+import 'package:ui/services/agent_message_kinds.dart';
 import 'package:ui/theme/theme_context.dart';
 
 class AgentToolSummaryCard extends StatefulWidget {
@@ -237,7 +238,7 @@ String? _resolveDiffStatLabel(Map<String, dynamic> cardData) {
   if (changedFiles <= 0 && additions <= 0 && deletions <= 0) {
     return null;
   }
-  return formatCodexDiffStat(additions: additions, deletions: deletions);
+  return formatAgentDiffStat(additions: additions, deletions: deletions);
 }
 
 int _asNonNegativeInt(dynamic value) {
@@ -279,12 +280,14 @@ bool _isInlineFileTool(Map<String, dynamic> cardData) {
   return (cardData['toolType'] ?? '').toString().trim() == 'file';
 }
 
-bool _isCodexInlineTool(Map<String, dynamic> cardData) {
-  if ((cardData['uiStyle'] ?? '').toString().trim() == 'codex_tool') {
+bool _isAgentInlineTool(Map<String, dynamic> cardData) {
+  if (isAgentToolUiStyle(cardData['uiStyle'])) {
     return true;
   }
   final toolName = (cardData['toolName'] ?? '').toString().trim();
-  if (toolName.startsWith('codex.')) {
+  final canonicalToolName = canonicalAgentToolName(toolName) ?? toolName;
+  if (canonicalToolName.startsWith('agent.') ||
+      canonicalToolName.startsWith('agent/')) {
     return true;
   }
   for (final rawJson in [
@@ -293,7 +296,7 @@ bool _isCodexInlineTool(Map<String, dynamic> cardData) {
   ]) {
     final decoded = _decodeJsonMap(rawJson);
     final itemType = (decoded['type'] ?? '').toString();
-    if (isCodexToolItemType(itemType)) {
+    if (isAgentToolItemType(itemType)) {
       return true;
     }
   }
@@ -301,7 +304,7 @@ bool _isCodexInlineTool(Map<String, dynamic> cardData) {
 }
 
 bool _usesInlineToolStyle(Map<String, dynamic> cardData) {
-  return _isInlineFileTool(cardData) || _isCodexInlineTool(cardData);
+  return _isInlineFileTool(cardData) || _isAgentInlineTool(cardData);
 }
 
 class _InlineToolCallCard extends StatefulWidget {
@@ -328,14 +331,14 @@ class _InlineToolCallCardState extends State<_InlineToolCallCard> {
     final status = (cardData['status'] ?? 'running').toString();
     final toolType = (cardData['toolType'] ?? '').toString().trim();
     final isFileTool = _isInlineFileTool(cardData);
-    final isCodexTool = _isCodexInlineTool(cardData);
+    final isAgentTool = _isAgentInlineTool(cardData);
     final diffSummary = isFileTool ? _resolveInlineDiffSummary(cardData) : null;
     final hasDiff =
         isFileTool && diffSummary != null && diffSummary.files.isNotEmpty;
     final diffStatLabel = isFileTool
         ? diffSummary == null
               ? _resolveDiffStatLabel(cardData)
-              : formatCodexDiffStat(
+              : formatAgentDiffStat(
                   additions: diffSummary.additions,
                   deletions: diffSummary.deletions,
                 )
@@ -396,7 +399,7 @@ class _InlineToolCallCardState extends State<_InlineToolCallCard> {
                     key: const ValueKey('inline-file-diff-title-toggle'),
                     onTap: hasDiff
                         ? () => setState(() => _expanded = !_expanded)
-                        : isCodexTool
+                        : isAgentTool
                         ? () => unawaited(
                             showAgentToolDetailSheet(
                               context,
@@ -429,7 +432,7 @@ class _InlineToolCallCardState extends State<_InlineToolCallCard> {
                                 height: 1.18,
                               ),
                               fileNameColor: palette.accentPrimary,
-                              shimmer: isCodexTool && status == 'running',
+                              shimmer: isAgentTool && status == 'running',
                             ),
                           ),
                           if (diffStatLabel != null) ...[
@@ -490,7 +493,7 @@ class _InlineToolCallCardState extends State<_InlineToolCallCard> {
                             ),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(14),
-                              child: CodexDiffViewer(
+                              child: AgentDiffViewer(
                                 summary: diffSummary,
                                 padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
                                 showOverview: false,
@@ -755,9 +758,9 @@ class _FlowingInlineToolTitleState extends State<_FlowingInlineToolTitle>
   }
 }
 
-CodexDiffSummary? _resolveInlineDiffSummary(Map<String, dynamic> cardData) {
+AgentDiffSummary? _resolveInlineDiffSummary(Map<String, dynamic> cardData) {
   final diffText = (cardData['diffText'] ?? '').toString();
-  final extracted = extractCodexDiffText(
+  final extracted = extractAgentDiffText(
     <String, dynamic>{
       ...cardData,
       if (diffText.isNotEmpty) 'diffText': diffText,
@@ -771,13 +774,13 @@ CodexDiffSummary? _resolveInlineDiffSummary(Map<String, dynamic> cardData) {
   if (extracted == null || extracted.trim().isEmpty) {
     return null;
   }
-  final summary = parseCodexDiffText(extracted);
+  final summary = parseAgentDiffText(extracted);
   return summary.files.isEmpty ? null : summary;
 }
 
 String _resolveInlineFilePath(
   Map<String, dynamic> cardData,
-  CodexDiffSummary? diffSummary,
+  AgentDiffSummary? diffSummary,
 ) {
   final filePath = (cardData['filePath'] ?? '').toString().trim();
   if (filePath.isNotEmpty) {
@@ -805,7 +808,7 @@ String _lastPathSegment(String path) {
 
 String _inlineToolSubtitle(
   Map<String, dynamic> cardData,
-  CodexDiffSummary? diffSummary,
+  AgentDiffSummary? diffSummary,
   String title,
 ) {
   final filePath = (cardData['filePath'] ?? '').toString().trim();

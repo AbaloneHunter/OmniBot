@@ -255,8 +255,8 @@ mixin _ChatPageOpenClawMixin on _ChatPageStateBase {
   }) async {
     final trimmed = messageText.trim();
     if (!trimmed.startsWith('/')) return false;
-    if (_activeMode == ChatPageMode.codex) {
-      return _tryHandleCodexSlashCommand(trimmed, attachments: attachments);
+    if (_activeMode == ChatPageMode.agent) {
+      return _tryHandleAgentSlashCommand(trimmed, attachments: attachments);
     }
 
     if (trimmed == '/compact' || trimmed.startsWith('/compact ')) {

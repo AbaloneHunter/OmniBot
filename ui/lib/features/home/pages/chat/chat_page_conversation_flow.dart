@@ -512,8 +512,8 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
       return;
     }
 
-    if (_activeConversationMode == ChatPageMode.codex) {
-      await _sendCodexMessage(
+    if (_activeConversationMode == ChatPageMode.agent) {
+      await _sendAgentMessage(
         messageIds.aiMessageId,
         messageText,
         attachments: attachments,
@@ -974,8 +974,8 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
   @override
   void _onCancelTask() {
     try {
-      if (_activeConversationMode == ChatPageMode.codex) {
-        unawaited(_interruptCodexTurn());
+      if (_activeConversationMode == ChatPageMode.agent) {
+        unawaited(_interruptAgentTurn());
         final taskId =
             _currentDispatchTaskId ?? _activeRuntime?.lastAgentTaskId;
         if (taskId != null) {

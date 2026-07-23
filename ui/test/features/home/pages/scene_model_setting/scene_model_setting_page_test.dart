@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_switch/flutter_switch.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:ui/features/home/pages/codex/codex_setting_page.dart';
+import 'package:ui/features/home/pages/agent/remote_codex_setting_page.dart';
 import 'package:ui/features/home/pages/scene_model_setting/scene_model_setting_page.dart';
 import 'package:ui/l10n/generated/app_localizations.dart';
 import 'package:ui/services/storage_service.dart';
@@ -36,7 +36,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const channel = MethodChannel('cn.com.omnimind.bot/AssistCoreEvent');
-  const codexChannel = MethodChannel('cn.com.omnimind.bot/CodexAppServer');
+  const agentRuntimeChannel = MethodChannel('cn.com.omnimind.bot/AgentRuntime');
 
   Widget buildTestApp(Widget child, {Locale locale = const Locale('zh')}) {
     return MaterialApp(
@@ -143,7 +143,7 @@ void main() {
           }
         });
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(codexChannel, (call) async {
+        .setMockMethodCallHandler(agentRuntimeChannel, (call) async {
           switch (call.method) {
             case 'config/remote/read':
               return codexReadConfig;
@@ -163,7 +163,7 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(codexChannel, null);
+        .setMockMethodCallHandler(agentRuntimeChannel, null);
     await VoicePlaybackCoordinator.instance.debugResetForTest();
   });
 
@@ -228,7 +228,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(buildTestApp(const CodexSettingPage()));
+    await tester.pumpWidget(buildTestApp(const RemoteCodexSettingPage()));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 

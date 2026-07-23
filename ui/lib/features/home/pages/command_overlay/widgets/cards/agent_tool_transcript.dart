@@ -5,10 +5,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/features/home/pages/chat/tool_activity_utils.dart';
-import 'package:ui/features/home/pages/command_overlay/widgets/cards/codex_diff_viewer.dart';
+import 'package:ui/features/home/pages/command_overlay/widgets/cards/agent_diff_viewer.dart';
 import 'package:ui/features/home/pages/command_overlay/widgets/cards/terminal_output_utils.dart';
 import 'package:ui/services/chat_detail_sheet_preferences.dart';
-import 'package:ui/services/codex_diff_parser.dart';
+import 'package:ui/services/agent_diff_parser.dart';
+import 'package:ui/services/agent_tool_call_parser.dart';
 import 'package:ui/theme/app_colors.dart';
 import 'package:ui/widgets/omni_glass.dart';
 
@@ -249,6 +250,11 @@ String _buildToolPromptLine(Map<String, dynamic> cardData) {
   final toolName = (cardData['toolName'] ?? '').toString().trim().isEmpty
       ? (cardData['displayName'] ?? 'tool').toString().trim()
       : (cardData['toolName'] ?? '').toString().trim();
+  final agentName = _resolveAgentToolPromptAgentName(cardData);
+  if (_isInternalAgentToolName(toolName) && agentName.isNotEmpty) {
+    final title = _resolveAgentToolPromptTitle(cardData, toolName);
+    return '$agentName · $title';
+  }
   final args = _decodeJsonMap((cardData['argsJson'] ?? '').toString());
   final segments = <String>[toolName];
 
@@ -261,6 +267,46 @@ String _buildToolPromptLine(Map<String, dynamic> cardData) {
   }
 
   return '\$ ${segments.join(' ').trim()}';
+}
+
+String _resolveAgentToolPromptAgentName(Map<String, dynamic> cardData) {
+  final explicit = (cardData['agentName'] ?? '').toString().trim();
+  if (explicit.isNotEmpty) {
+    return explicit;
+  }
+  return switch ((cardData['agentId'] ?? '').toString().trim()) {
+    'codex-acp' || 'codex-remote' => 'Codex',
+    'claude-code-acp' => 'Claude Code',
+    'opencode-acp' => 'OpenCode',
+    _ => '',
+  };
+}
+
+String _resolveAgentToolPromptTitle(
+  Map<String, dynamic> cardData,
+  String toolName,
+) {
+  for (final value in <dynamic>[
+    cardData['toolTitle'],
+    cardData['displayName'],
+  ]) {
+    final title = (value ?? '').toString().trim();
+    if (title.isNotEmpty &&
+        title != toolName &&
+        !_isInternalAgentToolName(title)) {
+      return title;
+    }
+  }
+  final separator = toolName.indexOf('.');
+  final fallback = separator >= 0
+      ? toolName.substring(separator + 1).trim()
+      : toolName;
+  return fallback.isEmpty ? 'tool' : fallback;
+}
+
+bool _isInternalAgentToolName(String value) {
+  final normalized = canonicalAgentToolName(value) ?? value.trim();
+  return normalized.startsWith('agent.') || normalized.startsWith('agent/');
 }
 
 String _buildTerminalOutputText(Map<String, dynamic> cardData) {
@@ -969,7 +1015,7 @@ class _AgentToolDetailContent extends StatelessWidget {
         ),
         Expanded(
           child: isDiffView
-              ? CodexDiffViewer(summary: diffSummary!, padding: scrollPadding)
+              ? AgentDiffViewer(summary: diffSummary!, padding: scrollPadding)
               : SingleChildScrollView(
                   padding: scrollPadding,
                   child: SelectableText.rich(detailSpan!),
@@ -980,9 +1026,9 @@ class _AgentToolDetailContent extends StatelessWidget {
   }
 }
 
-CodexDiffSummary? _resolveDiffSummary(Map<String, dynamic> cardData) {
+AgentDiffSummary? _resolveDiffSummary(Map<String, dynamic> cardData) {
   final diffText = (cardData['diffText'] ?? '').toString();
-  final extracted = extractCodexDiffText(
+  final extracted = extractAgentDiffText(
     <String, dynamic>{
       ...cardData,
       if (diffText.isNotEmpty) 'diffText': diffText,
@@ -996,7 +1042,7 @@ CodexDiffSummary? _resolveDiffSummary(Map<String, dynamic> cardData) {
   if (extracted == null || extracted.trim().isEmpty) {
     return null;
   }
-  final summary = parseCodexDiffText(extracted);
+  final summary = parseAgentDiffText(extracted);
   return summary.files.isEmpty ? null : summary;
 }
 

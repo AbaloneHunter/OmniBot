@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -539,7 +540,7 @@ void main() {
 
     // 顶层区块标题（定时任务/置顶会话/小万）左对齐；置顶条目与标题共用缩进。
     expect(tester.getTopLeft(find.text('置顶会话')).dx, sectionHeaderLeft);
-    expect(tester.getTopLeft(find.text('小万（OmniAi）')).dx, sectionHeaderLeft);
+    expect(tester.getTopLeft(find.text('小万')).dx, sectionHeaderLeft);
     expect(tester.getTopLeft(find.text('重点对话')).dx, sectionHeaderLeft);
 
     // 定时任务、置顶区块与历史记录在同一个滚动列表内，上滑时随列表一起
@@ -805,7 +806,7 @@ void main() {
       12,
     ).millisecondsSinceEpoch;
     final dateKey =
-        '__home_drawer_date__agent__'
+        '__home_drawer_date__omni_ai__'
         '${currentDay.year.toString().padLeft(4, '0')}-'
         '${currentDay.month.toString().padLeft(2, '0')}-'
         '${currentDay.day.toString().padLeft(2, '0')}';
@@ -939,7 +940,7 @@ void main() {
     expect(find.text('普通会话').hitTestable(), findsNothing);
   });
 
-  testWidgets('splits codex, agent and pure chat histories into sections', (
+  testWidgets('splits Agent, OmniAi and pure chat histories into sections', (
     tester,
   ) async {
     // 相对时间标签依赖 LegacyTextLocalizer 的解析语言，固定为中文保证断言稳定。
@@ -950,8 +951,8 @@ void main() {
       <String, Object?>{
         'id': 11,
         'title': '修复登录问题',
-        'mode': ConversationMode.codex.storageValue,
-        'codexCwd': '/root/blog',
+        'mode': ConversationMode.agent.storageValue,
+        'agentCwd': '/root/blog',
         'summary': null,
         'status': 0,
         'lastMessage': null,
@@ -962,8 +963,8 @@ void main() {
       <String, Object?>{
         'id': 12,
         'title': '写周报脚本',
-        'mode': ConversationMode.codex.storageValue,
-        'codexCwd': '/root/blog/',
+        'mode': ConversationMode.agent.storageValue,
+        'agentCwd': '/root/blog/',
         'summary': null,
         'status': 0,
         'lastMessage': null,
@@ -974,8 +975,8 @@ void main() {
       <String, Object?>{
         'id': 13,
         'title': '优化首页响应式',
-        'mode': ConversationMode.codex.storageValue,
-        'codexCwd': '/root/CoffeeMux',
+        'mode': ConversationMode.agent.storageValue,
+        'agentCwd': '/root/CoffeeMux',
         'summary': null,
         'status': 0,
         'lastMessage': null,
@@ -1023,10 +1024,28 @@ void main() {
 
     // 三个模式区块并列展示。
     expect(find.text('Agent'), findsOneWidget);
-    expect(find.text('小万（OmniAi）'), findsOneWidget);
+    expect(find.text('小万'), findsOneWidget);
     expect(find.text('纯聊天'), findsOneWidget);
+    final agentSectionIcon = tester.widget<SvgPicture>(
+      find.byKey(
+        const ValueKey('home-drawer-section-icon-__home_drawer_agent__'),
+      ),
+    );
+    final omniAiSectionIcon = tester.widget<SvgPicture>(
+      find.byKey(
+        const ValueKey('home-drawer-section-icon-__home_drawer_omni_ai__'),
+      ),
+    );
+    expect(
+      agentSectionIcon.bytesLoader.toString(),
+      contains('assets/home/chat/agent.svg'),
+    );
+    expect(
+      omniAiSectionIcon.bytesLoader.toString(),
+      contains('assets/home/avatar.svg'),
+    );
 
-    // Codex 区块内按项目名分组，且项目按最近活跃排序。
+    // Agent 区块内按项目名分组，且项目按最近活跃排序。
     expect(find.text('blog'), findsOneWidget);
     expect(find.text('CoffeeMux'), findsOneWidget);
     expect(
@@ -1042,10 +1061,10 @@ void main() {
     // 日期分组下的会话标题不再缩进：与区块标题、日期分组行共用同一左缘。
     expect(
       tester.getTopLeft(find.text('Agent 会话')).dx,
-      tester.getTopLeft(find.text('小万（OmniAi）')).dx,
+      tester.getTopLeft(find.text('小万')).dx,
     );
 
-    // Codex 条目展示相对时间标签而非日期分组。
+    // Agent 条目展示相对时间标签而非日期分组。
     expect(find.text('1 周'), findsNWidgets(3));
 
     // 折叠单个项目只隐藏该项目下的会话。

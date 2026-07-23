@@ -2876,17 +2876,17 @@ abstract class AppLocalizations {
   /// **'置顶会话'**
   String get homeDrawerPinnedConversations;
 
-  /// No description provided for @homeDrawerCodexSection.
-  ///
-  /// In zh, this message translates to:
-  /// **'Agent'**
-  String get homeDrawerCodexSection;
-
   /// No description provided for @homeDrawerAgentSection.
   ///
   /// In zh, this message translates to:
-  /// **'小万（OmniAi）'**
+  /// **'Agent'**
   String get homeDrawerAgentSection;
+
+  /// No description provided for @homeDrawerOmniAiSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'小万'**
+  String get homeDrawerOmniAiSection;
 
   /// No description provided for @homeDrawerChatOnlySection.
   ///
@@ -2894,11 +2894,11 @@ abstract class AppLocalizations {
   /// **'纯聊天'**
   String get homeDrawerChatOnlySection;
 
-  /// No description provided for @homeDrawerCodexNoProject.
+  /// No description provided for @homeDrawerAgentNoProject.
   ///
   /// In zh, this message translates to:
   /// **'其他'**
-  String get homeDrawerCodexNoProject;
+  String get homeDrawerAgentNoProject;
 
   /// No description provided for @homeDrawerGreeting.
   ///

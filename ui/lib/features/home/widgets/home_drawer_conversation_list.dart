@@ -6,16 +6,15 @@ const String _kExpandedConversationSectionsStorageKey =
     'home_drawer_expanded_sections_v1';
 const String _kPinnedConversationSectionKey = '__home_drawer_pinned__';
 const String _kScheduledConversationSectionKey = '__home_drawer_scheduled__';
-const String _kCodexConversationSectionKey = '__home_drawer_codex__';
 const String _kAgentConversationSectionKey = '__home_drawer_agent__';
+const String _kOmniAiConversationSectionKey = '__home_drawer_omni_ai__';
 const String _kChatOnlyConversationSectionKey = '__home_drawer_chat_only__';
-const String _kAgentDateSectionNamespace = 'agent';
+const String _kOmniAiDateSectionNamespace = 'omni_ai';
 const String _kChatOnlyDateSectionNamespace = 'chat_only';
-const String _kCodexSectionIconAssetPath =
-    'assets/home/chat/mode_menu_closed.svg';
 const String _kAgentSectionIconAssetPath = 'assets/home/chat/agent.svg';
+const String _kOmniAiSectionIconAssetPath = 'assets/home/avatar.svg';
 const String _kChatOnlySectionIconAssetPath = 'assets/home/chat/pure_chat.svg';
-const String _kCodexProjectIconAssetPath =
+const String _kAgentProjectIconAssetPath =
     'assets/home/workspace_folder_icon.svg';
 const double _kConversationSectionHeaderLeadingSlotWidth = 20;
 const double _kPromotedConversationItemTitleInset = 20;
@@ -187,18 +186,18 @@ extension _HomeDrawerConversationList on HomeDrawerState {
   Widget _buildConversationTimelineBody(
     List<_ConversationSearchResult> results,
   ) {
-    final codexResults = <_ConversationSearchResult>[];
-    final chatOnlyResults = <_ConversationSearchResult>[];
     final agentResults = <_ConversationSearchResult>[];
+    final chatOnlyResults = <_ConversationSearchResult>[];
+    final omniAiResults = <_ConversationSearchResult>[];
     for (final result in results) {
       final mode = result.conversation.mode;
-      if (mode == ConversationMode.codex) {
-        codexResults.add(result);
+      if (mode == ConversationMode.agent) {
+        agentResults.add(result);
       } else if (mode == ConversationMode.chatOnly) {
         chatOnlyResults.add(result);
       } else {
-        // normal / subagent / openclaw 统一归入 Agent 区块。
-        agentResults.add(result);
+        // normal / subagent / openclaw 统一归入小万（OmniAi）区块。
+        omniAiResults.add(result);
       }
     }
 
@@ -218,17 +217,17 @@ extension _HomeDrawerConversationList on HomeDrawerState {
     if (pinnedResults.isNotEmpty) {
       addSection(_buildPinnedConversationSection(pinnedResults));
     }
-    if (codexResults.isNotEmpty) {
-      addSection(_buildCodexConversationSection(codexResults));
-    }
     if (agentResults.isNotEmpty) {
+      addSection(_buildAgentConversationSection(agentResults));
+    }
+    if (omniAiResults.isNotEmpty) {
       addSection(
         _buildModeTimelineConversationSection(
-          sectionKey: _kAgentConversationSectionKey,
-          label: context.l10n.homeDrawerAgentSection,
-          iconAssetPath: _kAgentSectionIconAssetPath,
-          dateSectionNamespace: _kAgentDateSectionNamespace,
-          results: agentResults,
+          sectionKey: _kOmniAiConversationSectionKey,
+          label: context.l10n.homeDrawerOmniAiSection,
+          iconAssetPath: _kOmniAiSectionIconAssetPath,
+          dateSectionNamespace: _kOmniAiDateSectionNamespace,
+          results: omniAiResults,
         ),
       );
     }
@@ -547,8 +546,8 @@ extension _HomeDrawerConversationList on HomeDrawerState {
   String _scheduledParentConversationSectionKey(ConversationModel parent) =>
       '__home_drawer_scheduled_${parent.threadKey}';
 
-  String _codexProjectConversationSectionKey(String projectKey) =>
-      '__home_drawer_codex_project_$projectKey';
+  String _agentProjectConversationSectionKey(String projectKey) =>
+      '__home_drawer_agent_project_$projectKey';
 
   void _restoreExpandedConversationSections() {
     _expandedConversationSections
@@ -630,19 +629,19 @@ extension _HomeDrawerConversationList on HomeDrawerState {
     );
   }
 
-  Widget _buildCodexConversationSection(
+  Widget _buildAgentConversationSection(
     List<_ConversationSearchResult> results,
   ) {
-    final groups = _codexProjectConversationGroups(results);
+    final groups = _agentProjectConversationGroups(results);
     return _buildPromotedConversationSection(
-      sectionKey: _kCodexConversationSectionKey,
-      label: context.l10n.homeDrawerCodexSection,
+      sectionKey: _kAgentConversationSectionKey,
+      label: context.l10n.homeDrawerAgentSection,
       itemCount: results.length,
-      iconAssetPath: _kCodexSectionIconAssetPath,
+      iconAssetPath: _kAgentSectionIconAssetPath,
       childrenLeadingInset: 0,
       children: [
         for (int groupIndex = 0; groupIndex < groups.length; groupIndex++)
-          _buildCodexProjectConversationGroup(
+          _buildAgentProjectConversationGroup(
             groups[groupIndex],
             showDivider: groupIndex != groups.length - 1,
           ),
@@ -691,6 +690,7 @@ extension _HomeDrawerConversationList on HomeDrawerState {
           itemCount: itemCount,
           onTap: () => _toggleConversationSection(sectionKey),
           iconAssetPath: iconAssetPath,
+          iconKey: ValueKey('home-drawer-section-icon-$sectionKey'),
           leadingSlotWidth: _kConversationSectionHeaderLeadingSlotWidth,
         ),
         _buildCollapsibleSectionBody(expanded: expanded, child: items),
@@ -760,16 +760,16 @@ extension _HomeDrawerConversationList on HomeDrawerState {
     );
   }
 
-  List<_CodexProjectConversationGroup> _codexProjectConversationGroups(
+  List<_AgentProjectConversationGroup> _agentProjectConversationGroups(
     List<_ConversationSearchResult> results,
   ) {
     // 会话列表已按 updatedAt 降序排列，项目按首次出现顺序即为最近活跃顺序。
-    final groupsByKey = <String, _CodexProjectConversationGroup>{};
+    final groupsByKey = <String, _AgentProjectConversationGroup>{};
     for (final result in results) {
       final conversation = result.conversation;
-      final projectName = conversation.codexProjectName;
+      final projectName = conversation.agentProjectName;
       // 去掉尾部斜杠，让 /root/blog 与 /root/blog/ 归入同一项目。
-      final normalizedCwd = (conversation.codexCwd ?? '').trim().replaceAll(
+      final normalizedCwd = (conversation.agentCwd ?? '').trim().replaceAll(
         RegExp(r'/+$'),
         '',
       );
@@ -778,9 +778,9 @@ extension _HomeDrawerConversationList on HomeDrawerState {
           : (normalizedCwd.isEmpty ? '/' : normalizedCwd);
       final group = groupsByKey.putIfAbsent(
         projectKey,
-        () => _CodexProjectConversationGroup(
+        () => _AgentProjectConversationGroup(
           projectKey: projectKey,
-          label: projectName ?? context.l10n.homeDrawerCodexNoProject,
+          label: projectName ?? context.l10n.homeDrawerAgentNoProject,
           results: <_ConversationSearchResult>[],
         ),
       );
@@ -789,11 +789,11 @@ extension _HomeDrawerConversationList on HomeDrawerState {
     return groupsByKey.values.toList(growable: false);
   }
 
-  Widget _buildCodexProjectConversationGroup(
-    _CodexProjectConversationGroup group, {
+  Widget _buildAgentProjectConversationGroup(
+    _AgentProjectConversationGroup group, {
     required bool showDivider,
   }) {
-    final sectionKey = _codexProjectConversationSectionKey(group.projectKey);
+    final sectionKey = _agentProjectConversationSectionKey(group.projectKey);
     final expanded = _isConversationSectionExpanded(sectionKey);
     final children = Column(
       children: [
@@ -815,7 +815,7 @@ extension _HomeDrawerConversationList on HomeDrawerState {
 
     return Column(
       children: [
-        _buildCodexProjectConversationRow(
+        _buildAgentProjectConversationRow(
           group,
           onToggle: () => _toggleConversationSection(sectionKey),
         ),
@@ -825,8 +825,8 @@ extension _HomeDrawerConversationList on HomeDrawerState {
     );
   }
 
-  Widget _buildCodexProjectConversationRow(
-    _CodexProjectConversationGroup group, {
+  Widget _buildAgentProjectConversationRow(
+    _AgentProjectConversationGroup group, {
     required VoidCallback onToggle,
   }) {
     final palette = context.omniPalette;
@@ -843,7 +843,7 @@ extension _HomeDrawerConversationList on HomeDrawerState {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               SvgPicture.asset(
-                _kCodexProjectIconAssetPath,
+                _kAgentProjectIconAssetPath,
                 width: 14,
                 height: 14,
                 colorFilter: ColorFilter.mode(
@@ -1054,6 +1054,7 @@ extension _HomeDrawerConversationList on HomeDrawerState {
     required int itemCount,
     required VoidCallback onTap,
     String? iconAssetPath,
+    Key? iconKey,
     double leadingSlotWidth = 0,
   }) {
     final palette = context.omniPalette;
@@ -1078,6 +1079,7 @@ extension _HomeDrawerConversationList on HomeDrawerState {
                         alignment: Alignment.centerLeft,
                         child: SvgPicture.asset(
                           iconAssetPath,
+                          key: iconKey,
                           width: 14,
                           height: 14,
                           colorFilter: ColorFilter.mode(

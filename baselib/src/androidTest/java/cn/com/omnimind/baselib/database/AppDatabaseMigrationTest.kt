@@ -67,22 +67,22 @@ class AppDatabaseMigrationTest {
     }
 
     @Test
-    fun migrate12To13_addsCodexThreadBindingTable() = runBlocking {
+    fun migrate12To13_addsAgentSessionBindingTable() = runBlocking {
         createVersion12Database()
 
         val database = openMigratedDatabase()
         try {
-            val binding = CodexThreadBinding(
+            val binding = AgentSessionBinding(
                 conversationId = 1L,
                 threadId = "thread-codex-1",
                 cwd = "/workspace",
                 createdAt = 1000L,
                 updatedAt = 2000L
             )
-            database.codexThreadBindingDao().upsert(binding)
+            database.agentSessionBindingDao().upsert(binding)
 
-            val byConversation = database.codexThreadBindingDao().getByConversationId(1L)
-            val byThread = database.codexThreadBindingDao().getByThreadId("thread-codex-1")
+            val byConversation = database.agentSessionBindingDao().getByConversationId(1L)
+            val byThread = database.agentSessionBindingDao().getByThreadId("thread-codex-1")
             assertEquals(binding, byConversation)
             assertEquals(binding, byThread)
         } finally {

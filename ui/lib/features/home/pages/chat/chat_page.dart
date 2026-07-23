@@ -32,9 +32,10 @@ import 'package:ui/services/app_update_service.dart';
 import 'package:ui/services/app_background_service.dart';
 import 'package:ui/services/agent_browser_session_service.dart';
 import 'package:ui/services/chat_terminal_environment_service.dart';
-import 'package:ui/services/codex_app_server_service.dart';
-import 'package:ui/services/codex_diff_parser.dart';
-import 'package:ui/services/codex_tool_call_parser.dart';
+import 'package:ui/services/agent_runtime_service.dart';
+import 'package:ui/services/agent_diff_parser.dart';
+import 'package:ui/services/agent_tool_call_parser.dart';
+import 'package:ui/services/agent_message_kinds.dart';
 import 'package:ui/services/conversation_model_override_service.dart';
 import 'package:ui/services/conversation_history_service.dart';
 import 'package:ui/services/conversation_service.dart';
@@ -56,13 +57,13 @@ import 'package:ui/models/chat_startup_behavior.dart';
 import 'package:ui/features/home/pages/chat/utils/agent_run_timeline.dart';
 import 'package:ui/features/home/pages/chat/utils/agent_runtime_attachment_payload.dart';
 import 'package:ui/features/home/pages/chat/utils/agent_thinking_card_locator.dart';
-import 'package:ui/features/home/pages/chat/utils/codex_slash_commands.dart';
+import 'package:ui/features/home/pages/chat/utils/agent_slash_commands.dart';
 import 'package:ui/features/home/pages/chat/utils/deep_thinking_persistence.dart';
 import 'package:ui/features/home/pages/chat/utils/composer_lift_intent_tracker.dart';
 import 'package:ui/features/home/pages/chat/utils/composer_keyboard_metrics_tracker.dart';
 import 'package:ui/features/home/pages/chat/utils/keyboard_inset_motion_tracker.dart';
-import 'package:ui/features/home/pages/codex/codex_remote_directory_picker.dart';
-import 'package:ui/features/home/pages/codex/codex_remote_workspace_browser.dart';
+import 'package:ui/features/home/pages/agent/codex_remote_directory_picker.dart';
+import 'package:ui/features/home/pages/agent/codex_remote_workspace_browser.dart';
 import 'package:ui/widgets/chat_drawer_gesture_guard.dart';
 
 // 导入 Mixins
@@ -91,13 +92,13 @@ part 'chat_page_lifecycle.dart';
 part 'chat_page_model_context.dart';
 part 'chat_page_openclaw.dart';
 part 'chat_page_terminal_env.dart';
-part 'chat_page_codex.dart';
+part 'chat_page_agent.dart';
 part 'chat_page_conversation_flow.dart';
 part 'chat_page_ui.dart';
 
-enum ChatPageMode { normal, openclaw, codex }
+enum ChatPageMode { normal, openclaw, agent }
 
-enum _SlashCommandPanelRoute { root, effort, codexModel }
+enum _SlashCommandPanelRoute { root, effort, agentModel }
 
 const String _kRemoteCodexModeAgentId = 'codex-remote';
 
@@ -123,12 +124,12 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _normalMessageScrollController = ScrollController();
   final ScrollController _openClawMessageScrollController = ScrollController();
-  final ScrollController _codexMessageScrollController = ScrollController();
+  final ScrollController _agentMessageScrollController = ScrollController();
   final Map<ChatPageMode, ChatMessageListNavigator>
   _messageListNavigatorByMode = {
     ChatPageMode.normal: ChatMessageListNavigator(),
     ChatPageMode.openclaw: ChatMessageListNavigator(),
-    ChatPageMode.codex: ChatMessageListNavigator(),
+    ChatPageMode.agent: ChatMessageListNavigator(),
   };
   final PageController _modePageController = PageController(initialPage: 0);
   final FocusNode _inputFocusNode = FocusNode();
@@ -200,12 +201,12 @@ abstract class _ChatPageStateBase extends State<ChatPage>
       {
         ChatPageMode.normal: <ChatInputAttachment>[],
         ChatPageMode.openclaw: <ChatInputAttachment>[],
-        ChatPageMode.codex: <ChatInputAttachment>[],
+        ChatPageMode.agent: <ChatInputAttachment>[],
       };
   final Map<ChatPageMode, String> _draftMessageByMode = {
     ChatPageMode.normal: '',
     ChatPageMode.openclaw: '',
-    ChatPageMode.codex: '',
+    ChatPageMode.agent: '',
   };
   final KeyboardInsetMotionTracker _emptyGreetingKeyboardLiftTracker =
       KeyboardInsetMotionTracker();
@@ -217,151 +218,151 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   _chatIslandDisplayLayerByMode = {
     ChatPageMode.normal: ChatIslandDisplayLayer.mode,
     ChatPageMode.openclaw: ChatIslandDisplayLayer.mode,
-    ChatPageMode.codex: ChatIslandDisplayLayer.mode,
+    ChatPageMode.agent: ChatIslandDisplayLayer.mode,
   };
   final Map<ChatPageMode, String?> _lastAgentToolTypeByMode = {
     ChatPageMode.normal: null,
     ChatPageMode.openclaw: null,
-    ChatPageMode.codex: null,
+    ChatPageMode.agent: null,
   };
   final Map<ChatPageMode, String> _runtimeChromeSignatureByMode = {
     ChatPageMode.normal: '',
     ChatPageMode.openclaw: '',
-    ChatPageMode.codex: '',
+    ChatPageMode.agent: '',
   };
   final Map<ChatPageMode, int> _runtimeMessageMutationRevisionByMode = {
     ChatPageMode.normal: 0,
     ChatPageMode.openclaw: 0,
-    ChatPageMode.codex: 0,
+    ChatPageMode.agent: 0,
   };
   final Map<ChatPageMode, ChatBrowserSessionSnapshot?>
   _browserSessionSnapshotByMode = {
     ChatPageMode.normal: null,
     ChatPageMode.openclaw: null,
-    ChatPageMode.codex: null,
+    ChatPageMode.agent: null,
   };
 
   // 输入框/任务执行状态
   final Map<ChatPageMode, bool> _isInputAreaVisibleByMode = {
     ChatPageMode.normal: true,
     ChatPageMode.openclaw: true,
-    ChatPageMode.codex: true,
+    ChatPageMode.agent: true,
   };
   final Map<ChatPageMode, bool> _isExecutingTaskByMode = {
     ChatPageMode.normal: false,
     ChatPageMode.openclaw: false,
-    ChatPageMode.codex: false,
+    ChatPageMode.agent: false,
   };
 
   final Map<ChatPageMode, List<ChatMessageModel>> _messagesByMode = {
     ChatPageMode.normal: <ChatMessageModel>[],
     ChatPageMode.openclaw: <ChatMessageModel>[],
-    ChatPageMode.codex: <ChatMessageModel>[],
+    ChatPageMode.agent: <ChatMessageModel>[],
   };
   final Map<ChatPageMode, String?> _editingUserMessageIdByMode = {
     ChatPageMode.normal: null,
     ChatPageMode.openclaw: null,
-    ChatPageMode.codex: null,
+    ChatPageMode.agent: null,
   };
   final Map<ChatPageMode, double> _toolActivityOccupiedHeightByMode = {
     ChatPageMode.normal: 0,
     ChatPageMode.openclaw: 0,
-    ChatPageMode.codex: 0,
+    ChatPageMode.agent: 0,
   };
   final Map<ChatPageMode, double> _slashCommandPanelOccupiedHeightByMode = {
     ChatPageMode.normal: 0,
     ChatPageMode.openclaw: 0,
-    ChatPageMode.codex: 0,
+    ChatPageMode.agent: 0,
   };
   final Map<ChatPageMode, bool> _slashCommandExpandedByMode = {
     ChatPageMode.normal: false,
     ChatPageMode.openclaw: false,
-    ChatPageMode.codex: false,
+    ChatPageMode.agent: false,
   };
   final Map<ChatPageMode, bool> _toolActivityExpandedByMode = {
     ChatPageMode.normal: false,
     ChatPageMode.openclaw: false,
-    ChatPageMode.codex: false,
+    ChatPageMode.agent: false,
   };
   final Map<ChatPageMode, Set<String>> _expandedAgentRunTaskIdsByMode = {
     ChatPageMode.normal: <String>{},
     ChatPageMode.openclaw: <String>{},
-    ChatPageMode.codex: <String>{},
+    ChatPageMode.agent: <String>{},
   };
   final Map<ChatPageMode, List<String>> _expandedAgentRunTaskOrderByMode = {
     ChatPageMode.normal: <String>[],
     ChatPageMode.openclaw: <String>[],
-    ChatPageMode.codex: <String>[],
+    ChatPageMode.agent: <String>[],
   };
   final Map<ChatPageMode, double> _inputAreaHeightByMode = {
     ChatPageMode.normal: 0,
     ChatPageMode.openclaw: 0,
-    ChatPageMode.codex: 0,
+    ChatPageMode.agent: 0,
   };
   final Map<ChatPageMode, bool> _isAiRespondingByMode = {
     ChatPageMode.normal: false,
     ChatPageMode.openclaw: false,
-    ChatPageMode.codex: false,
+    ChatPageMode.agent: false,
   };
   final Map<ChatPageMode, bool> _isContextCompressingByMode = {
     ChatPageMode.normal: false,
     ChatPageMode.openclaw: false,
-    ChatPageMode.codex: false,
+    ChatPageMode.agent: false,
   };
   final Map<ChatPageMode, bool> _isCheckingExecutableTaskByMode = {
     ChatPageMode.normal: false,
     ChatPageMode.openclaw: false,
-    ChatPageMode.codex: false,
+    ChatPageMode.agent: false,
   };
   final Map<ChatPageMode, Map<String, String>> _currentAiMessagesByMode = {
     ChatPageMode.normal: <String, String>{},
     ChatPageMode.openclaw: <String, String>{},
-    ChatPageMode.codex: <String, String>{},
+    ChatPageMode.agent: <String, String>{},
   };
   final Map<ChatPageMode, String> _deepThinkingContentByMode = {
     ChatPageMode.normal: '',
     ChatPageMode.openclaw: '',
-    ChatPageMode.codex: '',
+    ChatPageMode.agent: '',
   };
   final Map<ChatPageMode, bool> _isDeepThinkingByMode = {
     ChatPageMode.normal: false,
     ChatPageMode.openclaw: false,
-    ChatPageMode.codex: false,
+    ChatPageMode.agent: false,
   };
   final Map<ChatPageMode, String?> _currentDispatchTaskIdByMode = {
     ChatPageMode.normal: null,
     ChatPageMode.openclaw: null,
-    ChatPageMode.codex: null,
+    ChatPageMode.agent: null,
   };
   final Map<ChatPageMode, int> _currentThinkingStageByMode = {
     ChatPageMode.normal: 1,
     ChatPageMode.openclaw: 1,
-    ChatPageMode.codex: 1,
+    ChatPageMode.agent: 1,
   };
   final Map<ChatPageMode, int?> _currentConversationIdByMode = {
     ChatPageMode.normal: null,
     ChatPageMode.openclaw: null,
-    ChatPageMode.codex: null,
+    ChatPageMode.agent: null,
   };
   final Map<ChatPageMode, ConversationModel?> _currentConversationByMode = {
     ChatPageMode.normal: null,
     ChatPageMode.openclaw: null,
-    ChatPageMode.codex: null,
+    ChatPageMode.agent: null,
   };
   final Map<ChatPageMode, bool> _hasMoreMessagesByMode = {
     ChatPageMode.normal: false,
     ChatPageMode.openclaw: false,
-    ChatPageMode.codex: false,
+    ChatPageMode.agent: false,
   };
   final Map<ChatPageMode, int> _messageOffsetByMode = {
     ChatPageMode.normal: 0,
     ChatPageMode.openclaw: 0,
-    ChatPageMode.codex: 0,
+    ChatPageMode.agent: 0,
   };
   final Map<ChatPageMode, bool> _isLoadingMoreByMode = {
     ChatPageMode.normal: false,
     ChatPageMode.openclaw: false,
-    ChatPageMode.codex: false,
+    ChatPageMode.agent: false,
   };
   bool _isAwaitingAuthorizeResult = false;
   bool _isRetryingLatestInstructionAfterAuth = false;
@@ -385,7 +386,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   _conversationMessagesChangedSubscription;
   StreamSubscription<Map<String, dynamic>>?
   _browserSessionSnapshotChangedSubscription;
-  StreamSubscription<Map<String, dynamic>>? _codexEventSubscription;
+  StreamSubscription<Map<String, dynamic>>? _agentEventSubscription;
   Timer? _remoteCodexSessionSyncTimer;
   bool _remoteCodexSessionSyncInFlight = false;
   String? _remoteCodexSessionSyncThreadId;
@@ -393,33 +394,33 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   String? _remoteCodexActivityThreadId;
   String _remoteCodexActivityContentSignature = '';
   int? _remoteCodexLastContentChangeAtMs;
-  CodexStatus _codexStatus = CodexStatus.disconnected;
-  AcpAgentCatalog? _codexAgentCatalog;
-  bool _isCodexAgentCatalogLoading = false;
-  bool _isCodexStatusLoading = false;
-  int? _activeCodexRemoteRuntimeId;
-  String? _activeCodexThreadId;
-  String? _activeCodexTurnId;
-  String? _activeCodexModelId;
-  String? _activeCodexReasoningEffort;
-  String? _activeCodexCollaborationMode;
-  final Set<String> _codexPlanTurnIds = <String>{};
-  bool _isCodexModelListLoading = false;
-  bool _isCodexCollaborationModeListLoading = false;
-  String? _codexModelListError;
-  String? _codexCollaborationModeListError;
-  String? _loadedCodexModelSourceKey;
-  String? _loadingCodexModelSourceKey;
-  int _codexModelListRequestId = 0;
-  List<String> _codexModelOptions = const <String>[];
-  List<String> _codexReasoningEffortOptions = const <String>[
+  AgentRuntimeStatus _agentRuntimeStatus = AgentRuntimeStatus.disconnected;
+  AcpAgentCatalog? _agentCatalog;
+  bool _isAgentCatalogLoading = false;
+  bool _isAgentRuntimeStatusLoading = false;
+  int? _activeRemoteCodexRuntimeId;
+  String? _activeAgentThreadId;
+  String? _activeAgentTurnId;
+  String? _activeAgentModelId;
+  String? _activeAgentReasoningEffort;
+  String? _activeAgentCollaborationMode;
+  final Set<String> _agentPlanTurnIds = <String>{};
+  bool _isAgentModelListLoading = false;
+  bool _isAgentCollaborationModeListLoading = false;
+  String? _agentModelListError;
+  String? _agentCollaborationModeListError;
+  String? _loadedAgentModelSourceKey;
+  String? _loadingAgentModelSourceKey;
+  int _agentModelListRequestId = 0;
+  List<String> _agentModelOptions = const <String>[];
+  List<String> _agentReasoningEffortOptions = const <String>[
     'low',
     'medium',
     'high',
     'xhigh',
   ];
-  List<String> _codexCollaborationModes = const <String>[];
-  CodexPermissionMode _codexPermissionMode = CodexPermissionMode.fullAccess;
+  List<String> _agentCollaborationModes = const <String>[];
+  AgentPermissionMode _agentPermissionMode = AgentPermissionMode.fullAccess;
   ChatBrowserSessionSnapshot? _liveBrowserSessionSnapshot;
   bool _isBrowserOverlayVisible = false;
   bool _isBrowserOverlayInitialized = false;
@@ -451,33 +452,36 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   ChatPageMode get _activeMode => _activeConversationMode;
 
   String? get _activeAcpAgentId {
-    if (_codexStatus.runtime == 'remote' || _codexStatus.remoteEnabled) {
+    if (_agentRuntimeStatus.runtime == 'remote' ||
+        _agentRuntimeStatus.remoteEnabled) {
       return _kRemoteCodexModeAgentId;
     }
     final activeId =
-        _codexStatus.activeAgentId ?? _codexAgentCatalog?.selectedAgentId;
+        _agentRuntimeStatus.activeAgentId ?? _agentCatalog?.selectedAgentId;
     return activeId?.trim().isNotEmpty == true ? activeId!.trim() : null;
   }
 
   String get _activeAcpAgentDisplayName {
-    if (_codexStatus.runtime == 'remote' || _codexStatus.remoteEnabled) {
-      return 'Codex';
+    if (_agentRuntimeStatus.runtime == 'remote' ||
+        _agentRuntimeStatus.remoteEnabled) {
+      return 'Agent';
     }
     final name =
-        _codexStatus.activeAgentName ?? _codexAgentCatalog?.selectedAgent?.name;
+        _agentRuntimeStatus.activeAgentName ??
+        _agentCatalog?.selectedAgent?.name;
     return name?.trim().isNotEmpty == true ? name!.trim() : 'Agent';
   }
 
   List<ChatAcpAgentModeOption> get _chatAcpAgentModeOptions {
-    final profiles = _codexAgentCatalog?.agents ?? const <AcpAgentProfile>[];
+    final profiles = _agentCatalog?.agents ?? const <AcpAgentProfile>[];
     final options = <ChatAcpAgentModeOption>[
       for (final profile in profiles)
         if (profile.enabled)
           ChatAcpAgentModeOption(id: profile.id, name: profile.name),
-      if (_codexStatus.remoteConfigured)
+      if (_agentRuntimeStatus.remoteConfigured)
         const ChatAcpAgentModeOption(
           id: _kRemoteCodexModeAgentId,
-          name: 'Codex Remote',
+          name: 'Agent Remote',
         ),
     ];
     final activeId = _activeAcpAgentId;
@@ -485,8 +489,8 @@ abstract class _ChatPageStateBase extends State<ChatPage>
       options.add(
         ChatAcpAgentModeOption(
           id: activeId,
-          name: _codexStatus.activeAgentName?.trim().isNotEmpty == true
-              ? _codexStatus.activeAgentName!.trim()
+          name: _agentRuntimeStatus.activeAgentName?.trim().isNotEmpty == true
+              ? _agentRuntimeStatus.activeAgentName!.trim()
               : 'ACP Agent',
         ),
       );
@@ -495,8 +499,8 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   }
 
   ConversationMode _conversationModeForPageMode(ChatPageMode mode) {
-    if (mode == ChatPageMode.codex) {
-      return ConversationMode.codex;
+    if (mode == ChatPageMode.agent) {
+      return ConversationMode.agent;
     }
     if (mode == ChatPageMode.openclaw) {
       return ConversationMode.openclaw;
@@ -521,8 +525,8 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   ChatPageMode _pageModeForConversationMode(ConversationMode mode) =>
       mode == ConversationMode.openclaw
       ? ChatPageMode.openclaw
-      : mode == ConversationMode.codex
-      ? ChatPageMode.codex
+      : mode == ConversationMode.agent
+      ? ChatPageMode.agent
       : ChatPageMode.normal;
   ChatSurfaceMode _surfaceForConversationMode(ConversationMode mode) =>
       mode == ConversationMode.openclaw
@@ -531,7 +535,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   String _modeKey(ChatPageMode mode) => switch (mode) {
     ChatPageMode.normal => kChatRuntimeModeNormal,
     ChatPageMode.openclaw => kChatRuntimeModeOpenClaw,
-    ChatPageMode.codex => kChatRuntimeModeCodex,
+    ChatPageMode.agent => kChatRuntimeModeAgent,
   };
   ChatConversationRuntimeState? _runtimeForMode(ChatPageMode mode) {
     final conversationId = _currentConversationIdByMode[mode];
@@ -543,7 +547,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   }
 
   bool _isRemoteCodexRuntimeActiveForMode(ChatPageMode mode) {
-    if (mode != ChatPageMode.codex) {
+    if (mode != ChatPageMode.agent) {
       return false;
     }
     final conversationId = _currentConversationIdByMode[mode];
@@ -692,18 +696,18 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   ConversationThreadTarget get _threadTargetForMode {
     final conversationMode = _conversationModeForPageMode(_activeMode);
     final conversationId = _currentConversationIdByMode[_activeMode];
-    if (_activeMode == ChatPageMode.codex &&
-        _isRemoteCodexRuntimeActiveForMode(ChatPageMode.codex)) {
-      final threadId = _activeCodexThreadId?.trim() ?? '';
+    if (_activeMode == ChatPageMode.agent &&
+        _isRemoteCodexRuntimeActiveForMode(ChatPageMode.agent)) {
+      final threadId = _activeAgentThreadId?.trim() ?? '';
       if (threadId.isNotEmpty) {
-        return ConversationThreadTarget.codexSession(
-          threadId: threadId,
+        return ConversationThreadTarget.agentSession(
+          sessionId: threadId,
           runtime: 'remote',
         );
       }
       return ConversationThreadTarget.newConversation(
-        mode: ConversationMode.codex,
-        codexRuntime: 'remote',
+        mode: ConversationMode.agent,
+        agentRuntime: 'remote',
       );
     }
     if (conversationId == null) {
@@ -715,16 +719,16 @@ abstract class _ChatPageStateBase extends State<ChatPage>
       }
       return _newThreadTargetForConversationMode(conversationMode);
     }
-    final localCodexThreadId = _activeMode == ChatPageMode.codex
-        ? _activeCodexThreadId?.trim()
+    final localAgentThreadId = _activeMode == ChatPageMode.agent
+        ? _activeAgentThreadId?.trim()
         : null;
     return ConversationThreadTarget.existing(
       conversationId: conversationId,
       mode: conversationMode,
-      codexThreadId: localCodexThreadId == null || localCodexThreadId.isEmpty
+      agentSessionId: localAgentThreadId == null || localAgentThreadId.isEmpty
           ? null
-          : localCodexThreadId,
-      codexRuntime: localCodexThreadId == null || localCodexThreadId.isEmpty
+          : localAgentThreadId,
+      agentRuntime: localAgentThreadId == null || localAgentThreadId.isEmpty
           ? null
           : 'local',
     );
@@ -756,7 +760,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   }
 
   Future<void> _handlePureChatModeShortcutTap() async {
-    if (_activeMode == ChatPageMode.codex) {
+    if (_activeMode == ChatPageMode.agent) {
       final target = _newThreadTargetForConversationMode(
         ConversationMode.chatOnly,
       );
@@ -1025,9 +1029,9 @@ abstract class _ChatPageStateBase extends State<ChatPage>
       return _SlashCommandPanelRoute.root;
     }
     final normalized = trimmed.toLowerCase();
-    if (_activeMode == ChatPageMode.codex &&
+    if (_activeMode == ChatPageMode.agent &&
         (normalized == '/model' || normalized.startsWith('/model '))) {
-      return _SlashCommandPanelRoute.codexModel;
+      return _SlashCommandPanelRoute.agentModel;
     }
     if (normalized == '/effort' || normalized.startsWith('/effort ')) {
       return _SlashCommandPanelRoute.effort;
@@ -1041,7 +1045,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   }) {
     final source = (text ?? _messageController.text).trimLeft();
     return switch (route) {
-      _SlashCommandPanelRoute.codexModel =>
+      _SlashCommandPanelRoute.agentModel =>
         source.length <= 6 ? '' : source.substring(6).trimLeft(),
       _SlashCommandPanelRoute.effort =>
         source.length <= 7 ? '' : source.substring(7).trimLeft(),
@@ -1552,11 +1556,11 @@ abstract class _ChatPageStateBase extends State<ChatPage>
     _pendingAttachmentsByMode[mode]!.clear();
     _editingUserMessageIdByMode[mode] = null;
     _draftMessageByMode[mode] = '';
-    if (mode == ChatPageMode.codex) {
+    if (mode == ChatPageMode.agent) {
       _stopRemoteCodexSessionSync();
-      _activeCodexRemoteRuntimeId = null;
-      _activeCodexThreadId = null;
-      _activeCodexTurnId = null;
+      _activeRemoteCodexRuntimeId = null;
+      _activeAgentThreadId = null;
+      _activeAgentTurnId = null;
     }
     if (mode == ChatPageMode.normal) {
       _conversationModelOverride = null;
@@ -1684,59 +1688,59 @@ abstract class _ChatPageStateBase extends State<ChatPage>
 
   Future<void> _handleAppUpdateBannerTap();
 
-  Future<void> _refreshCodexStatus();
+  Future<void> _refreshAgentRuntimeStatus();
 
-  Future<void> _refreshCodexCommandPreferences();
+  Future<void> _refreshAgentCommandPreferences();
 
-  Future<void> _loadCodexModelOptionsWhenReady({bool force = false});
+  Future<void> _loadAgentModelOptionsWhenReady({bool force = false});
 
-  Future<void> _loadCodexModelOptions({bool force = false});
+  Future<void> _loadAgentModelOptions({bool force = false});
 
-  Future<void> _loadCodexCollaborationModes({bool force = false});
+  Future<void> _loadAgentCollaborationModes({bool force = false});
 
-  Future<void> _selectCodexModel(String modelId, {bool clearComposer = true});
+  Future<void> _selectAgentModel(String modelId, {bool clearComposer = true});
 
-  Future<bool> _selectCodexAgent(String agentId);
+  Future<bool> _selectAgent(String agentId);
 
   Future<void> _handleAcpAgentModeShortcutTap(String agentId);
 
-  Future<void> _selectCodexReasoningEffort(String effort);
+  Future<void> _selectAgentReasoningEffort(String effort);
 
-  Future<void> _activateCodexPlanMode({
+  Future<void> _activateAgentPlanMode({
     bool persistOnly = false,
     bool dismissPanel = true,
   });
 
-  Future<void> _deactivateCodexPlanMode({bool dismissPanel = true});
+  Future<void> _deactivateAgentPlanMode({bool dismissPanel = true});
 
-  Future<void> _handleCodexSlashCommandCardSelected(
+  Future<void> _handleAgentSlashCommandCardSelected(
     Map<String, dynamic> cardData,
   );
 
-  Future<bool> _tryHandleCodexSlashCommand(
+  Future<bool> _tryHandleAgentSlashCommand(
     String messageText, {
     List<Map<String, dynamic>> attachments = const [],
   });
 
-  Future<void> _executeCodexInitCommand();
+  Future<void> _executeAgentInitCommand();
 
-  Future<void> _startCodexReviewCommand();
+  Future<void> _startAgentReviewCommand();
 
-  Future<void> _handleCodexTap();
+  Future<void> _handleAgentTap();
 
-  String? _codexRemoteWorkspaceNameForGreeting();
+  String? _remoteCodexWorkspaceNameForGreeting();
 
-  Future<void> _openCodexRemoteWorkspacePicker();
+  Future<void> _openRemoteCodexWorkspacePicker();
 
   Future<void> _prepareRemoteCodexSessionTarget(
     ConversationThreadTarget target,
   );
 
-  void _handleCodexAppServerEvent(Map<String, dynamic> event);
+  void _handleAgentRuntimeEvent(Map<String, dynamic> event);
 
   void _stopRemoteCodexSessionSync();
 
-  Future<void> _sendCodexMessage(
+  Future<void> _sendAgentMessage(
     String aiMessageId,
     String messageText, {
     List<Map<String, dynamic>> attachments = const [],
@@ -1744,7 +1748,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
     String? collaborationModeOverride,
   });
 
-  Future<void> _interruptCodexTurn();
+  Future<void> _interruptAgentTurn();
 
   Future<void> _loadOpenClawConfig();
 
@@ -1993,7 +1997,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
 class _ChatPageState extends _ChatPageStateBase
     with
         _ChatPageBrowserMixin,
-        _ChatPageCodexMixin,
+        _ChatPageAgentMixin,
         _ChatPageLifecycleMixin,
         _ChatPageModelContextMixin,
         _ChatPageOpenClawMixin,

@@ -33,7 +33,7 @@ class ConversationDomainService(
     }
 
     private companion object {
-        const val CODEX_MODE = "codex"
+        const val AGENT_MODE_STORAGE_VALUE = "codex"
     }
 
     suspend fun listConversationPayloads(
@@ -48,8 +48,9 @@ class ConversationDomainService(
                     else -> !conversation.isArchived
                 }
             }
-        val codexCwdByConversationId = if (conversations.any { it.mode == CODEX_MODE }) {
-            DatabaseHelper.getAllCodexThreadBindings()
+        val agentCwdByConversationId =
+            if (conversations.any { it.mode == AGENT_MODE_STORAGE_VALUE }) {
+            DatabaseHelper.getAllAgentSessionBindings()
                 .associate { binding -> binding.conversationId to binding.cwd }
         } else {
             emptyMap()
@@ -57,19 +58,19 @@ class ConversationDomainService(
         return conversations.map { conversation ->
             conversationToPayload(
                 conversation,
-                codexCwd = codexCwdByConversationId[conversation.id]
+                agentCwd = agentCwdByConversationId[conversation.id]
             )
         }
     }
 
     suspend fun getConversationPayload(conversationId: Long): Map<String, Any?>? {
         val conversation = DatabaseHelper.getConversationById(conversationId) ?: return null
-        val codexCwd = if (conversation.mode == CODEX_MODE) {
-            DatabaseHelper.getCodexThreadBindingByConversationId(conversation.id)?.cwd
+        val agentCwd = if (conversation.mode == AGENT_MODE_STORAGE_VALUE) {
+            DatabaseHelper.getAgentSessionBindingByConversationId(conversation.id)?.cwd
         } else {
             null
         }
-        return conversationToPayload(conversation, codexCwd = codexCwd)
+        return conversationToPayload(conversation, agentCwd = agentCwd)
     }
 
     suspend fun createConversation(
@@ -409,13 +410,13 @@ class ConversationDomainService(
 
     fun conversationToPayload(
         conversation: Conversation,
-        codexCwd: String? = null
+        agentCwd: String? = null
     ): Map<String, Any?> {
         return linkedMapOf(
             "id" to conversation.id,
             "title" to conversation.title,
             "mode" to conversation.mode,
-            "codexCwd" to codexCwd?.trim()?.takeIf { it.isNotEmpty() },
+            "agentCwd" to agentCwd?.trim()?.takeIf { it.isNotEmpty() },
             "isArchived" to conversation.isArchived,
             "isPinned" to conversation.isPinned,
             "parentConversationId" to conversation.parentConversationId,

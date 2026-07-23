@@ -657,11 +657,11 @@ void main() {
     const conversationId = 2001;
     final runtime = coordinator.ensureRuntime(
       conversationId: conversationId,
-      mode: kChatRuntimeModeCodex,
+      mode: kChatRuntimeModeAgent,
     );
     runtime.messages.insert(0, ChatMessageModel.userMessage('第一句标题应该保留'));
 
-    await coordinator.applyCodexEvent(
+    await coordinator.applyAgentEvent(
       conversationId: conversationId,
       event: {
         'message': {
@@ -672,7 +672,7 @@ void main() {
     );
     await coordinator.flushPendingPersistence(
       conversationId: conversationId,
-      mode: kChatRuntimeModeCodex,
+      mode: kChatRuntimeModeAgent,
     );
 
     final replaceCalls = recordedMethodCalls
@@ -712,10 +712,10 @@ void main() {
     const conversationId = 2002;
     coordinator.ensureRuntime(
       conversationId: conversationId,
-      mode: kChatRuntimeModeCodex,
+      mode: kChatRuntimeModeAgent,
     );
 
-    coordinator.applyCodexEvent(
+    coordinator.applyAgentEvent(
       conversationId: conversationId,
       event: {
         'agentId': 'claude-code-acp',
@@ -726,7 +726,7 @@ void main() {
         },
       },
     );
-    coordinator.applyCodexEvent(
+    coordinator.applyAgentEvent(
       conversationId: conversationId,
       event: {
         'agentId': 'claude-code-acp',
@@ -748,7 +748,7 @@ void main() {
 
     final runtime = coordinator.runtimeFor(
       conversationId: conversationId,
-      mode: kChatRuntimeModeCodex,
+      mode: kChatRuntimeModeAgent,
     )!;
     final assistant = runtime.messages.singleWhere(
       (message) => message.user == 2,

@@ -9,8 +9,8 @@ ConversationThreadTarget _newThreadTargetForConversationMode(
   );
 }
 
-ConversationThreadTarget _newCodexThreadTarget() {
-  return _newThreadTargetForConversationMode(ConversationMode.codex);
+ConversationThreadTarget _newAgentThreadTarget() {
+  return _newThreadTargetForConversationMode(ConversationMode.agent);
 }
 
 mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
@@ -48,10 +48,10 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     _browserSessionSnapshotChangedSubscription = AssistsMessageService
         .browserSessionSnapshotChangedStream
         .listen(_handleBrowserSessionSnapshotChanged);
-    _codexEventSubscription = CodexAppServerService.events.listen(
-      _handleCodexAppServerEvent,
+    _agentEventSubscription = AgentRuntimeService.events.listen(
+      _handleAgentRuntimeEvent,
     );
-    unawaited(_refreshCodexStatus());
+    unawaited(_refreshAgentRuntimeStatus());
 
     _inputFocusNode.addListener(_onFocusChange);
     _messageController.addListener(_handleSlashCommandInput);
@@ -242,7 +242,7 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
       _isSurfacePageScrolling = false;
     });
     _resetLocalConversationState(targetMode);
-    _restoreLocalCodexThreadIdFromTarget(effectiveTarget);
+    _restoreLocalAgentThreadIdFromTarget(effectiveTarget);
     _applyDraftForConversationMode(targetMode);
     if (effectiveTarget.isRemoteCodexSessionTarget) {
       await _prepareRemoteCodexSessionTarget(effectiveTarget);
@@ -250,8 +250,8 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
       await initializeConversation(lifecycleToken: lifecycleToken);
     }
     if (isStaleRequest()) return;
-    if (_activeConversationMode == ChatPageMode.codex) {
-      await _refreshCodexCommandPreferences();
+    if (_activeConversationMode == ChatPageMode.agent) {
+      await _refreshAgentCommandPreferences();
       if (isStaleRequest()) return;
     }
     await _applyStagedSharedDraftIfNeeded(effectiveTarget);
@@ -264,16 +264,16 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     }
   }
 
-  void _restoreLocalCodexThreadIdFromTarget(ConversationThreadTarget target) {
-    if (target.mode != ConversationMode.codex ||
+  void _restoreLocalAgentThreadIdFromTarget(ConversationThreadTarget target) {
+    if (target.mode != ConversationMode.agent ||
         target.isRemoteCodexSessionTarget) {
       return;
     }
-    final threadId = target.codexThreadId?.trim();
+    final threadId = target.agentSessionId?.trim();
     if (threadId == null || threadId.isEmpty) {
       return;
     }
-    _activeCodexThreadId = threadId;
+    _activeAgentThreadId = threadId;
   }
 
   @override
@@ -385,8 +385,8 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     }
     _resolvedThreadTarget = visibleTarget;
     if (visibleTarget.isRemoteCodexSessionTarget ||
-        (_activeConversationMode == ChatPageMode.codex &&
-            _isRemoteCodexRuntimeActiveForMode(ChatPageMode.codex))) {
+        (_activeConversationMode == ChatPageMode.agent &&
+            _isRemoteCodexRuntimeActiveForMode(ChatPageMode.agent))) {
       return;
     }
     await ConversationHistoryService.saveLastVisibleThreadTarget(visibleTarget);
@@ -526,14 +526,14 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     _messageController.dispose();
     _normalMessageScrollController.dispose();
     _openClawMessageScrollController.dispose();
-    _codexMessageScrollController.dispose();
+    _agentMessageScrollController.dispose();
     _modePageController.dispose();
     _inputFocusNode.dispose();
     _openClawBaseUrlController.dispose();
     _openClawTokenController.dispose();
     _openClawUserIdController.dispose();
     _stopRemoteCodexSessionSync();
-    _codexEventSubscription?.cancel();
+    _agentEventSubscription?.cancel();
     super.dispose();
   }
 
@@ -691,8 +691,8 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
   ScrollController _scrollControllerForMode(ChatPageMode mode) {
     return mode == ChatPageMode.openclaw
         ? _openClawMessageScrollController
-        : mode == ChatPageMode.codex
-        ? _codexMessageScrollController
+        : mode == ChatPageMode.agent
+        ? _agentMessageScrollController
         : _normalMessageScrollController;
   }
 
@@ -759,8 +759,8 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
       return;
     }
 
-    final targetConversationMode = _activeConversationMode == ChatPageMode.codex
-        ? ChatPageMode.codex
+    final targetConversationMode = _activeConversationMode == ChatPageMode.agent
+        ? ChatPageMode.agent
         : ChatPageMode.normal;
     await _ensureConversationModeReady(targetConversationMode);
     if (isStaleRequest()) return;

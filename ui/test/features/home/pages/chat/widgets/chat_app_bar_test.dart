@@ -122,16 +122,16 @@ class _PureChatToggleHarness extends StatefulWidget {
   const _PureChatToggleHarness({
     this.selected = false,
     this.locked = false,
+    this.showOmniAiTapCount = false,
     this.showAgentTapCount = false,
-    this.showCodexTapCount = false,
     this.translucent = false,
     this.visualProfile = AppBackgroundVisualProfile.defaultProfile,
   });
 
   final bool selected;
   final bool locked;
+  final bool showOmniAiTapCount;
   final bool showAgentTapCount;
-  final bool showCodexTapCount;
   final bool translucent;
   final AppBackgroundVisualProfile visualProfile;
 
@@ -143,8 +143,8 @@ class _PureChatToggleHarnessState extends State<_PureChatToggleHarness> {
   late bool _selected = widget.selected;
   late final bool _locked = widget.locked;
   int _toggleCount = 0;
+  int _omniAiTapCount = 0;
   int _agentTapCount = 0;
-  int _codexTapCount = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -157,9 +157,9 @@ class _PureChatToggleHarnessState extends State<_PureChatToggleHarness> {
               ChatAppBar(
                 onMenuTap: () {},
                 onPetTap: () {},
-                onAgentTap: () {
+                onOmniAiTap: () {
                   setState(() {
-                    _agentTapCount += 1;
+                    _omniAiTapCount += 1;
                   });
                 },
                 onPureChatToggleTap: () {
@@ -168,9 +168,9 @@ class _PureChatToggleHarnessState extends State<_PureChatToggleHarness> {
                     _toggleCount += 1;
                   });
                 },
-                onCodexTap: () {
+                onAgentTap: () {
                   setState(() {
-                    _codexTapCount += 1;
+                    _agentTapCount += 1;
                   });
                 },
                 activeMode: ChatSurfaceMode.normal,
@@ -189,8 +189,9 @@ class _PureChatToggleHarnessState extends State<_PureChatToggleHarness> {
               Text('selected:$_selected'),
               Text('locked:$_locked'),
               Text('toggles:$_toggleCount'),
+              if (widget.showOmniAiTapCount)
+                Text('omniAiTaps:$_omniAiTapCount'),
               if (widget.showAgentTapCount) Text('agentTaps:$_agentTapCount'),
-              if (widget.showCodexTapCount) Text('codexTaps:$_codexTapCount'),
             ],
           ),
         ),
@@ -652,8 +653,8 @@ void main() {
   ) async {
     await tester.pumpWidget(
       const _PureChatToggleHarness(
+        showOmniAiTapCount: true,
         showAgentTapCount: true,
-        showCodexTapCount: true,
       ),
     );
 
@@ -674,6 +675,16 @@ void main() {
       find.byKey(const ValueKey('chat-app-bar-mode-menu-pure-chat')),
       findsOneWidget,
     );
+    final omniAiMenuIcon = tester.widget<SvgPicture>(
+      find.descendant(
+        of: find.byKey(const ValueKey('chat-app-bar-mode-menu-omni-ai')),
+        matching: find.byType(SvgPicture),
+      ),
+    );
+    expect(
+      omniAiMenuIcon.bytesLoader.toString(),
+      contains('assets/home/avatar.svg'),
+    );
     final pureChatMenuIcon = tester.widget<SvgPicture>(
       find.descendant(
         of: find.byKey(const ValueKey('chat-app-bar-mode-menu-pure-chat')),
@@ -683,7 +694,7 @@ void main() {
     expect(pureChatMenuIcon.width, 18);
     expect(pureChatMenuIcon.height, 18);
     expect(find.text('Agent 模式'), findsNothing);
-    expect(find.text('Codex 模式'), findsNothing);
+    expect(find.text('OmniAi 模式'), findsNothing);
     expect(find.text('纯聊天模式'), findsNothing);
 
     await tester.tap(
@@ -691,7 +702,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('agentTaps:1'), findsOneWidget);
+    expect(find.text('omniAiTaps:1'), findsOneWidget);
 
     await tester.tap(
       find.byKey(const ValueKey('chat-app-bar-pure-chat-button')),
@@ -702,7 +713,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('codexTaps:1'), findsOneWidget);
+    expect(find.text('agentTaps:1'), findsOneWidget);
 
     await tester.tap(
       find.byKey(const ValueKey('chat-app-bar-pure-chat-button')),
@@ -728,7 +739,7 @@ void main() {
           child: Scaffold(
             body: ChatAppBar(
               onMenuTap: () {},
-              onAgentTap: () {},
+              onOmniAiTap: () {},
               onPureChatToggleTap: () {},
               onAcpAgentTap: (agentId) {
                 selectedAgentId = agentId;
@@ -741,8 +752,8 @@ void main() {
                 ),
                 ChatAcpAgentModeOption(id: 'opencode-acp', name: 'OpenCode'),
                 ChatAcpAgentModeOption(
-                  id: 'codex-remote',
-                  name: 'Codex Remote',
+                  id: 'agent-remote',
+                  name: 'Agent Remote',
                 ),
               ],
               activeAcpAgentId: 'codex-acp',
@@ -767,7 +778,7 @@ void main() {
       'codex-acp',
       'claude-code-acp',
       'opencode-acp',
-      'codex-remote',
+      'agent-remote',
     ]) {
       final row = find.byKey(ValueKey('chat-app-bar-mode-menu-acp-$agentId'));
       expect(row, findsOneWidget);
@@ -806,7 +817,7 @@ void main() {
         home: Scaffold(
           body: ChatAppBar(
             onMenuTap: () {},
-            onAgentTap: () {},
+            onOmniAiTap: () {},
             onPureChatToggleTap: () {},
             onAcpAgentTap: (agentId) {
               selectedAgentId = agentId;
@@ -872,7 +883,7 @@ void main() {
           matching: find.byType(SvgPicture),
         ),
       );
-      final unselectedCodexIcon = tester.widget<SvgPicture>(
+      final unselectedAgentIcon = tester.widget<SvgPicture>(
         find.descendant(
           of: find.byKey(
             const ValueKey('chat-app-bar-mode-menu-acp-codex-acp'),
@@ -893,7 +904,7 @@ void main() {
         ColorFilter.mode(OmniThemePalette.light.accentPrimary, BlendMode.srcIn),
       );
       expect(
-        unselectedCodexIcon.colorFilter,
+        unselectedAgentIcon.colorFilter,
         ColorFilter.mode(OmniThemePalette.light.textSecondary, BlendMode.srcIn),
       );
       expect(
@@ -901,7 +912,7 @@ void main() {
         ColorFilter.mode(OmniThemePalette.light.textSecondary, BlendMode.srcIn),
       );
       expect(
-        unselectedCodexIcon.colorFilter,
+        unselectedAgentIcon.colorFilter,
         isNot(
           ColorFilter.mode(
             lightIconsForDarkBackground.appBarIconColor,
@@ -1029,11 +1040,11 @@ void main() {
     expect(find.text('active:normal'), findsOneWidget);
   });
 
-  testWidgets('shows update indicator next to mode menu without direct codex', (
+  testWidgets('shows update indicator next to mode menu without direct agent', (
     tester,
   ) async {
     var tapCount = 0;
-    var codexTapCount = 0;
+    var agentTapCount = 0;
     await tester.pumpWidget(
       MaterialApp(
         home: DefaultAssetBundle(
@@ -1051,8 +1062,8 @@ void main() {
               showAppUpdateIndicator: true,
               showPureChatToggle: true,
               appUpdateTooltip: '发现新版本 v9.9.9',
-              onCodexTap: () {
-                codexTapCount += 1;
+              onAgentTap: () {
+                agentTapCount += 1;
               },
               onAppUpdateTap: () {
                 tapCount += 1;
@@ -1064,13 +1075,13 @@ void main() {
     );
 
     final indicator = find.byKey(const ValueKey('chat-app-update-button'));
-    final codex = find.byKey(const ValueKey('chat-app-codex-button'));
+    final agent = find.byKey(const ValueKey('chat-app-agent-button'));
     final modeMenu = find.byKey(
       const ValueKey('chat-app-bar-pure-chat-button'),
     );
     final island = find.byKey(const ValueKey('chat-app-bar-island'));
     expect(indicator, findsOneWidget);
-    expect(codex, findsNothing);
+    expect(agent, findsNothing);
     expect(modeMenu, findsOneWidget);
     expect(island, findsOneWidget);
     expect(
@@ -1090,7 +1101,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(codexTapCount, 1);
+    expect(agentTapCount, 1);
   });
 
   testWidgets('hides update indicator when no update is available', (
@@ -1121,7 +1132,7 @@ void main() {
     expect(find.byKey(const ValueKey('chat-app-update-button')), findsNothing);
   });
 
-  testWidgets('tints and enlarges codex icon with theme color when selected', (
+  testWidgets('tints and enlarges agent icon with theme color when selected', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -1138,9 +1149,9 @@ void main() {
               onTerminalEnvironmentTap: (_) {},
               onTerminalTap: () {},
               onBrowserTap: () {},
-              isCodexReady: true,
-              isCodexConnected: true,
-              isCodexSelected: true,
+              isAgentReady: true,
+              isAgentConnected: true,
+              isAgentSelected: true,
               showPureChatToggle: true,
             ),
           ),
@@ -1148,23 +1159,23 @@ void main() {
       ),
     );
 
-    final codex = find.byKey(const ValueKey('chat-app-bar-pure-chat-button'));
-    final codexIcon = tester.widget<SvgPicture>(
-      find.descendant(of: codex, matching: find.byType(SvgPicture)),
+    final agent = find.byKey(const ValueKey('chat-app-bar-pure-chat-button'));
+    final agentIcon = tester.widget<SvgPicture>(
+      find.descendant(of: agent, matching: find.byType(SvgPicture)),
     );
 
     expect(
-      codexIcon.colorFilter,
+      agentIcon.colorFilter,
       const ColorFilter.mode(Color(0xFF2C7FEB), BlendMode.srcIn),
     );
-    expect(codexIcon.width, 22);
-    expect(codexIcon.height, 22);
+    expect(agentIcon.width, 22);
+    expect(agentIcon.height, 22);
   });
 
   testWidgets('uses current chat mode icon in surface slider', (tester) async {
     Future<void> pumpAppBar({
+      bool isOmniAiSelected = false,
       bool isAgentSelected = false,
-      bool isCodexSelected = false,
       bool isPureChatSelected = false,
     }) async {
       await tester.pumpWidget(
@@ -1181,8 +1192,8 @@ void main() {
                 onTerminalEnvironmentTap: (_) {},
                 onTerminalTap: () {},
                 onBrowserTap: () {},
+                isOmniAiSelected: isOmniAiSelected,
                 isAgentSelected: isAgentSelected,
-                isCodexSelected: isCodexSelected,
                 isPureChatSelected: isPureChatSelected,
               ),
             ),
@@ -1202,10 +1213,10 @@ void main() {
       return (widget as SvgPicture).bytesLoader.toString();
     }
 
-    await pumpAppBar(isAgentSelected: true);
-    expect(primaryIconIdentity(), contains('assets/home/chat/agent.svg'));
+    await pumpAppBar(isOmniAiSelected: true);
+    expect(primaryIconIdentity(), contains('assets/home/avatar.svg'));
 
-    await pumpAppBar(isCodexSelected: true);
+    await pumpAppBar(isAgentSelected: true);
     expect(primaryIconIdentity(), 'agent:codex-acp');
 
     await pumpAppBar(isPureChatSelected: true);

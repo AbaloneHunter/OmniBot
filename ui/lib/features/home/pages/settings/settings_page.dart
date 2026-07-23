@@ -352,7 +352,7 @@ class _SettingsPageState extends State<SettingsPage> {
             title: context.trLegacy('远程 PC Bridge'),
             subtitle: context.trLegacy('仅配置远程 Codex app-server 连接'),
             onTap: () {
-              GoRouterManager.push('/home/codex_setting');
+              GoRouterManager.push('/home/remote_codex_setting');
             },
           ),
         ],

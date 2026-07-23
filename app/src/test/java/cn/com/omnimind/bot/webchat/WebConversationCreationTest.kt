@@ -26,11 +26,11 @@ class WebConversationCreationTest {
     @Test
     fun `each stored mode selects its own runtime`() {
         assertEquals(
-            WebConversationRunKind.AGENT,
+            WebConversationRunKind.OMNIAI,
             resolveWebConversationRunKind("normal")
         )
         assertEquals(
-            WebConversationRunKind.CODEX,
+            WebConversationRunKind.AGENT,
             resolveWebConversationRunKind("codex")
         )
         assertEquals(
@@ -74,8 +74,8 @@ class WebConversationCreationTest {
     }
 
     @Test
-    fun `codex stream events are mapped to web updates`() {
-        val assistantUpdate = parseWebCodexEvent(
+    fun `agent stream events are mapped to web updates`() {
+        val assistantUpdate = parseWebAgentEvent(
             mapOf(
                 "method" to "item/agentMessage/delta",
                 "turnId" to "turn-1",
@@ -86,12 +86,12 @@ class WebConversationCreationTest {
             )
         )
         assertEquals("hello", assistantUpdate.assistantDelta)
-        assertEquals("item-1-codex-agent", assistantUpdate.assistantEntryId)
+        assertEquals("item-1-agent-message", assistantUpdate.assistantEntryId)
         assertEquals("turn-1", assistantUpdate.parentTaskId)
 
         assertEquals(
             "thinking",
-            parseWebCodexEvent(
+            parseWebAgentEvent(
                 mapOf(
                     "method" to "item/reasoning/textDelta",
                     "turnId" to "turn-1",
@@ -104,15 +104,15 @@ class WebConversationCreationTest {
         )
         assertEquals(
             "completed",
-            parseWebCodexEvent(
+            parseWebAgentEvent(
                 mapOf("method" to "turn/completed")
             ).terminalKind
         )
     }
 
     @Test
-    fun `web codex runs explicitly request full access`() {
-        val arguments = buildWebCodexTurnArguments(
+    fun `web agent runs explicitly request full access`() {
+        val arguments = buildWebAgentTurnArguments(
             conversationId = 42L,
             userMessage = "检查权限",
             attachments = emptyList(),
@@ -131,8 +131,8 @@ class WebConversationCreationTest {
     }
 
     @Test
-    fun `codex tool lifecycle keeps a stable card id and terminal status`() {
-        val started = parseWebCodexEvent(
+    fun `agent tool lifecycle keeps a stable card id and terminal status`() {
+        val started = parseWebAgentEvent(
             mapOf(
                 "method" to "item/started",
                 "turnId" to "turn-2",
@@ -146,7 +146,7 @@ class WebConversationCreationTest {
                 )
             )
         ).tool
-        val completed = parseWebCodexEvent(
+        val completed = parseWebAgentEvent(
             mapOf(
                 "method" to "item/completed",
                 "turnId" to "turn-2",
@@ -161,7 +161,7 @@ class WebConversationCreationTest {
             )
         ).tool
 
-        assertEquals("command-1-codex-command", started?.entryId)
+        assertEquals("command-1-agent-command", started?.entryId)
         assertEquals("running", started?.status)
         assertEquals(started?.entryId, completed?.entryId)
         assertEquals("success", completed?.status)
