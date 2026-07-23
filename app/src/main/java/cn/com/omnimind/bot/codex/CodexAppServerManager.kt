@@ -6,16 +6,15 @@ import android.os.Looper
 import android.util.Log
 import com.ai.assistance.operit.terminal.TerminalManager
 import cn.com.omnimind.baselib.database.DatabaseHelper
-import cn.com.omnimind.baselib.llm.ModelProviderConfigStore
-import cn.com.omnimind.baselib.llm.ModelProviderProfile
 import cn.com.omnimind.bot.BuildConfig
 import cn.com.omnimind.bot.agent.AgentAttachmentPromptSupport
 import cn.com.omnimind.bot.agent.AgentImageAttachmentSupport
 import cn.com.omnimind.bot.agent.AgentWorkspaceAttachmentSupport
 import cn.com.omnimind.bot.agent.AgentWorkspaceManager
 import cn.com.omnimind.bot.util.TaskRuntimeSettings
-import com.google.gson.Gson
 import com.rk.terminal.runtime.TerminalDistribution
+import com.google.gson.GsonBuilder
+import com.google.gson.JsonParser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -192,6 +191,12 @@ class CodexAppServerManager private constructor(
     }
 
     suspend fun handleMethod(method: String, args: Map<String, Any?>): Any? {
+        if (method == "agent/config/read") {
+            return readAgentConfig(args)
+        }
+        if (method == "agent/config/write") {
+            return writeAgentConfig(args)
+        }
         if (method.startsWith("agent/")) {
             return localAcpRuntime.handleMethod(method, args)
         }
@@ -513,6 +518,201 @@ class CodexAppServerManager private constructor(
         }
     }
 
+    private suspend fun readAgentConfig(args: Map<String, Any?>): Map<String, Any?> {
+        val agentId = args.stringValue("agentId")
+            ?: throw IllegalArgumentException("agentId is required.")
+        val profile = acpAgentProfileStore.list().firstOrNull { it.id == agentId }
+            ?: throw IllegalArgumentException("Unknown ACP agent: $agentId")
+        return when (profile.id) {
+            AcpAgentProfileStore.DEFAULT_CODEX_AGENT_ID -> {
+                val configToml = readTerminalTextFile(
+                    path = CODEX_CONFIG_TOML_PATH,
+                    executorKey = "codex-agent-config-read"
+                )
+                val authJson = readTerminalTextFile(
+                    path = CODEX_AUTH_JSON_PATH,
+                    executorKey = "codex-agent-auth-read"
+                )
+                linkedMapOf(
+                    "agentId" to profile.id,
+                    "kind" to "codex",
+                    "configPath" to CODEX_CONFIG_TOML_DISPLAY_PATH,
+                    "authPath" to CODEX_AUTH_JSON_DISPLAY_PATH,
+                    "baseUrl" to extractTomlString(configToml, "base_url").orEmpty(),
+                    "model" to extractTomlString(configToml, "model").orEmpty(),
+                    "apiKey" to extractOpenAiApiKey(authJson).orEmpty()
+                )
+            }
+            CLAUDE_CODE_AGENT_ID -> readRawAgentConfig(
+                profile = profile,
+                kind = "json",
+                path = CLAUDE_SETTINGS_JSON_PATH,
+                displayPath = CLAUDE_SETTINGS_JSON_DISPLAY_PATH
+            )
+            OPENCODE_AGENT_ID -> readRawAgentConfig(
+                profile = profile,
+                kind = "jsonc",
+                path = OPENCODE_CONFIG_JSON_PATH,
+                displayPath = OPENCODE_CONFIG_JSON_DISPLAY_PATH
+            )
+            else -> linkedMapOf(
+                "agentId" to profile.id,
+                "kind" to "profile"
+            )
+        }
+    }
+
+    private suspend fun readRawAgentConfig(
+        profile: AcpAgentProfile,
+        kind: String,
+        path: String,
+        displayPath: String
+    ): Map<String, Any?> {
+        val stored = readTerminalTextFile(
+            path = path,
+            executorKey = "agent-config-read-${profile.id}"
+        )
+        return linkedMapOf(
+            "agentId" to profile.id,
+            "kind" to kind,
+            "path" to displayPath,
+            "content" to stored.ifBlank { DEFAULT_EMPTY_JSON_FILE }
+        )
+    }
+
+    private suspend fun writeAgentConfig(args: Map<String, Any?>): Map<String, Any?> {
+        val agentId = args.stringValue("agentId")
+            ?: throw IllegalArgumentException("agentId is required.")
+        val profile = acpAgentProfileStore.list().firstOrNull { it.id == agentId }
+            ?: throw IllegalArgumentException("Unknown ACP agent: $agentId")
+        when (profile.id) {
+            AcpAgentProfileStore.DEFAULT_CODEX_AGENT_ID -> {
+                val baseUrl = args.stringValue("baseUrl")
+                    ?: throw IllegalArgumentException("Base URL is required.")
+                val model = args.stringValue("model")
+                    ?: throw IllegalArgumentException("Model ID is required.")
+                val apiKey = args.stringValue("apiKey")
+                    ?: throw IllegalArgumentException("API Key is required.")
+                writeCodexConfigFiles(
+                    configToml = buildCodexConfigToml(
+                        baseUrl = baseUrl,
+                        model = model
+                    ),
+                    authJson = buildCodexAuthJson(apiKey)
+                )
+            }
+            CLAUDE_CODE_AGENT_ID -> {
+                val content = args.stringValuePreservingWhitespace("content")
+                    ?.ifBlank { DEFAULT_EMPTY_JSON_FILE }
+                    ?: throw IllegalArgumentException("settings.json content is required.")
+                requireAgentConfigSize(content)
+                runCatching {
+                    require(JsonParser.parseString(content).isJsonObject)
+                }.getOrElse {
+                    throw IllegalArgumentException(
+                        "Claude Code settings.json must contain a valid JSON object.",
+                        it
+                    )
+                }
+                writeTerminalTextFile(
+                    path = CLAUDE_SETTINGS_JSON_PATH,
+                    content = content,
+                    executorKey = "agent-config-write-${profile.id}"
+                )
+            }
+            OPENCODE_AGENT_ID -> {
+                val content = args.stringValuePreservingWhitespace("content")
+                    ?.ifBlank { DEFAULT_EMPTY_JSON_FILE }
+                    ?: throw IllegalArgumentException("opencode.json content is required.")
+                requireAgentConfigSize(content)
+                writeTerminalTextFile(
+                    path = OPENCODE_CONFIG_JSON_PATH,
+                    content = content,
+                    executorKey = "agent-config-write-${profile.id}"
+                )
+            }
+            else -> throw UnsupportedOperationException(
+                "Custom ACP Agent settings are stored in its launch profile."
+            )
+        }
+        localAcpRuntime.disconnect()
+        activeTurnsByThreadId.clear()
+        return readAgentConfig(mapOf("agentId" to profile.id))
+    }
+
+    private suspend fun writeCodexConfigFiles(
+        configToml: String,
+        authJson: String
+    ) {
+        val command = """
+            set -eu
+            mkdir -p ${shellQuote(CodexAppServerDefaults.CODEX_HOME)}
+            umask 077
+            printf %s ${shellQuote(configToml)} > ${shellQuote(CODEX_CONFIG_TOML_PATH)}
+            printf %s ${shellQuote(authJson)} > ${shellQuote(CODEX_AUTH_JSON_PATH)}
+            chmod 600 ${shellQuote(CODEX_CONFIG_TOML_PATH)} ${shellQuote(CODEX_AUTH_JSON_PATH)}
+        """.trimIndent()
+        executeAgentConfigCommand(command, "codex-agent-config-write")
+    }
+
+    private suspend fun readTerminalTextFile(
+        path: String,
+        executorKey: String
+    ): String {
+        val command = """
+            set -eu
+            printf '${AGENT_CONFIG_START_MARKER}\n'
+            if [ -f ${shellQuote(path)} ]; then
+              cat ${shellQuote(path)}
+            fi
+            printf '\n${AGENT_CONFIG_END_MARKER}\n'
+        """.trimIndent()
+        val output = executeAgentConfigCommand(command, executorKey)
+        return extractMarkedBlock(
+            output,
+            AGENT_CONFIG_START_MARKER,
+            AGENT_CONFIG_END_MARKER
+        )
+    }
+
+    private suspend fun writeTerminalTextFile(
+        path: String,
+        content: String,
+        executorKey: String
+    ) {
+        val parent = File(path).parent
+            ?: throw IllegalArgumentException("Invalid Agent config path.")
+        val command = """
+            set -eu
+            mkdir -p ${shellQuote(parent)}
+            umask 077
+            printf %s ${shellQuote(content)} > ${shellQuote(path)}
+            chmod 600 ${shellQuote(path)}
+        """.trimIndent()
+        executeAgentConfigCommand(command, executorKey)
+    }
+
+    private suspend fun executeAgentConfigCommand(
+        command: String,
+        executorKey: String
+    ): String {
+        val result = TerminalManager.getInstance(appContext).executeHiddenCommand(
+            command = command,
+            executorKey = executorKey,
+            timeoutMs = 30_000L
+        )
+        if (!result.isOk || result.exitCode != 0) {
+            throw IllegalStateException(
+                result.error.ifBlank {
+                    result.rawOutputPreview.ifBlank {
+                        "Failed to access the Agent configuration."
+                    }
+                }
+            )
+        }
+        return result.output
+    }
+
     private suspend fun writeRemoteBridgeConfig(args: Map<String, Any?>): Map<String, Any?> {
         val remoteConfig = CodexRemoteBridgeConfig(
             enabled = args["remoteEnabled"] == true,
@@ -537,35 +737,6 @@ class CodexAppServerManager private constructor(
             remoteConfig = savedRemoteConfig,
             runtime = resolveRuntime().kind.payloadValue
         )
-    }
-
-    private suspend fun writeCodexAcpLaunchConfig(launchConfig: CodexAcpLaunchConfig) {
-        val normalized = launchConfig.normalized()
-        val configToml = buildCodexConfigToml(
-            baseUrl = normalized.baseUrl,
-            model = normalized.model
-        )
-        val configPath = "${CodexAppServerDefaults.CODEX_HOME}/config.toml"
-        val command = """
-            set -eu
-            mkdir -p ${shellQuote(CodexAppServerDefaults.CODEX_HOME)}
-            umask 077
-            printf %s ${shellQuote(configToml)} > ${shellQuote(configPath)}
-            chmod 600 ${shellQuote(configPath)}
-            printf '__OMNI_CODEX_WRITE_OK__\n'
-        """.trimIndent()
-        val result = TerminalManager.getInstance(appContext).executeHiddenCommand(
-            command = command,
-            executorKey = "codex-config-write",
-            timeoutMs = 30_000L
-        )
-        if (!result.isOk || result.exitCode != 0) {
-            throw IllegalStateException(
-                result.error.ifBlank {
-                    result.rawOutputPreview.ifBlank { "Failed to write Codex config." }
-                }
-            )
-        }
     }
 
     private suspend fun testRemoteConfig(args: Map<String, Any?>): Map<String, Any?> {
@@ -739,26 +910,11 @@ class CodexAppServerManager private constructor(
         profile: AcpAgentProfile
     ): Map<String, String> {
         ensureManagedAcpAdapter(profile)
-        val provider = profile.providerProfileId
-            .takeIf(String::isNotBlank)
-            ?.let(ModelProviderConfigStore::getProfile)
-            ?.also {
-                require(it.isConfigured()) {
-                    "The model provider bound to ${profile.name} is not configured."
-                }
-            }
-        if (profile.providerProfileId.isNotBlank() && provider == null) {
-            throw IllegalStateException(
-                "The model provider bound to ${profile.name} no longer exists."
-            )
+        return if (profile.id == AcpAgentProfileStore.DEFAULT_CODEX_AGENT_ID) {
+            mapOf("CODEX_HOME" to CodexAppServerDefaults.CODEX_HOME)
+        } else {
+            emptyMap()
         }
-        if (
-            profile.id == AcpAgentProfileStore.DEFAULT_CODEX_AGENT_ID &&
-            provider != null
-        ) {
-            writeUnifiedCodexConfig(profile, provider)
-        }
-        return buildUnifiedAgentEnvironment(profile, provider)
     }
 
     private suspend fun ensureManagedAcpAdapter(profile: AcpAgentProfile) {
@@ -818,65 +974,6 @@ class CodexAppServerManager private constructor(
         return result.isOk && result.exitCode == 0
     }
 
-    private fun buildUnifiedAgentEnvironment(
-        profile: AcpAgentProfile,
-        provider: ModelProviderProfile?
-    ): Map<String, String> {
-        val common = linkedMapOf<String, String>()
-        if (profile.id == AcpAgentProfileStore.DEFAULT_CODEX_AGENT_ID) {
-            common["CODEX_HOME"] = CodexAppServerDefaults.CODEX_HOME
-        }
-        if (provider == null) {
-            return common
-        }
-        common["OMNIBOT_PROVIDER_PROFILE_ID"] = provider.id
-        common["OMNIBOT_PROVIDER_PROTOCOL"] = provider.protocolType
-        common["OMNIBOT_API_BASE"] = provider.baseUrl
-        common["OMNIBOT_API_KEY"] = provider.apiKey
-        common["OMNIBOT_MODEL"] = profile.modelId
-        if (provider.customHeaders.isNotEmpty()) {
-            common["OMNIBOT_API_HEADERS_JSON"] = Gson().toJson(provider.customHeaders)
-        }
-
-        val useAnthropic = provider.protocolType.equals("anthropic", ignoreCase = true) ||
-            profile.id == "claude-code-acp"
-        when {
-            useAnthropic -> {
-                common["ANTHROPIC_BASE_URL"] = provider.baseUrl
-                common["ANTHROPIC_API_KEY"] = provider.apiKey
-                common["ANTHROPIC_AUTH_TOKEN"] = provider.apiKey
-                if (profile.modelId.isNotBlank()) {
-                    common["ANTHROPIC_MODEL"] = profile.modelId
-                }
-            }
-            else -> {
-                common["OPENAI_BASE_URL"] = provider.baseUrl
-                common["OPENAI_API_KEY"] = provider.apiKey
-                common[CODEX_CUSTOM_API_KEY_ENV] = provider.apiKey
-                if (profile.modelId.isNotBlank()) {
-                    common["OPENAI_MODEL"] = profile.modelId
-                }
-            }
-        }
-        return common
-    }
-
-    private suspend fun writeUnifiedCodexConfig(
-        profile: AcpAgentProfile,
-        provider: ModelProviderProfile
-    ) {
-        require(profile.modelId.isNotBlank()) {
-            "Select a model from Model Providers for ${profile.name}."
-        }
-        writeCodexAcpLaunchConfig(
-            CodexAcpLaunchConfig(
-                baseUrl = provider.baseUrl,
-                model = profile.modelId,
-                apiKey = provider.apiKey
-            )
-        )
-    }
-
     private suspend fun ensureLocalAcpConnected(
         method: String,
         args: Map<String, Any?>
@@ -913,8 +1010,8 @@ class CodexAppServerManager private constructor(
             return request(method, params)
         }
         throw UnsupportedOperationException(
-            "Local Agent authentication is managed by the selected ACP Agent. " +
-                "API credentials belong in Model Providers."
+            "Local authentication is managed by the selected ACP Agent. " +
+                "Open its Agent configuration page to update credentials."
         )
     }
 
@@ -1639,10 +1736,16 @@ internal fun buildCodexConfigToml(
         "name = \"omnimind\"",
         "base_url = ${tomlString(baseUrl.trim())}",
         "wire_api = \"responses\"",
-        "env_key = ${tomlString(CODEX_CUSTOM_API_KEY_ENV)}",
-        "requires_openai_auth = false"
+        "requires_openai_auth = true"
     )
     return lines.joinToString(separator = "\n", postfix = "\n")
+}
+
+internal fun buildCodexAuthJson(apiKey: String): String {
+    return GsonBuilder()
+        .setPrettyPrinting()
+        .create()
+        .toJson(mapOf("OPENAI_API_KEY" to apiKey.trim())) + "\n"
 }
 
 private fun shellQuote(value: String): String {
@@ -1675,8 +1778,84 @@ private fun tomlString(value: String): String {
     }
 }
 
+private fun extractMarkedBlock(
+    source: String,
+    startMarker: String,
+    endMarker: String
+): String {
+    val start = source.indexOf(startMarker)
+    if (start < 0) return ""
+    val bodyStart = start + startMarker.length
+    val end = source.indexOf(endMarker, bodyStart)
+    if (end < 0) return ""
+    return source.substring(bodyStart, end)
+        .removePrefix("\n")
+        .removeSuffix("\n")
+}
+
+private fun extractTomlString(source: String, key: String): String? {
+    if (source.isBlank()) return null
+    val escapedKey = Regex.escape(key)
+    return Regex(
+        pattern = """(?m)^\s*$escapedKey\s*=\s*"((?:\\.|[^"\\])*)"\s*(?:#.*)?$"""
+    ).find(source)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.let(::unescapeTomlBasicString)
+}
+
+private fun unescapeTomlBasicString(value: String): String {
+    return buildString {
+        var index = 0
+        while (index < value.length) {
+            val current = value[index]
+            if (current != '\\' || index + 1 >= value.length) {
+                append(current)
+                index += 1
+                continue
+            }
+            when (val escaped = value[index + 1]) {
+                'b' -> append('\b')
+                't' -> append('\t')
+                'n' -> append('\n')
+                'f' -> append('\u000C')
+                'r' -> append('\r')
+                '"' -> append('"')
+                '\\' -> append('\\')
+                else -> append(escaped)
+            }
+            index += 2
+        }
+    }
+}
+
+private fun extractOpenAiApiKey(source: String): String? {
+    val trimmed = source.trim()
+    if (trimmed.isEmpty()) return null
+    return runCatching {
+        JsonParser.parseString(trimmed)
+            .takeIf { it.isJsonObject }
+            ?.asJsonObject
+            ?.get("OPENAI_API_KEY")
+            ?.takeIf { it.isJsonPrimitive }
+            ?.asString
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+    }.getOrNull()
+}
+
+private fun requireAgentConfigSize(content: String) {
+    require(content.length <= MAX_AGENT_CONFIG_FILE_CHARS) {
+        "Agent configuration is too large."
+    }
+}
+
 private fun Map<String, Any?>.stringValue(key: String): String? {
     return this[key]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+}
+
+private fun Map<String, Any?>.stringValuePreservingWhitespace(key: String): String? {
+    return this[key]?.toString()
 }
 
 private fun Map<String, Any?>.longValue(key: String): Long? {
@@ -1687,6 +1866,21 @@ private fun Map<String, Any?>.longValue(key: String): Long? {
         else -> null
     }
 }
+
+private const val CLAUDE_CODE_AGENT_ID = "claude-code-acp"
+private const val OPENCODE_AGENT_ID = "opencode-acp"
+private const val CODEX_CONFIG_TOML_PATH = "/root/.codex/config.toml"
+private const val CODEX_AUTH_JSON_PATH = "/root/.codex/auth.json"
+private const val CLAUDE_SETTINGS_JSON_PATH = "/root/.claude/settings.json"
+private const val OPENCODE_CONFIG_JSON_PATH = "/root/.config/opencode/opencode.json"
+private const val CODEX_CONFIG_TOML_DISPLAY_PATH = "~/.codex/config.toml"
+private const val CODEX_AUTH_JSON_DISPLAY_PATH = "~/.codex/auth.json"
+private const val CLAUDE_SETTINGS_JSON_DISPLAY_PATH = "~/.claude/settings.json"
+private const val OPENCODE_CONFIG_JSON_DISPLAY_PATH = "~/.config/opencode/opencode.json"
+private const val AGENT_CONFIG_START_MARKER = "__OMNI_AGENT_CONFIG_START__"
+private const val AGENT_CONFIG_END_MARKER = "__OMNI_AGENT_CONFIG_END__"
+private const val MAX_AGENT_CONFIG_FILE_CHARS = 1_048_576
+private const val DEFAULT_EMPTY_JSON_FILE = "{\n}\n"
 
 private fun Map<String, Any?>.mapValue(key: String): Map<String, Any?> {
     val raw = this[key] as? Map<*, *> ?: return emptyMap()

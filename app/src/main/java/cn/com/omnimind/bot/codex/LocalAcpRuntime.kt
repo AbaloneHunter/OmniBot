@@ -376,8 +376,6 @@ internal class LocalAcpRuntime(
                 command = profileMap.stringValue("command").orEmpty(),
                 arguments = profileMap.stringList("arguments"),
                 environment = profileMap.stringMap("environment"),
-                providerProfileId = profileMap.stringValue("providerProfileId").orEmpty(),
-                modelId = profileMap.stringValue("modelId").orEmpty(),
                 enabled = profileMap["enabled"] != false
             )
         )
@@ -968,10 +966,7 @@ internal class LocalAcpRuntime(
         args: Map<String, Any?>
     ) {
         val requested = linkedMapOf<String, Any?>(
-            "model" to (
-                args.stringValue("model")
-                    ?: activeProfile?.modelId?.takeIf(String::isNotBlank)
-                ),
+            "model" to args.stringValue("model"),
             "reasoning_effort" to (
                 args.stringValue("effort") ?: args.stringValue("reasoningEffort")
                 ),

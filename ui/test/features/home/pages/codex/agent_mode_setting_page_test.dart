@@ -11,9 +11,6 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const codexChannel = MethodChannel('cn.com.omnimind.bot/CodexAppServer');
-  const assistCoreChannel = MethodChannel(
-    'cn.com.omnimind.bot/AssistCoreEvent',
-  );
 
   setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -41,23 +38,11 @@ void main() {
             ],
           };
         });
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(assistCoreChannel, (call) async {
-          if (call.method == 'listModelProviderProfiles') {
-            return <String, dynamic>{
-              'profiles': <Map<String, dynamic>>[],
-              'editingProfileId': '',
-            };
-          }
-          return null;
-        });
   });
 
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(codexChannel, null);
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(assistCoreChannel, null);
   });
 
   testWidgets('shows the managed ACP Agent catalog without Gemini', (
@@ -90,6 +75,9 @@ void main() {
     expect(find.text('预置 Agent'), findsOneWidget);
     expect(find.text('官方 Agent'), findsNothing);
     expect(find.text('官方'), findsNothing);
+    expect(find.textContaining('统一 API'), findsNothing);
+    expect(find.byType(PopupMenuButton<String>), findsNothing);
+    expect(find.byIcon(Icons.chevron_right_rounded), findsNWidgets(3));
   });
 }
 

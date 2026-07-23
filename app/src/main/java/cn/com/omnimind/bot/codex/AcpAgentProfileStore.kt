@@ -12,8 +12,6 @@ internal data class AcpAgentProfile(
     val command: String,
     val arguments: List<String> = emptyList(),
     val environment: Map<String, String> = emptyMap(),
-    val providerProfileId: String = "",
-    val modelId: String = "",
     val enabled: Boolean = true,
     val builtIn: Boolean = false
 ) {
@@ -29,8 +27,6 @@ internal data class AcpAgentProfile(
             "command" to command,
             "arguments" to arguments,
             "environment" to environment,
-            "providerProfileId" to providerProfileId,
-            "modelId" to modelId,
             "enabled" to enabled,
             "builtIn" to builtIn,
             "source" to if (builtIn) "official" else "custom",
@@ -92,8 +88,6 @@ internal class AcpAgentProfileStore(context: Context) {
                 command = override.command,
                 arguments = override.arguments,
                 environment = override.environment,
-                providerProfileId = override.providerProfileId,
-                modelId = override.modelId,
                 enabled = override.enabled
             )
         }
@@ -150,8 +144,6 @@ internal class AcpAgentProfileStore(context: Context) {
                 command = raw.command,
                 arguments = raw.arguments,
                 environment = raw.environment,
-                providerProfileId = raw.providerProfileId,
-                modelId = raw.modelId,
                 enabled = raw.enabled
             )
         } else {
@@ -232,8 +224,6 @@ internal class AcpAgentProfileStore(context: Context) {
         return profile.command != definition.command ||
             profile.arguments != definition.arguments ||
             profile.environment.isNotEmpty() ||
-            profile.providerProfileId.isNotEmpty() ||
-            profile.modelId.isNotEmpty() ||
             profile.enabled != definition.enabled
     }
 
@@ -272,12 +262,9 @@ internal class AcpAgentProfileStore(context: Context) {
                 .mapNotNull { (key, value) ->
                     key.trim()
                         .takeIf(ENVIRONMENT_NAME::matches)
-                        ?.takeUnless { it.uppercase() in RESERVED_API_ENVIRONMENT_NAMES }
                         ?.let { it to value }
                 }
                 .toMap(),
-            providerProfileId = profile.providerProfileId.trim(),
-            modelId = profile.modelId.trim(),
             builtIn = id in OFFICIAL_AGENT_IDS
         )
     }
@@ -342,18 +329,5 @@ internal class AcpAgentProfileStore(context: Context) {
         private const val KEY_SESSION_BINDINGS = "session_bindings"
         private const val KEY_HEALTH = "health"
         private val ENVIRONMENT_NAME = Regex("[A-Za-z_][A-Za-z0-9_]*")
-        private val RESERVED_API_ENVIRONMENT_NAMES = setOf(
-            "OPENAI_API_KEY",
-            "OPENAI_BASE_URL",
-            "ANTHROPIC_API_KEY",
-            "ANTHROPIC_AUTH_TOKEN",
-            "ANTHROPIC_BASE_URL",
-            "GEMINI_API_KEY",
-            "GOOGLE_API_KEY",
-            "GOOGLE_GEMINI_BASE_URL",
-            "OMNIBOT_API_KEY",
-            "OMNIBOT_API_BASE",
-            "OMNIBOT_CODEX_API_KEY"
-        )
     }
 }

@@ -335,8 +335,8 @@ class _CodexSettingPageState extends State<CodexSettingPage> {
                   SettingsSectionTitle(
                     label: _text('Codex 远程运行', 'Remote Codex runtime'),
                     subtitle: _text(
-                      '这里只保留远程 PC Bridge。所有本地 Agent、API 与模型请分别在“Agent 模式”和“模型提供商”中统一管理。',
-                      'This page only manages Remote PC Bridge. Manage local Agents and all API/model credentials in Agent mode and Model Providers.',
+                      '这里只保留远程 PC Bridge。本地 Agent 的 API、账号与默认模型请在“Agent 模式”中分别配置。',
+                      'This page only manages Remote PC Bridge. Configure each local Agent API, account, and default model in Agent mode.',
                     ),
                   ),
                   Container(

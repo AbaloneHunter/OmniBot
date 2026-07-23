@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:ui/core/router/go_router_manager.dart';
 import 'package:ui/services/codex_app_server_service.dart';
-import 'package:ui/services/model_provider_config_service.dart';
 import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
@@ -22,8 +21,6 @@ class AgentModeSettingPage extends StatefulWidget {
 
 class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
   AcpAgentCatalog? _catalog;
-  List<ModelProviderProfileSummary> _providers = const [];
-  Map<String, List<ProviderModelOption>> _modelsByProvider = const {};
   _AgentFilter _filter = _AgentFilter.all;
   String _query = '';
   bool _loading = true;
@@ -47,29 +44,12 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
       setState(() => _refreshing = true);
     }
     try {
-      final results = await Future.wait<dynamic>([
-        refresh
-            ? CodexAppServerService.refreshAgents()
-            : CodexAppServerService.listAgents(),
-        ModelProviderConfigService.listProfiles(),
-      ]);
-      final catalog = results[0] as AcpAgentCatalog;
-      final providerPayload = results[1] as ModelProviderProfilesPayload;
-      final modelEntries = await Future.wait(
-        providerPayload.profiles.map((profile) async {
-          final models =
-              await ModelProviderConfigService.getStoredModelOptionsForProfile(
-                profile.id,
-                profile: profile,
-              );
-          return MapEntry(profile.id, models);
-        }),
-      );
+      final catalog = refresh
+          ? await CodexAppServerService.refreshAgents()
+          : await CodexAppServerService.listAgents();
       if (!mounted) return;
       setState(() {
         _catalog = catalog;
-        _providers = providerPayload.profiles;
-        _modelsByProvider = Map.fromEntries(modelEntries);
         _loading = false;
         _refreshing = false;
         _error = null;
@@ -114,13 +94,6 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
       _AgentFilter.unavailable =>
         agents.where((agent) => agent.status != 'online').length,
     };
-  }
-
-  ModelProviderProfileSummary? _providerFor(String id) {
-    for (final provider in _providers) {
-      if (provider.id == id) return provider;
-    }
-    return null;
   }
 
   Future<void> _select(AcpAgentProfile agent) async {
@@ -229,257 +202,105 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
     return '$indent$value';
   }
 
-  Future<void> _edit([AcpAgentProfile? existing]) async {
-    final nameController = TextEditingController(text: existing?.name ?? '');
-    final commandController = TextEditingController(
-      text: existing?.command ?? '',
-    );
-    final argumentsController = TextEditingController(
-      text: existing?.arguments.join('\n') ?? '',
-    );
-    final environmentController = TextEditingController(
-      text:
-          existing?.environment.entries
-              .map((entry) => '${entry.key}=${entry.value}')
-              .join('\n') ??
-          '',
-    );
-    final modelController = TextEditingController(
-      text: existing?.modelId ?? '',
-    );
-    var providerId = existing?.providerProfileId ?? '';
-    var enabled = existing?.enabled ?? true;
+  Future<void> _addCustomAgent() async {
+    final nameController = TextEditingController();
+    final commandController = TextEditingController();
+    final argumentsController = TextEditingController();
+    final environmentController = TextEditingController();
+    var enabled = true;
     final result = await showDialog<AcpAgentProfile>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) {
-          final models = _modelsByProvider[providerId] ?? const [];
-          return AlertDialog(
-            title: Text(
-              existing == null
-                  ? _text('添加自定义 ACP Agent', 'Add custom ACP Agent')
-                  : _text('配置 ${existing.name}', 'Configure ${existing.name}'),
-            ),
-            content: SizedBox(
-              width: 460,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (existing?.builtIn != true)
-                      TextField(
-                        controller: nameController,
-                        decoration: InputDecoration(
-                          labelText: _text('名称', 'Name'),
-                          hintText: 'My ACP Agent',
-                        ),
-                      )
-                    else
-                      Text(
-                        existing!.description,
-                        style: Theme.of(dialogContext).textTheme.bodySmall,
-                      ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: commandController,
-                      decoration: InputDecoration(
-                        labelText: _text('启动命令或路径', 'Command or path'),
-                        hintText: '/usr/local/bin/agent',
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text(_text('添加自定义 ACP Agent', 'Add custom ACP Agent')),
+          content: SizedBox(
+            width: 460,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                      labelText: _text('名称', 'Name'),
+                      hintText: 'My ACP Agent',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: commandController,
+                    decoration: InputDecoration(
+                      labelText: _text('启动命令或路径', 'Command or path'),
+                      hintText: '/usr/local/bin/agent',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: argumentsController,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: InputDecoration(
+                      labelText: _text(
+                        '启动参数（每行一个）',
+                        'Arguments (one per line)',
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: argumentsController,
-                      minLines: 2,
-                      maxLines: 4,
-                      decoration: InputDecoration(
-                        labelText: _text(
-                          '启动参数（每行一个）',
-                          'Arguments (one per line)',
-                        ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: environmentController,
+                    minLines: 3,
+                    maxLines: 6,
+                    decoration: InputDecoration(
+                      labelText: _text('启动环境变量', 'Launch environment'),
+                      hintText: 'KEY=VALUE',
+                      helperText: _text(
+                        '变量直接传给 Agent，由 Agent 自身决定如何使用。',
+                        'Variables are passed directly to the Agent.',
                       ),
                     ),
-                    const SizedBox(height: 18),
-                    Text(
-                      _text('统一 API 与模型', 'Unified API and model'),
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _text(
-                        '密钥只保存在“模型提供商”，不会复制进 Agent 配置。',
-                        'Credentials stay in Model Providers and are never copied into the Agent profile.',
-                      ),
-                      style: Theme.of(dialogContext).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      initialValue: providerId,
-                      isExpanded: true,
-                      decoration: InputDecoration(
-                        labelText: _text('模型提供商', 'Model provider'),
-                      ),
-                      items: [
-                        DropdownMenuItem(
-                          value: '',
-                          child: Text(
-                            _text(
-                              '使用 Agent 自身登录/配置',
-                              'Use Agent authentication/config',
-                            ),
-                          ),
-                        ),
-                        for (final provider in _providers)
-                          DropdownMenuItem(
-                            value: provider.id,
-                            child: Text(provider.name),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        setDialogState(() {
-                          providerId = value ?? '';
-                          final available =
-                              _modelsByProvider[providerId] ?? const [];
-                          if (available.isNotEmpty &&
-                              !available.any(
-                                (model) => model.id == modelController.text,
-                              )) {
-                            modelController.text = available.first.id;
-                          }
-                        });
-                      },
-                    ),
-                    if (providerId.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: modelController,
-                        decoration: InputDecoration(
-                          labelText: _text('模型 ID', 'Model ID'),
-                          hintText: _text(
-                            '从下方选择或手动输入',
-                            'Choose below or enter manually',
-                          ),
-                        ),
-                      ),
-                      if (models.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: [
-                            for (final model in models.take(12))
-                              ActionChip(
-                                label: Text(
-                                  model.displayName,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                onPressed: () => setDialogState(
-                                  () => modelController.text = model.id,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ],
-                    ],
-                    const SizedBox(height: 18),
-                    ExpansionTile(
-                      tilePadding: EdgeInsets.zero,
-                      childrenPadding: EdgeInsets.zero,
-                      title: Text(
-                        _text('高级启动环境', 'Advanced launch environment'),
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                      subtitle: Text(
-                        _text(
-                          'API Key/Base URL 变量会被忽略，请在模型提供商中配置。',
-                          'API credential variables are ignored; configure them in Model Providers.',
-                        ),
-                        style: Theme.of(dialogContext).textTheme.bodySmall,
-                      ),
-                      children: [
-                        TextField(
-                          controller: environmentController,
-                          minLines: 3,
-                          maxLines: 6,
-                          decoration: const InputDecoration(
-                            hintText: 'KEY=VALUE',
-                          ),
-                        ),
-                      ],
-                    ),
-                    SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(_text('启用 Agent', 'Enable Agent')),
-                      value: enabled,
-                      onChanged: (value) =>
-                          setDialogState(() => enabled = value),
-                    ),
-                  ],
-                ),
+                  ),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(_text('启用 Agent', 'Enable Agent')),
+                    value: enabled,
+                    onChanged: (value) => setDialogState(() => enabled = value),
+                  ),
+                ],
               ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: Text(_text('取消', 'Cancel')),
-              ),
-              FilledButton(
-                onPressed: () {
-                  final name = nameController.text.trim();
-                  final command = commandController.text.trim();
-                  final model = modelController.text.trim();
-                  if (name.isEmpty || command.isEmpty) return;
-                  if (providerId.isNotEmpty && model.isEmpty) {
-                    showToast(
-                      _text(
-                        '绑定模型提供商后必须选择模型。',
-                        'Select a model when a provider is bound.',
-                      ),
-                      type: ToastType.warning,
-                    );
-                    return;
-                  }
-                  final environment = <String, String>{};
-                  for (final line in environmentController.text.split('\n')) {
-                    final separator = line.indexOf('=');
-                    if (separator <= 0) continue;
-                    final key = line.substring(0, separator).trim();
-                    if (key.isEmpty) continue;
-                    environment[key] = line.substring(separator + 1);
-                  }
-                  Navigator.of(dialogContext).pop(
-                    AcpAgentProfile(
-                      id: existing?.id ?? '',
-                      name: existing?.builtIn == true ? existing!.name : name,
-                      description: existing?.description ?? '',
-                      command: command,
-                      arguments: argumentsController.text
-                          .split('\n')
-                          .map((value) => value.trim())
-                          .where((value) => value.isNotEmpty)
-                          .toList(growable: false),
-                      environment: environment,
-                      providerProfileId: providerId,
-                      modelId: providerId.isEmpty ? '' : model,
-                      enabled: enabled,
-                      builtIn: existing?.builtIn ?? false,
-                      source: existing?.source ?? 'custom',
-                    ),
-                  );
-                },
-                child: Text(_text('保存', 'Save')),
-              ),
-            ],
-          );
-        },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(_text('取消', 'Cancel')),
+            ),
+            FilledButton(
+              onPressed: () {
+                final name = nameController.text.trim();
+                final command = commandController.text.trim();
+                if (name.isEmpty || command.isEmpty) return;
+                Navigator.of(dialogContext).pop(
+                  AcpAgentProfile(
+                    id: '',
+                    name: name,
+                    command: command,
+                    arguments: _nonEmptyLines(argumentsController.text),
+                    environment: _parseEnvironment(environmentController.text),
+                    enabled: enabled,
+                  ),
+                );
+              },
+              child: Text(_text('保存', 'Save')),
+            ),
+          ],
+        ),
       ),
     );
     nameController.dispose();
     commandController.dispose();
     argumentsController.dispose();
     environmentController.dispose();
-    modelController.dispose();
     if (result == null) return;
     try {
       final catalog = await CodexAppServerService.saveAgent(result);
@@ -494,41 +315,12 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
     }
   }
 
-  Future<void> _delete(AcpAgentProfile agent) async {
-    if (agent.builtIn || _busyAgentId != null) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(_text('删除 Agent？', 'Delete Agent?')),
-        content: Text(
-          _text(
-            '将删除“${agent.name}”的配置，不会卸载对应命令。',
-            'This removes “${agent.name}” from the catalog without uninstalling its command.',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(_text('取消', 'Cancel')),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(_text('删除', 'Delete')),
-          ),
-        ],
-      ),
+  Future<void> _openAgentConfig(AcpAgentProfile agent) async {
+    final changed = await GoRouterManager.pushForResult<bool>(
+      '/home/agent_config/${Uri.encodeComponent(agent.id)}',
     );
-    if (confirmed != true) return;
-    setState(() => _busyAgentId = agent.id);
-    try {
-      final catalog = await CodexAppServerService.deleteAgent(agent.id);
-      if (!mounted) return;
-      setState(() => _catalog = catalog);
-    } catch (error) {
-      if (!mounted) return;
-      showToast(error.toString(), type: ToastType.error);
-    } finally {
-      if (mounted) setState(() => _busyAgentId = null);
+    if (changed == true && mounted) {
+      await _load();
     }
   }
 
@@ -560,7 +352,7 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
           ),
           IconButton(
             tooltip: _text('添加自定义 ACP Agent', 'Add custom ACP Agent'),
-            onPressed: _busyAgentId == null ? _edit : null,
+            onPressed: _busyAgentId == null ? _addCustomAgent : null,
             icon: const Icon(Icons.add_rounded),
           ),
         ],
@@ -592,8 +384,8 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
                   SettingsSectionTitle(
                     label: _text('托管 Agent', 'Managed Agents'),
                     subtitle: _text(
-                      '预置 Agent 始终显示；状态由命令检测和 ACP initialize 握手产生。API Key、Base URL 与模型统一来自“模型提供商”。',
-                      'Built-in Agents always remain visible. Status comes from command detection and the ACP initialize handshake. API keys, endpoints, and models come from Model Providers.',
+                      '预置 Agent 始终显示；状态来自命令检测与 ACP initialize。API、账号和默认模型由各 Agent 自身配置。',
+                      'Built-in Agents always remain visible. Status comes from command detection and ACP initialize. Each Agent owns its API, account, and default model configuration.',
                     ),
                   ),
                   TextField(
@@ -638,18 +430,6 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
                     onSelectionChanged: (values) =>
                         setState(() => _filter = values.first),
                   ),
-                  if (_providers.isEmpty) ...[
-                    const SizedBox(height: 12),
-                    _ProviderNotice(
-                      text: _text(
-                        '尚无可用模型提供商。请先配置统一 API 与模型。',
-                        'No model provider is ready. Configure unified API and models first.',
-                      ),
-                      action: _text('打开模型提供商', 'Open Model Providers'),
-                      onTap: () =>
-                          GoRouterManager.push('/home/model_provider_setting'),
-                    ),
-                  ],
                   if (managed.isNotEmpty) ...[
                     const SizedBox(height: 20),
                     _sectionLabel(_text('预置 Agent', 'Built-in Agents')),
@@ -657,14 +437,11 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
                     for (final agent in managed) ...[
                       _AgentCard(
                         agent: agent,
-                        providerName: _providerFor(
-                          agent.providerProfileId,
-                        )?.name,
                         selected: agent.id == _catalog?.selectedAgentId,
                         busy: agent.id == _busyAgentId,
                         onSelect: () => _select(agent),
                         onTest: () => _test(agent),
-                        onConfigure: () => _edit(agent),
+                        onConfigure: () => _openAgentConfig(agent),
                         cardColor: card,
                       ),
                       const SizedBox(height: 10),
@@ -677,15 +454,11 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
                     for (final agent in custom) ...[
                       _AgentCard(
                         agent: agent,
-                        providerName: _providerFor(
-                          agent.providerProfileId,
-                        )?.name,
                         selected: agent.id == _catalog?.selectedAgentId,
                         busy: agent.id == _busyAgentId,
                         onSelect: () => _select(agent),
                         onTest: () => _test(agent),
-                        onConfigure: () => _edit(agent),
-                        onDelete: () => _delete(agent),
+                        onConfigure: () => _openAgentConfig(agent),
                         cardColor: card,
                       ),
                       const SizedBox(height: 10),
@@ -718,64 +491,23 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
   }
 }
 
-class _ProviderNotice extends StatelessWidget {
-  const _ProviderNotice({
-    required this.text,
-    required this.action,
-    required this.onTap,
-  });
-
-  final String text;
-  final String action;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
-      decoration: BoxDecoration(
-        color: context.omniPalette.surfaceSecondary,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                color: context.omniPalette.textSecondary,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          TextButton(onPressed: onTap, child: Text(action)),
-        ],
-      ),
-    );
-  }
-}
-
 class _AgentCard extends StatelessWidget {
   const _AgentCard({
     required this.agent,
-    required this.providerName,
     required this.selected,
     required this.busy,
     required this.onSelect,
     required this.onTest,
     required this.onConfigure,
-    this.onDelete,
     required this.cardColor,
   });
 
   final AcpAgentProfile agent;
-  final String? providerName;
   final bool selected;
   final bool busy;
   final VoidCallback onSelect;
   final VoidCallback onTest;
   final VoidCallback onConfigure;
-  final VoidCallback? onDelete;
   final Color cardColor;
 
   @override
@@ -858,22 +590,11 @@ class _AgentCard extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               else
-                PopupMenuButton<String>(
-                  onSelected: (value) {
-                    if (value == 'configure') onConfigure();
-                    if (value == 'delete') onDelete?.call();
-                  },
-                  itemBuilder: (_) => [
-                    PopupMenuItem(
-                      value: 'configure',
-                      child: Text(english ? 'Configure' : '配置'),
-                    ),
-                    if (onDelete != null)
-                      PopupMenuItem(
-                        value: 'delete',
-                        child: Text(english ? 'Delete' : '删除'),
-                      ),
-                  ],
+                IconButton(
+                  key: Key('agent-config-${agent.id}'),
+                  tooltip: english ? 'Agent configuration' : 'Agent 配置',
+                  onPressed: onConfigure,
+                  icon: const Icon(Icons.chevron_right_rounded),
                 ),
             ],
           ),
@@ -895,12 +616,7 @@ class _AgentCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            providerName == null
-                ? (english
-                      ? 'API: Agent authentication/config'
-                      : 'API：使用 Agent 自身登录/配置')
-                : 'API: $providerName'
-                      '${agent.modelId.isEmpty ? '' : ' · ${agent.modelId}'}',
+            english ? 'API: configured by the Agent' : 'API：由 Agent 自身配置',
             style: TextStyle(color: palette.textSecondary, fontSize: 12),
           ),
           if ((agent.lastCheckError ?? '').isNotEmpty &&
@@ -953,6 +669,26 @@ class _AgentCard extends StatelessWidget {
       ),
     );
   }
+}
+
+List<String> _nonEmptyLines(String source) {
+  return source
+      .split('\n')
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty)
+      .toList(growable: false);
+}
+
+Map<String, String> _parseEnvironment(String source) {
+  final environment = <String, String>{};
+  for (final line in source.split('\n')) {
+    final separator = line.indexOf('=');
+    if (separator <= 0) continue;
+    final key = line.substring(0, separator).trim();
+    if (key.isEmpty) continue;
+    environment[key] = line.substring(separator + 1);
+  }
+  return environment;
 }
 
 ({String label, Color color}) _statusPresentation(String status, bool english) {

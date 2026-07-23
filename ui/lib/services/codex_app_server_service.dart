@@ -105,8 +105,6 @@ class AcpAgentProfile {
     this.description = '',
     this.arguments = const <String>[],
     this.environment = const <String, String>{},
-    this.providerProfileId = '',
-    this.modelId = '',
     this.enabled = true,
     this.builtIn = false,
     this.source = 'custom',
@@ -127,8 +125,6 @@ class AcpAgentProfile {
   final String description;
   final List<String> arguments;
   final Map<String, String> environment;
-  final String providerProfileId;
-  final String modelId;
   final bool enabled;
   final bool builtIn;
   final String source;
@@ -161,8 +157,6 @@ class AcpAgentProfile {
               (key, value) => MapEntry(key.toString(), value.toString()),
             )
           : const <String, String>{},
-      providerProfileId: _stringOrNull(map['providerProfileId']) ?? '',
-      modelId: _stringOrNull(map['modelId']) ?? '',
       enabled: map['enabled'] != false,
       builtIn: map['builtIn'] == true,
       source: _stringOrNull(map['source']) ?? 'custom',
@@ -186,8 +180,6 @@ class AcpAgentProfile {
     'command': command,
     'arguments': arguments,
     'environment': environment,
-    'providerProfileId': providerProfileId,
-    'modelId': modelId,
     'enabled': enabled,
   };
 }
@@ -470,6 +462,26 @@ class CodexAppServerService {
 
   static Future<Map<String, dynamic>> testAgent(String agentId) {
     return _invokeMap('agent/test', {'agentId': agentId.trim()});
+  }
+
+  static Future<Map<String, dynamic>> readAgentConfig(String agentId) {
+    return _invokeMap('agent/config/read', {'agentId': agentId.trim()});
+  }
+
+  static Future<Map<String, dynamic>> writeAgentConfig(
+    String agentId, {
+    String? baseUrl,
+    String? model,
+    String? apiKey,
+    String? content,
+  }) {
+    return _invokeMap('agent/config/write', {
+      'agentId': agentId.trim(),
+      if (baseUrl != null) 'baseUrl': baseUrl,
+      if (model != null) 'model': model,
+      if (apiKey != null) 'apiKey': apiKey,
+      if (content != null) 'content': content,
+    });
   }
 
   static Future<Map<String, dynamic>> startThread({

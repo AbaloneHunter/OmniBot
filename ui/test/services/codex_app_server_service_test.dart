@@ -121,6 +121,33 @@ void main() {
     expect(calls.first.arguments, {'limit': 100});
   });
 
+  test(
+    'reads and writes Agent-owned configuration without trimming content',
+    () async {
+      final calls = <MethodCall>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        return <String, dynamic>{'ok': true};
+      });
+
+      await CodexAppServerService.readAgentConfig('claude-code-acp');
+      await CodexAppServerService.writeAgentConfig(
+        'claude-code-acp',
+        content: ' {\n  "env": {}\n}\n ',
+      );
+
+      expect(calls.map((call) => call.method), [
+        'agent/config/read',
+        'agent/config/write',
+      ]);
+      expect(calls.first.arguments, {'agentId': 'claude-code-acp'});
+      expect(calls.last.arguments, {
+        'agentId': 'claude-code-acp',
+        'content': ' {\n  "env": {}\n}\n ',
+      });
+    },
+  );
+
   test('ignoreUserInput responds with empty answers payload', () async {
     MethodCall? capturedCall;
     messenger.setMockMethodCallHandler(channel, (call) async {

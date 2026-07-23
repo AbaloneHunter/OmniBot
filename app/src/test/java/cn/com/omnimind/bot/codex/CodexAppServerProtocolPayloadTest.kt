@@ -360,16 +360,19 @@ class CodexAppServerProtocolPayloadTest {
     }
 
     @Test
-    fun buildUnifiedProviderCodexConfigUsesDedicatedEnvironmentKey() {
+    fun buildCodexAgentFilesUseAuthJsonAndResponsesProviderConfig() {
         val config = buildCodexConfigToml(
             baseUrl = "https://example.com/v1",
             model = "custom-codex"
         )
+        val auth = buildCodexAuthJson("sk-test")
 
         assertTrue(config.contains("model_provider = \"omnimind\""))
         assertTrue(config.contains("model = \"custom-codex\""))
         assertTrue(config.contains("base_url = \"https://example.com/v1\""))
-        assertTrue(config.contains("env_key = \"OMNIBOT_CODEX_API_KEY\""))
-        assertTrue(config.contains("requires_openai_auth = false"))
+        assertTrue(config.contains("wire_api = \"responses\""))
+        assertTrue(config.contains("requires_openai_auth = true"))
+        assertFalse(config.contains("env_key"))
+        assertTrue(auth.contains("\"OPENAI_API_KEY\": \"sk-test\""))
     }
 }
