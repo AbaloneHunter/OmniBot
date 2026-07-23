@@ -43,6 +43,21 @@ const double _kChatAppBarIslandMaxWidth = 176;
 const double _kChatAppBarRightActionSlotWidth = 50;
 const Duration _kChatAppBarModeMenuOpenDuration = Duration(milliseconds: 260);
 const Duration _kChatAppBarModeMenuCloseDuration = Duration(milliseconds: 180);
+const double _kChatAppBarModeMenuOmniAiIconSize = 23;
+const Offset _kChatAppBarModeMenuOmniAiIconOffset = Offset(1, 0);
+const double _kChatAppBarModeMenuPureChatIconSize = 20;
+
+double _chatAppBarModeMenuAgentIconSize(String agentId) {
+  // 品牌 SVG 的有效绘制范围并不一致：Codex 几乎铺满 24px viewBox，
+  // Claude Code 横向较宽，OpenCode 则有较多留白。这里按轮廓做光学尺寸
+  // 校正，让它们在 40px 菜单行内看起来接近同一大小。
+  return switch (agentId.trim()) {
+    'codex-acp' || 'codex-remote' => 19,
+    'claude-code-acp' => 21,
+    'opencode-acp' => 22,
+    _ => 20,
+  };
+}
 
 enum ChatSurfaceMode { workspace, normal, openclaw }
 
@@ -626,7 +641,8 @@ class _ChatAppBarModeShortcutButtonState
             tooltip: isEnglish ? 'OmniAi' : '小万',
             selected: widget.isOmniAiSelected,
             enabled: widget.onOmniAiTap != null,
-            iconSize: 20,
+            iconSize: _kChatAppBarModeMenuOmniAiIconSize,
+            iconOffset: _kChatAppBarModeMenuOmniAiIconOffset,
           ),
           for (final agent in acpAgentModes)
             _ChatAppBarModeShortcutMenuItemData(
@@ -638,7 +654,7 @@ class _ChatAppBarModeShortcutButtonState
               enabled:
                   !widget.isAgentLoading &&
                   (widget.onAcpAgentTap != null || widget.onAgentTap != null),
-              iconSize: 20,
+              iconSize: _chatAppBarModeMenuAgentIconSize(agent.id),
             ),
           _ChatAppBarModeShortcutMenuItemData(
             action: _ChatAppBarModeShortcutAction.pureChat,
@@ -646,7 +662,7 @@ class _ChatAppBarModeShortcutButtonState
             tooltip: isEnglish ? 'Pure chat' : '纯聊天模式',
             selected: widget.isPureChatSelected,
             enabled: canSelectPureChat,
-            iconSize: 18,
+            iconSize: _kChatAppBarModeMenuPureChatIconSize,
           ),
         ],
         selectedColor: selectedColor,
@@ -773,6 +789,7 @@ class _ChatAppBarModeShortcutMenuItemData {
     required this.selected,
     required this.enabled,
     this.iconSize = 20,
+    this.iconOffset = Offset.zero,
   });
 
   final _ChatAppBarModeShortcutAction action;
@@ -782,6 +799,7 @@ class _ChatAppBarModeShortcutMenuItemData {
   final bool selected;
   final bool enabled;
   final double iconSize;
+  final Offset iconOffset;
 }
 
 class _ChatAppBarModeShortcutMenuContent extends StatelessWidget {
@@ -911,18 +929,21 @@ class _ChatAppBarModeShortcutMenuRow extends StatelessWidget {
         child: SizedBox(
           height: 40,
           child: Center(
-            child: item.agentId?.trim().isNotEmpty == true
-                ? AgentBrandIcon(
-                    agentId: item.agentId!,
-                    size: item.iconSize,
-                    tint: color,
-                  )
-                : SvgPicture.asset(
-                    item.iconAsset!,
-                    width: item.iconSize,
-                    height: item.iconSize,
-                    colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-                  ),
+            child: Transform.translate(
+              offset: item.iconOffset,
+              child: item.agentId?.trim().isNotEmpty == true
+                  ? AgentBrandIcon(
+                      agentId: item.agentId!,
+                      size: item.iconSize,
+                      tint: color,
+                    )
+                  : SvgPicture.asset(
+                      item.iconAsset!,
+                      width: item.iconSize,
+                      height: item.iconSize,
+                      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+                    ),
+            ),
           ),
         ),
       ),

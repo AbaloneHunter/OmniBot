@@ -685,14 +685,16 @@ void main() {
       omniAiMenuIcon.bytesLoader.toString(),
       contains('assets/home/avatar.svg'),
     );
+    expect(omniAiMenuIcon.width, 23);
+    expect(omniAiMenuIcon.height, 23);
     final pureChatMenuIcon = tester.widget<SvgPicture>(
       find.descendant(
         of: find.byKey(const ValueKey('chat-app-bar-mode-menu-pure-chat')),
         matching: find.byType(SvgPicture),
       ),
     );
-    expect(pureChatMenuIcon.width, 18);
-    expect(pureChatMenuIcon.height, 18);
+    expect(pureChatMenuIcon.width, 20);
+    expect(pureChatMenuIcon.height, 20);
     expect(find.text('Agent 模式'), findsNothing);
     expect(find.text('OmniAi 模式'), findsNothing);
     expect(find.text('纯聊天模式'), findsNothing);
@@ -774,6 +776,29 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    final omniAiRow = find.byKey(
+      const ValueKey('chat-app-bar-mode-menu-omni-ai'),
+    );
+    final omniAiIconFinder = find.descendant(
+      of: omniAiRow,
+      matching: find.byType(SvgPicture),
+    );
+    final omniAiIcon = tester.widget<SvgPicture>(omniAiIconFinder);
+    final pureChatIcon = tester.widget<SvgPicture>(
+      find.descendant(
+        of: find.byKey(const ValueKey('chat-app-bar-mode-menu-pure-chat')),
+        matching: find.byType(SvgPicture),
+      ),
+    );
+    expect(omniAiIcon.width, 23);
+    expect(omniAiIcon.height, 23);
+    final omniAiRowCenter = tester.getCenter(omniAiRow);
+    final omniAiIconCenter = tester.getCenter(omniAiIconFinder);
+    expect(omniAiIconCenter.dx, closeTo(omniAiRowCenter.dx + 1, 0.01));
+    expect(omniAiIconCenter.dy, closeTo(omniAiRowCenter.dy, 0.01));
+    expect(pureChatIcon.width, 20);
+    expect(pureChatIcon.height, 20);
+
     for (final agentId in const <String>[
       'codex-acp',
       'claude-code-acp',
@@ -786,6 +811,12 @@ void main() {
         find.descendant(of: row, matching: find.byType(AgentBrandIcon)),
       );
       expect(icon.agentId, agentId);
+      expect(icon.size, switch (agentId) {
+        'codex-acp' => 19,
+        'claude-code-acp' => 21,
+        'opencode-acp' => 22,
+        _ => 20,
+      });
     }
 
     await tester.tap(
