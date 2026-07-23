@@ -1598,32 +1598,26 @@ class _StatusIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = resolveAgentToolStatusColor(status);
-    final backgroundColor = context.isDarkTheme
-        ? Color.alphaBlend(
-            color.withValues(alpha: 0.14),
-            context.omniPalette.surfaceElevated,
-          )
-        : color.withValues(alpha: 0.12);
     final iconColor = context.isDarkTheme
         ? Color.lerp(context.omniPalette.textSecondary, color, 0.38)!
         : color;
-    return Container(
-      width: 18,
-      height: 18,
-      decoration: BoxDecoration(color: backgroundColor, shape: BoxShape.circle),
+    return SizedBox(
+      key: const ValueKey('agent-tool-summary-leading-icon'),
+      width: 20,
+      height: 20,
       child: Center(
         child: status == 'running'
             ? SizedBox(
-                width: 8,
-                height: 8,
+                width: 16,
+                height: 16,
                 child: CircularProgressIndicator(
-                  strokeWidth: 1.4,
+                  strokeWidth: 1.8,
                   valueColor: AlwaysStoppedAnimation<Color>(iconColor),
                 ),
               )
             : Icon(
                 resolveAgentToolStatusIcon(status, (toolType ?? '').toString()),
-                size: 10,
+                size: 18,
                 color: iconColor,
               ),
       ),
