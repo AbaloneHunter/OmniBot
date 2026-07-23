@@ -553,6 +553,8 @@ class AgentRunService(
             "conversationMode" to conversationMode,
             "userMessage" to normalizedPayload.userMessage,
             "userMessageCreatedAt" to (request["userMessageCreatedAt"] as? Number)?.toLong(),
+            "userEntryId" to "$taskId-user",
+            "externalUserMessage" to true,
             "attachments" to normalizedPayload.attachments,
             "terminalEnvironment" to AgentRunRequestNormalizer.normalizeMap(request["terminalEnvironment"]),
             "modelOverride" to AgentRunRequestNormalizer.normalizeMap(request["modelOverride"])
@@ -590,6 +592,9 @@ class AgentRunService(
                     "conversationId" to conversationId,
                     "conversationMode" to conversationMode,
                     "userMessage" to normalizedPayload.userMessage,
+                    "userMessageCreatedAt" to
+                        (request["userMessageCreatedAt"] as? Number)?.toLong(),
+                    "externalUserMessage" to true,
                     "userAttachments" to normalizedPayload.attachments,
                     "modelOverride" to AgentRunRequestNormalizer.normalizeMap(
                         request["modelOverride"]

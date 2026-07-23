@@ -105,6 +105,48 @@ class CodexAppServerProtocolPayloadTest {
     }
 
     @Test
+    fun resolveCodexSandboxModeUsesCurrentThreadStartEnum() {
+        assertEquals(
+            "danger-full-access",
+            resolveCodexSandboxMode(mapOf("type" to "dangerFullAccess"))
+        )
+        assertEquals(
+            "read-only",
+            resolveCodexSandboxMode(mapOf("type" to "readOnly"))
+        )
+        assertEquals(
+            "workspace-write",
+            resolveCodexSandboxMode(buildDefaultCodexSandboxPolicy("/workspace"))
+        )
+    }
+
+    @Test
+    fun reviewThreadSettingsKeepSelectedFullAccessPolicy() {
+        val params = buildCodexThreadSettingsUpdateParams(
+            args = mapOf(
+                "approvalPolicy" to "never",
+                "approvalsReviewer" to "user",
+                "sandboxPolicy" to mapOf("type" to "dangerFullAccess"),
+                "model" to "gpt-5-codex",
+                "effort" to "high"
+            ),
+            cwd = "/workspace",
+            threadId = "thread-1"
+        )
+
+        assertEquals("thread-1", params["threadId"])
+        assertEquals("/workspace", params["cwd"])
+        assertEquals("never", params["approvalPolicy"])
+        assertEquals("user", params["approvalsReviewer"])
+        assertEquals(
+            mapOf("type" to "dangerFullAccess"),
+            params["sandboxPolicy"]
+        )
+        assertEquals("gpt-5-codex", params["model"])
+        assertEquals("high", params["effort"])
+    }
+
+    @Test
     fun addCodexOptionalRunParamsForwardsModelAndPlanMode() {
         val params = linkedMapOf<String, Any?>("threadId" to "thread-1")
 

@@ -58,6 +58,7 @@ import cn.com.omnimind.bot.agent.AgentTextSanitizer
 import cn.com.omnimind.bot.agent.AgentModelOverride
 import cn.com.omnimind.bot.agent.AgentResult
 import cn.com.omnimind.bot.agent.AgentConversationHistoryRepository
+import cn.com.omnimind.bot.agent.AgentConversationHistorySupport
 import cn.com.omnimind.bot.agent.AgentRuntimeContextRepository
 import cn.com.omnimind.bot.agent.AgentScheduleToolBridge
 import cn.com.omnimind.bot.agent.AgentRunControl
@@ -1771,6 +1772,9 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
         val conversationId = call.argument<Number>("conversationId")?.toLong()
         val conversationMode = normalizeConversationMode(call.argument<String>("conversationMode"))
         val userMessage = call.argument<String>("userMessage")?.trim().orEmpty()
+        val requestedUserMessageCreatedAt =
+            call.argument<Number>("userMessageCreatedAt")?.toLong()?.takeIf { it > 0L }
+        val externalUserMessage = call.argument<Boolean>("externalUserMessage") == true
         val rawUserAttachments = (call.argument<List<Map<String, Any?>>>("userAttachments") ?: emptyList())
             .map(::sanitizeInteropMap)
         val userAttachments = AgentImageAttachmentSupport.prepareAttachments(
@@ -1815,13 +1819,31 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
                 if (normalizedConversationId != null) {
                     val repository = conversationHistoryRepository()
                     if (userMessage.isNotBlank() || userAttachments.isNotEmpty()) {
+                        val userMessageCreatedAt =
+                            requestedUserMessageCreatedAt ?: System.currentTimeMillis()
                         repository.upsertUserMessage(
                             conversationId = normalizedConversationId,
                             conversationMode = conversationMode,
                             entryId = "$taskID-user",
                             text = userMessage,
-                            attachments = userAttachments
+                            attachments = userAttachments,
+                            streamMeta = if (externalUserMessage) {
+                                AgentConversationHistorySupport.externalUserMessageStreamMeta()
+                            } else {
+                                null
+                            },
+                            createdAt = userMessageCreatedAt
                         )
+                        if (externalUserMessage) {
+                            FlutterChatSyncBridge.dispatchExternalUserMessageAppended(
+                                conversationId = normalizedConversationId,
+                                mode = conversationMode,
+                                entryId = "$taskID-user",
+                                text = userMessage,
+                                attachments = userAttachments,
+                                createdAt = userMessageCreatedAt
+                            )
+                        }
                     }
                     val persistenceState = ChatTaskPersistenceState(
                         conversationId = normalizedConversationId,
@@ -3887,9 +3909,13 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
         val runtimeAttachments = preparedAttachments.runtimeAttachments
         val historyAttachments = preparedAttachments.historyAttachments
         val userMessageCreatedAt = call.argument<Number>("userMessageCreatedAt")?.toLong()
-        val userEntryId = userMessageCreatedAt
-            ?.takeIf { it > 0L }
-            ?.let { "$it-user" }
+        val externalUserMessage = call.argument<Boolean>("externalUserMessage") == true
+        val userEntryId = call.argument<String>("userEntryId")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: userMessageCreatedAt
+                ?.takeIf { it > 0L }
+                ?.let { "$it-user" }
             ?: "$taskId-user"
         val conversationId = call.argument<Number>("conversationId")?.toLong()?.takeIf { it > 0L }
         val requestedConversationMode =
@@ -4194,7 +4220,7 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
                     description: String,
                     publish: Boolean = true,
                     block: suspend () -> Unit
-                ) {
+                ): Boolean {
                     val persisted = try {
                         block()
                         true
@@ -4207,6 +4233,7 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
                     if (persisted && publish) {
                         publishConversationMessagesSync()
                     }
+                    return persisted
                 }
 
                 // 续跑代数后缀,用于隔离 thinking / tool entry id,避免新 run 的卡片
@@ -4685,14 +4712,31 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
 
                 conversationId?.let { normalizedConversationId ->
                     if (!continueMode && (userMessage.isNotBlank() || historyAttachments.isNotEmpty())) {
-                        persistConversationMutation("upsert user message") {
+                        val createdAt = userMessageCreatedAt ?: System.currentTimeMillis()
+                        val persisted = persistConversationMutation("upsert user message") {
                             repository.upsertUserMessage(
                                 conversationId = normalizedConversationId,
                                 conversationMode = resolvedConversationMode,
                                 entryId = userEntryId,
                                 text = userMessage,
                                 attachments = historyAttachments,
-                                createdAt = userMessageCreatedAt ?: System.currentTimeMillis()
+                                streamMeta = if (externalUserMessage) {
+                                    AgentConversationHistorySupport
+                                        .externalUserMessageStreamMeta()
+                                } else {
+                                    null
+                                },
+                                createdAt = createdAt
+                            )
+                        }
+                        if (persisted && externalUserMessage) {
+                            FlutterChatSyncBridge.dispatchExternalUserMessageAppended(
+                                conversationId = normalizedConversationId,
+                                mode = resolvedConversationMode,
+                                entryId = userEntryId,
+                                text = userMessage,
+                                attachments = historyAttachments,
+                                createdAt = createdAt
                             )
                         }
                     }

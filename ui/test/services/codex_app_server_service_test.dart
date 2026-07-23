@@ -78,7 +78,7 @@ void main() {
       conversationId: 42,
       threadId: 'thread-1',
       approvalPolicy: 'on-request',
-      approvalsReviewer: 'guardian_subagent',
+      approvalsReviewer: 'auto_review',
       model: 'gpt-5-codex',
       effort: 'xhigh',
       collaborationMode: 'plan',
@@ -91,7 +91,7 @@ void main() {
     expect(args['conversationId'], 42);
     expect(args['threadId'], 'thread-1');
     expect(args['approvalPolicy'], 'on-request');
-    expect(args['approvalsReviewer'], 'guardian_subagent');
+    expect(args['approvalsReviewer'], 'auto_review');
     expect(args['target'], const <String, dynamic>{
       'type': 'uncommittedChanges',
     });

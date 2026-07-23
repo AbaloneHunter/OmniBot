@@ -21,6 +21,58 @@ class AgentConversationHistorySupportTest {
     private val gson = Gson()
 
     @Test
+    fun `stale ui snapshot cannot delete a pending external user message`() {
+        val externalUser = mapOf<String, Any?>(
+            "id" to "web-run-user",
+            "type" to 1,
+            "user" to 1,
+            "content" to mapOf("id" to "web-run-user", "text" to "来自 WebUI"),
+            "streamMeta" to AgentConversationHistorySupport.externalUserMessageStreamMeta(),
+            "createAt" to "2026-07-23T05:00:00Z"
+        )
+        val assistant = mapOf<String, Any?>(
+            "id" to "reply-1",
+            "type" to 1,
+            "user" to 2,
+            "content" to mapOf("id" to "reply-1", "text" to "已收到"),
+            "createAt" to "2026-07-23T05:00:01Z"
+        )
+
+        val merged = AgentConversationHistorySupport.mergePendingExternalUserMessages(
+            existingMessages = listOf(externalUser),
+            incomingMessages = listOf(assistant)
+        )
+
+        assertEquals(listOf("web-run-user", "reply-1"), merged.map { it["id"] })
+    }
+
+    @Test
+    fun `ui snapshot acknowledges an external user message before later removal`() {
+        val externalUser = mapOf<String, Any?>(
+            "id" to "web-run-user",
+            "type" to 1,
+            "user" to 1,
+            "content" to mapOf("id" to "web-run-user", "text" to "来自 WebUI"),
+            "streamMeta" to AgentConversationHistorySupport.externalUserMessageStreamMeta()
+        )
+
+        val acknowledged = AgentConversationHistorySupport
+            .mergePendingExternalUserMessages(
+                existingMessages = listOf(externalUser),
+                incomingMessages = listOf(externalUser)
+            )
+            .single()
+        assertNull(acknowledged["streamMeta"])
+
+        val laterSnapshot = AgentConversationHistorySupport
+            .mergePendingExternalUserMessages(
+                existingMessages = listOf(acknowledged),
+                incomingMessages = emptyList()
+            )
+        assertTrue(laterSnapshot.isEmpty())
+    }
+
+    @Test
     fun `mergeToolPayload keeps args and final status across tool lifecycle`() {
         val startPayload = mapOf(
             "toolName" to "browser_use",

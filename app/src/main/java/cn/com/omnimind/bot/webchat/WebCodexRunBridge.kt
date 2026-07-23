@@ -131,14 +131,12 @@ internal class WebCodexRunBridge(
         )
 
         return try {
-            val arguments = linkedMapOf<String, Any?>(
-                "conversationId" to conversationId,
-                "text" to userMessage,
-                "attachments" to attachments
+            val arguments = buildWebCodexTurnArguments(
+                conversationId = conversationId,
+                userMessage = userMessage,
+                attachments = attachments,
+                cwd = cwd
             )
-            cwd?.trim()?.takeIf { it.isNotEmpty() }?.let {
-                arguments["cwd"] = it
-            }
             val response = normalizeMap(
                 manager.handleMethod("turn/start", arguments)
             )
@@ -543,6 +541,26 @@ internal class WebCodexRunBridge(
 
     private companion object {
         const val CODEX_MODE = "codex"
+    }
+}
+
+internal fun buildWebCodexTurnArguments(
+    conversationId: Long,
+    userMessage: String,
+    attachments: List<Map<String, Any?>>,
+    cwd: String?
+): Map<String, Any?> {
+    return linkedMapOf<String, Any?>(
+        "conversationId" to conversationId,
+        "text" to userMessage,
+        "attachments" to attachments,
+        "approvalPolicy" to "never",
+        "approvalsReviewer" to "user",
+        "sandboxPolicy" to mapOf("type" to "dangerFullAccess")
+    ).apply {
+        cwd?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            this["cwd"] = it
+        }
     }
 }
 

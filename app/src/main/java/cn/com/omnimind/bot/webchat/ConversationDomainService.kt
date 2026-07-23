@@ -5,6 +5,7 @@ import cn.com.omnimind.baselib.database.Conversation
 import cn.com.omnimind.baselib.database.DatabaseHelper
 import cn.com.omnimind.bot.agent.AgentConversationContextCompactor
 import cn.com.omnimind.bot.agent.AgentConversationHistoryRepository
+import cn.com.omnimind.bot.agent.AgentConversationHistorySupport
 import cn.com.omnimind.bot.agent.AgentModelOverride
 import cn.com.omnimind.bot.agent.AgentTextSanitizer
 
@@ -330,6 +331,7 @@ class ConversationDomainService(
             entryId = entryId,
             text = text,
             attachments = attachments,
+            streamMeta = AgentConversationHistorySupport.externalUserMessageStreamMeta(),
             createdAt = createdAt
         )
         // 来自 IM 等外部入口的用户消息：除了通过常规 messagesChanged 事件让聊天页重载，

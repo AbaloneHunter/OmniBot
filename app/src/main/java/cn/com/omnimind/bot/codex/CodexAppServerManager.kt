@@ -238,7 +238,9 @@ class CodexAppServerManager private constructor(
         val params = linkedMapOf<String, Any?>(
             "cwd" to cwd,
             "approvalPolicy" to (args.stringValue("approvalPolicy") ?: "on-request"),
-            "sandboxPolicy" to (args["sandboxPolicy"] ?: buildDefaultCodexSandboxPolicy(cwd))
+            "sandbox" to resolveCodexSandboxMode(
+                args["sandboxPolicy"] ?: buildDefaultCodexSandboxPolicy(cwd)
+            )
         )
         args.stringValue("approvalsReviewer")?.let {
             params["approvalsReviewer"] = it
@@ -394,10 +396,13 @@ class CodexAppServerManager private constructor(
         var threadId = ensureThreadForTurn(args, cwd)
         val params = buildReviewStartParams(
             args = args,
-            cwd = cwd,
             threadId = threadId
         )
         val response = try {
+            request(
+                "thread/settings/update",
+                buildCodexThreadSettingsUpdateParams(args, cwd, threadId)
+            )
             request("review/start", params) as Map<String, Any?>
         } catch (error: Throwable) {
             if (!shouldRecoverMissingThread(error)) {
@@ -411,6 +416,10 @@ class CodexAppServerManager private constructor(
             threadId = retryResponse["threadId"]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
                 ?: throw error
             params["threadId"] = threadId
+            request(
+                "thread/settings/update",
+                buildCodexThreadSettingsUpdateParams(args, cwd, threadId)
+            )
             request("review/start", params) as Map<String, Any?>
         }
         val turnId = extractTurnId(response)
@@ -830,22 +839,13 @@ class CodexAppServerManager private constructor(
 
     private fun buildReviewStartParams(
         args: Map<String, Any?>,
-        cwd: String,
         threadId: String
     ): MutableMap<String, Any?> {
-        val params = linkedMapOf<String, Any?>(
+        return linkedMapOf(
             "threadId" to threadId,
             "target" to resolveCodexReviewTarget(args["target"]),
-            "delivery" to (args.stringValue("delivery") ?: "inline"),
-            "cwd" to cwd,
-            "approvalPolicy" to (args.stringValue("approvalPolicy") ?: "on-request"),
-            "sandboxPolicy" to (args["sandboxPolicy"] ?: buildDefaultCodexSandboxPolicy(cwd))
+            "delivery" to (args.stringValue("delivery") ?: "inline")
         )
-        args.stringValue("approvalsReviewer")?.let {
-            params["approvalsReviewer"] = it
-        }
-        addCodexOptionalRunParams(params, args)
-        return params
     }
 
     private fun shouldRecoverMissingThread(error: Throwable): Boolean {
@@ -1469,6 +1469,35 @@ internal fun buildDefaultCodexSandboxPolicy(cwd: String): Map<String, Any?> {
         "excludeTmpdirEnvVar" to false,
         "excludeSlashTmp" to false
     )
+}
+
+internal fun resolveCodexSandboxMode(sandboxPolicy: Any?): String {
+    val type = sandboxPolicy.asStringMap()
+        ?.stringValue("type")
+        ?: sandboxPolicy?.toString()
+    return when (type?.trim()?.lowercase()?.replace("-", "")?.replace("_", "")) {
+        "dangerfullaccess" -> "danger-full-access"
+        "readonly" -> "read-only"
+        else -> "workspace-write"
+    }
+}
+
+internal fun buildCodexThreadSettingsUpdateParams(
+    args: Map<String, Any?>,
+    cwd: String,
+    threadId: String
+): Map<String, Any?> {
+    return linkedMapOf<String, Any?>(
+        "threadId" to threadId,
+        "cwd" to cwd,
+        "approvalPolicy" to (args.stringValue("approvalPolicy") ?: "on-request"),
+        "sandboxPolicy" to (args["sandboxPolicy"] ?: buildDefaultCodexSandboxPolicy(cwd))
+    ).apply {
+        args.stringValue("approvalsReviewer")?.let {
+            this["approvalsReviewer"] = it
+        }
+        addCodexOptionalRunParams(this, args)
+    }
 }
 
 internal fun addCodexOptionalRunParams(

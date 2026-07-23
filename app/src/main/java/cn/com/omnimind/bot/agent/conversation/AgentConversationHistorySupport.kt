@@ -14,6 +14,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import java.time.Instant
 
 internal object AgentConversationHistorySupport {
+    private const val EXTERNAL_USER_MESSAGE_SOURCE = "external_user_message"
+    private const val PENDING_SNAPSHOT_ACK = "pendingSnapshotAck"
     private data class ThinkingEntryRef(
         val index: Int,
         val entry: AgentConversationEntry,
@@ -108,6 +110,64 @@ internal object AgentConversationHistorySupport {
                 put("reasoning_content", safeReasoning)
             }
         }.filterValues { it != null }
+    }
+
+    fun externalUserMessageStreamMeta(): Map<String, Any?> {
+        return mapOf(
+            "source" to EXTERNAL_USER_MESSAGE_SOURCE,
+            PENDING_SNAPSHOT_ACK to true
+        )
+    }
+
+    fun mergePendingExternalUserMessages(
+        existingMessages: List<Map<String, Any?>>,
+        incomingMessages: List<Map<String, Any?>>
+    ): List<Map<String, Any?>> {
+        val incomingIds = incomingMessages.mapNotNull(::messageId).toSet()
+        val pendingById = linkedMapOf<String, Map<String, Any?>>()
+        existingMessages.forEach { message ->
+            val id = messageId(message) ?: return@forEach
+            val streamMeta = toStringAnyMap(message["streamMeta"])
+            if (
+                (message["type"] as? Number)?.toInt() == 1 &&
+                (message["user"] as? Number)?.toInt() == 1 &&
+                streamMeta["source"]?.toString() == EXTERNAL_USER_MESSAGE_SOURCE &&
+                parseBoolean(streamMeta[PENDING_SNAPSHOT_ACK], default = false) &&
+                id !in incomingIds
+            ) {
+                pendingById[id] = message
+            }
+        }
+        return pendingById.values + incomingMessages.map(::acknowledgeExternalUserMessage)
+    }
+
+    private fun acknowledgeExternalUserMessage(
+        message: Map<String, Any?>
+    ): Map<String, Any?> {
+        val streamMeta = toStringAnyMap(message["streamMeta"])
+        if (
+            streamMeta["source"]?.toString() != EXTERNAL_USER_MESSAGE_SOURCE ||
+            !parseBoolean(streamMeta[PENDING_SNAPSHOT_ACK], default = false)
+        ) {
+            return message
+        }
+        val acknowledgedMeta =
+            streamMeta - PENDING_SNAPSHOT_ACK - "source"
+        return LinkedHashMap(message).apply {
+            if (acknowledgedMeta.isEmpty()) {
+                remove("streamMeta")
+            } else {
+                put("streamMeta", acknowledgedMeta)
+            }
+        }
+    }
+
+    private fun messageId(message: Map<String, Any?>): String? {
+        val content = toStringAnyMap(message["content"])
+        return (message["id"] ?: content["id"])
+            ?.toString()
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
     }
 
     fun buildCardMessagePayload(
@@ -885,7 +945,9 @@ internal object AgentConversationHistorySupport {
             "kind",
             "parentTaskId",
             "entryId",
-            "isFinal"
+            "isFinal",
+            "source",
+            PENDING_SNAPSHOT_ACK
         ).forEach { key ->
             raw[key]?.let { candidate ->
                 safe[key] = compactDisplayScalar(candidate)

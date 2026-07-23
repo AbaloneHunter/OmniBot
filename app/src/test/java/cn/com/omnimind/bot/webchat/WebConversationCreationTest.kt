@@ -111,6 +111,26 @@ class WebConversationCreationTest {
     }
 
     @Test
+    fun `web codex runs explicitly request full access`() {
+        val arguments = buildWebCodexTurnArguments(
+            conversationId = 42L,
+            userMessage = "检查权限",
+            attachments = emptyList(),
+            cwd = " /workspace "
+        )
+
+        assertEquals(42L, arguments["conversationId"])
+        assertEquals("检查权限", arguments["text"])
+        assertEquals("never", arguments["approvalPolicy"])
+        assertEquals("user", arguments["approvalsReviewer"])
+        assertEquals(
+            mapOf("type" to "dangerFullAccess"),
+            arguments["sandboxPolicy"]
+        )
+        assertEquals("/workspace", arguments["cwd"])
+    }
+
+    @Test
     fun `codex tool lifecycle keeps a stable card id and terminal status`() {
         val started = parseWebCodexEvent(
             mapOf(

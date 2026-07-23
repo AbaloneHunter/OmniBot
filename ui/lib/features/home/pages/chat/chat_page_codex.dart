@@ -4842,7 +4842,7 @@ extension _CodexPermissionModePayload on CodexPermissionMode {
 
   String get approvalsReviewer {
     return switch (this) {
-      CodexPermissionMode.autoReview => 'guardian_subagent',
+      CodexPermissionMode.autoReview => 'auto_review',
       CodexPermissionMode.defaultMode ||
       CodexPermissionMode.fullAccess => 'user',
     };
