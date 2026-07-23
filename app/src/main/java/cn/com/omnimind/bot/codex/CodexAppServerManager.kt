@@ -51,9 +51,18 @@ class CodexAppServerManager private constructor(
     private var activeLocalDistributionId: String? = null
     @Volatile
     private var eventListener: ((Map<String, Any?>) -> Unit)? = null
+    private val supplementalEventListeners =
+        ConcurrentHashMap<String, (Map<String, Any?>) -> Unit>()
 
     fun setEventListener(listener: ((Map<String, Any?>) -> Unit)?) {
         eventListener = listener
+    }
+
+    internal fun setSupplementalEventListener(
+        key: String,
+        listener: (Map<String, Any?>) -> Unit
+    ) {
+        supplementalEventListeners[key] = listener
     }
 
     suspend fun status(): Map<String, Any?> {
@@ -1090,9 +1099,25 @@ class CodexAppServerManager private constructor(
     }
 
     private fun emitEvent(event: Map<String, Any?>) {
-        val listener = eventListener ?: return
+        val listener = eventListener
+        val supplementalListeners = supplementalEventListeners.values.toList()
+        if (listener == null && supplementalListeners.isEmpty()) return
         mainHandler.post {
-            listener(event)
+            runCatching {
+                listener?.invoke(event)
+            }.onFailure { error ->
+                Log.w("CodexAppServerManager", "primary event listener failed: ${error.message}")
+            }
+            supplementalListeners.forEach { supplemental ->
+                runCatching {
+                    supplemental(event)
+                }.onFailure { error ->
+                    Log.w(
+                        "CodexAppServerManager",
+                        "supplemental event listener failed: ${error.message}"
+                    )
+                }
+            }
         }
     }
 

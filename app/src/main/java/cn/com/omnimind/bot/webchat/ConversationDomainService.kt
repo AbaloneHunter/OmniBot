@@ -6,6 +6,23 @@ import cn.com.omnimind.baselib.database.DatabaseHelper
 import cn.com.omnimind.bot.agent.AgentConversationContextCompactor
 import cn.com.omnimind.bot.agent.AgentConversationHistoryRepository
 import cn.com.omnimind.bot.agent.AgentModelOverride
+import cn.com.omnimind.bot.agent.AgentTextSanitizer
+
+private const val WEB_CONVERSATION_TITLE_LIMIT = 20
+
+internal fun deriveWebConversationTitle(firstUserMessage: String?): String? {
+    val normalized = AgentTextSanitizer.sanitizeUtf16(firstUserMessage.orEmpty()).trim()
+    if (normalized.isEmpty()) return null
+    return if (normalized.length > WEB_CONVERSATION_TITLE_LIMIT) {
+        "${normalized.substring(0, WEB_CONVERSATION_TITLE_LIMIT)}..."
+    } else {
+        normalized
+    }
+}
+
+private fun isDefaultWebConversationTitle(title: String): Boolean {
+    return title.trim().lowercase() in setOf("", "新对话", "new chat", "new conversation")
+}
 
 class ConversationDomainService(
     private val context: Context
@@ -160,6 +177,29 @@ class ConversationDomainService(
             ?: throw IllegalArgumentException("Conversation not found")
         val updated = existing.copy(
             title = newTitle.ifBlank { existing.title },
+            updatedAt = System.currentTimeMillis()
+        )
+        DatabaseHelper.updateConversation(updated)
+        publishConversationEvent("conversation_updated", updated)
+        return conversationToPayload(updated)
+    }
+
+    suspend fun applyFirstUserMessageTitle(
+        conversationId: Long,
+        firstUserMessage: String?
+    ): Map<String, Any?> {
+        val existing = DatabaseHelper.getConversationById(conversationId)
+            ?: throw IllegalArgumentException("Conversation not found")
+        val nextTitle = deriveWebConversationTitle(firstUserMessage)
+        if (
+            nextTitle == null ||
+            existing.messageCount > 0 ||
+            !isDefaultWebConversationTitle(existing.title)
+        ) {
+            return conversationToPayload(existing)
+        }
+        val updated = existing.copy(
+            title = nextTitle,
             updatedAt = System.currentTimeMillis()
         )
         DatabaseHelper.updateConversation(updated)

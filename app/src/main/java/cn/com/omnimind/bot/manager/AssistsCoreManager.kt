@@ -1106,6 +1106,25 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
         }
     }
 
+    fun hasActiveChatTasks(): Boolean {
+        return synchronized(activeAgentLock) {
+            chatTaskPersistenceStates.isNotEmpty()
+        }
+    }
+
+    fun hasActiveChatRun(
+        conversationId: Long,
+        conversationMode: String
+    ): Boolean {
+        val normalizedMode = normalizeConversationMode(conversationMode)
+        return synchronized(activeAgentLock) {
+            chatTaskPersistenceStates.values.any { state ->
+                state.conversationId == conversationId &&
+                    state.conversationMode == normalizedMode
+            }
+        }
+    }
+
     suspend fun invokeFlutterMethodForAgent(method: String, arguments: Map<String, Any?>): Any? {
         val targetChannel = mainEngineChannel ?: if (this::channel.isInitialized) channel else null
         if (targetChannel == null) {
@@ -1449,6 +1468,46 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
 
     private fun extractChatTaskText(content: String): String = extractChatTaskTextPayload(content)
 
+    private suspend fun publishChatTaskMessagesSync(
+        state: ChatTaskPersistenceState,
+        finalizeInterruptedEntries: Boolean
+    ) {
+        val messages = conversationHistoryRepository().listConversationMessages(
+            conversationId = state.conversationId,
+            conversationMode = state.conversationMode,
+            finalizeInterruptedEntries = finalizeInterruptedEntries
+        )
+        RealtimeHub.publish(
+            "messages_replaced",
+            mapOf(
+                "conversationId" to state.conversationId,
+                "mode" to state.conversationMode,
+                "messages" to messages
+            )
+        )
+        FlutterChatSyncBridge.dispatchConversationMessagesChanged(
+            conversationId = state.conversationId,
+            mode = state.conversationMode,
+            reason = "messages_replaced"
+        )
+    }
+
+    private fun publishChatTaskTerminalEvent(
+        taskId: String,
+        state: ChatTaskPersistenceState,
+        kind: String
+    ) {
+        RealtimeHub.publish(
+            "agent_stream_event",
+            mapOf(
+                "taskId" to taskId,
+                "conversationId" to state.conversationId,
+                "conversationMode" to state.conversationMode,
+                "kind" to kind
+            )
+        )
+    }
+
 
     /**
      * 取消正在运行的聊天或 Agent 任务。
@@ -1764,22 +1823,24 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
                             attachments = userAttachments
                         )
                     }
-                    registerChatTaskPersistenceState(
-                        taskID,
-                        ChatTaskPersistenceState(
-                            conversationId = normalizedConversationId,
-                            conversationMode = conversationMode,
-                            userEntryId = "$taskID-user",
-                            assistantEntryId = "$taskID-assistant",
-                            modelOverride = modelOverride,
-                            reasoningEffort = reasoningEffort,
-                            promptTokenThreshold = resolvePromptTokenThresholdFallback(
-                                storedThreshold = repository
-                                    .getConversation(normalizedConversationId)
-                                    ?.promptTokenThreshold,
-                                modelOverride = modelOverride
-                            )
+                    val persistenceState = ChatTaskPersistenceState(
+                        conversationId = normalizedConversationId,
+                        conversationMode = conversationMode,
+                        userEntryId = "$taskID-user",
+                        assistantEntryId = "$taskID-assistant",
+                        modelOverride = modelOverride,
+                        reasoningEffort = reasoningEffort,
+                        promptTokenThreshold = resolvePromptTokenThresholdFallback(
+                            storedThreshold = repository
+                                .getConversation(normalizedConversationId)
+                                ?.promptTokenThreshold,
+                            modelOverride = modelOverride
                         )
+                    )
+                    registerChatTaskPersistenceState(taskID, persistenceState)
+                    publishChatTaskMessagesSync(
+                        persistenceState,
+                        finalizeInterruptedEntries = false
                     )
                 }
                 AssistsUtil.Core.createChatTask(
@@ -1884,6 +1945,10 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
                     isError = state.isError
                 )
             }
+            publishChatTaskMessagesSync(
+                state,
+                finalizeInterruptedEntries = false
+            )
         }
         withContext(Dispatchers.Main) {
             try {
@@ -1925,6 +1990,15 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
                     isError = state.isError
                 )
             }
+            publishChatTaskMessagesSync(
+                state,
+                finalizeInterruptedEntries = true
+            )
+            publishChatTaskTerminalEvent(
+                taskId = taskID,
+                state = state,
+                kind = if (state.isError) "error" else "completed"
+            )
         }
         val compactedConversationPayload = maybeAutoCompactChatOnlyConversation(
             taskID,

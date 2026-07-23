@@ -8,6 +8,7 @@ import {
 } from "react";
 import { agentAvatarUrl, isRecord } from "../api";
 import { formatBytes, markdownToHtml, messageContent, messageTime } from "../format";
+import { buildRunTimeline } from "../runTimeline";
 import type { Attachment, ChatMessage, Conversation } from "../types";
 import {
   ComposerAttachmentIcon,
@@ -590,16 +591,27 @@ function buildRunGroup(messages: ChatMessage[], taskId: string, active: boolean)
   const requestMessages = taskMessages.filter(isCodexRequestMessage);
   if (taskMessages.length < 2 && !requestMessages.length) return null;
   const primary = resolvePrimaryVisibleMessage(taskMessages, active, requestMessages);
-  if (!primary) return null;
-  const visibleMessages = resolveVisibleMessages(taskMessages, primary);
-  const visibleSet = new Set(visibleMessages);
-  const processMessages = taskMessages.filter((message) => !visibleSet.has(message)).sort(compareOldestFirst);
-  if (!processMessages.length && visibleMessages.length < 2 && !isCodexRequestMessage(primary)) return null;
+  const visibleMessages = primary
+    ? resolveVisibleMessages(taskMessages, primary)
+    : [];
+  const timeline = buildRunTimeline(
+    taskMessages,
+    visibleMessages,
+    active,
+    compareOldestFirst,
+  );
+  if (!timeline) return null;
+  const { processMessages } = timeline;
+  if (
+    !processMessages.length
+    && visibleMessages.length < 2
+    && (!primary || !isCodexRequestMessage(primary))
+  ) return null;
   const times = taskMessages.map(messageTime).filter((time) => time > 0);
   return {
     taskId,
     processMessages,
-    visibleMessages,
+    visibleMessages: timeline.visibleMessages,
     startTime: times.length ? Math.min(...times) : 0,
     endTime: times.length ? Math.max(...times) : 0,
     active,
@@ -727,6 +739,7 @@ export function ChatPanel({
   const activeTailMessage = activeTaskMessages.length
     ? newestBySequence(activeTaskMessages)
     : null;
+  const canManageConversation = Number(conversation?.id ?? 0) > 0;
   const isProcessing = sending || Boolean(activeTaskId && !clarifyTaskId);
   const canSend = !isProcessing && (clarifyTaskId ? Boolean(draft.trim()) : Boolean(draft.trim() || attachments.length));
 
@@ -789,7 +802,7 @@ export function ChatPanel({
             type="button"
             aria-label={conversation?.isArchived ? "取消归档" : "归档对话"}
             title={conversation?.isArchived ? "取消归档" : "归档对话"}
-            disabled={!conversation}
+            disabled={!canManageConversation}
             onClick={onArchive}
           >
             <Icon name="archive" size={18} />
@@ -799,7 +812,7 @@ export function ChatPanel({
             type="button"
             aria-label="删除对话"
             title="删除对话"
-            disabled={!conversation}
+            disabled={!canManageConversation}
             onClick={onDelete}
           >
             <Icon name="trash" size={18} />
