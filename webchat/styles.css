@@ -229,47 +229,6 @@ button:disabled {
   animation: rise-in 360ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
-.brand-mark {
-  width: 52px;
-  height: 52px;
-  display: grid;
-  place-items: center;
-  border-radius: 16px;
-  background: var(--grad-brand);
-  color: white;
-  font: 700 23px/1 Georgia, serif;
-  box-shadow: 0 10px 24px rgb(44 127 235 / 20%);
-}
-
-@media (prefers-color-scheme: dark) {
-  .brand-mark {
-    color: #151617;
-    box-shadow: 0 10px 24px rgb(0 0 0 / 28%);
-  }
-}
-
-.eyebrow {
-  margin: 28px 0 9px;
-  color: var(--accent);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: .16em;
-}
-
-.login-panel h1 {
-  margin: 0;
-  font-size: clamp(28px, 5vw, 38px);
-  line-height: 1.12;
-  letter-spacing: -.035em;
-}
-
-.login-copy {
-  margin: 14px 0 26px;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.7;
-}
-
 .login-form {
   display: grid;
   gap: 10px;
@@ -462,6 +421,11 @@ button:disabled {
     visibility: hidden;
     border: 0;
     pointer-events: none;
+  }
+
+  .app-view:is(.left-sidebar-collapsed, .right-sidebar-collapsed) .message-list,
+  .app-view:is(.left-sidebar-collapsed, .right-sidebar-collapsed) .composer-region {
+    padding-inline: max(28px, calc(50% - 480px));
   }
 }
 
