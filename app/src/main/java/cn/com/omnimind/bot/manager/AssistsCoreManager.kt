@@ -1489,7 +1489,7 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
         FlutterChatSyncBridge.dispatchConversationMessagesChanged(
             conversationId = state.conversationId,
             mode = state.conversationMode,
-            reason = "messages_replaced"
+            reason = "chat_task_stream_snapshot"
         )
     }
 
@@ -4203,7 +4203,7 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
                         FlutterChatSyncBridge.dispatchConversationMessagesChanged(
                             conversationId = normalizedConversationId,
                             mode = resolvedConversationMode,
-                            reason = "messages_replaced"
+                            reason = "agent_stream_snapshot"
                         )
                     } catch (error: CancellationException) {
                         throw error

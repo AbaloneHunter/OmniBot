@@ -100,6 +100,49 @@ void main() {
     });
   });
 
+  group('shouldReloadConversationMessagesChanged', () {
+    test('ignores native stream snapshots while runtime is in flight', () {
+      expect(
+        shouldReloadConversationMessagesChanged(
+          reason: 'agent_stream_snapshot',
+          hasInFlightTask: true,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldReloadConversationMessagesChanged(
+          reason: 'chat_task_stream_snapshot',
+          hasInFlightTask: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('still reloads external and non-stream changes', () {
+      expect(
+        shouldReloadConversationMessagesChanged(
+          reason: 'external_user_message',
+          hasInFlightTask: true,
+        ),
+        isTrue,
+      );
+      expect(
+        shouldReloadConversationMessagesChanged(
+          reason: 'messages_replaced',
+          hasInFlightTask: true,
+        ),
+        isTrue,
+      );
+      expect(
+        shouldReloadConversationMessagesChanged(
+          reason: 'agent_stream_snapshot',
+          hasInFlightTask: false,
+        ),
+        isTrue,
+      );
+    });
+  });
+
   group('ObservableChatMessageList', () {
     late ObservableChatMessageList list;
     late int notifyCount;

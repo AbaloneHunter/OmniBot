@@ -28,6 +28,7 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
     ChatPageMode mode, {
     ConversationModel? conversation,
     List<ChatMessageModel>? messages,
+    bool preserveLiveStreamingState = false,
   }) {
     final conversationId = _currentConversationIdByMode[mode];
     if (conversationId == null) return;
@@ -90,6 +91,7 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
       browserSessionSnapshot:
           runtime?.browserSessionSnapshot ??
           _browserSessionSnapshotByMode[mode],
+      preserveLiveStreamingState: preserveLiveStreamingState,
     );
     _rememberRuntimeUiSnapshot(mode);
   }

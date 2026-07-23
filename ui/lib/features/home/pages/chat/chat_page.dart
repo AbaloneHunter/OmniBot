@@ -1341,6 +1341,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
       pageMode,
       conversation: conversation,
       messages: messages,
+      preserveLiveStreamingState: runtime?.hasInFlightTask == true,
     );
     if (pageMode == ChatPageMode.normal) {
       unawaited(
@@ -1899,6 +1900,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
     ChatPageMode mode, {
     ConversationModel? conversation,
     List<ChatMessageModel>? messages,
+    bool preserveLiveStreamingState = false,
   });
 
   Future<void> _ensureActiveConversationReadyForStreaming();

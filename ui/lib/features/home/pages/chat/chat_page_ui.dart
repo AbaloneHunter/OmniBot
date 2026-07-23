@@ -893,6 +893,7 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
     return ChatMessageList(
       messages: resolvedMessages,
       activeAgentTaskIds: activeAgentTaskIds,
+      useAcpPresentation: mode == ChatPageMode.agent,
       onRetryAgentMessage: _retryFailedAgentTurn,
       onContinueAgentMessage: _continueFailedAgentTurn,
       expandedAgentRunTaskIds: _expandedAgentRunTaskIdsForMode(mode),

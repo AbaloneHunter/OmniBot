@@ -18,11 +18,13 @@ class AgentToolSummaryCard extends StatefulWidget {
   const AgentToolSummaryCard({
     super.key,
     required this.cardData,
+    this.useAgentToolPresentation = true,
     this.parentScrollController,
     this.visualProfile = AppBackgroundVisualProfile.defaultProfile,
   });
 
   final Map<String, dynamic> cardData;
+  final bool useAgentToolPresentation;
   final ScrollController? parentScrollController;
   final AppBackgroundVisualProfile visualProfile;
 
@@ -36,7 +38,10 @@ class _AgentToolSummaryCardState extends State<AgentToolSummaryCard> {
   @override
   Widget build(BuildContext context) {
     final cardData = widget.cardData;
-    if (_usesInlineToolStyle(cardData)) {
+    if (_usesInlineToolStyle(
+      cardData,
+      useAgentToolPresentation: widget.useAgentToolPresentation,
+    )) {
       return _InlineToolCallCard(
         cardData: cardData,
         visualProfile: widget.visualProfile,
@@ -165,6 +170,9 @@ class _AgentToolSummaryCardState extends State<AgentToolSummaryCard> {
   }) {
     final diffStatLabel = _resolveDiffStatLabel(cardData);
     return Material(
+      key: ValueKey(
+        'agent-tool-summary-capsule-${cardData['cardId'] ?? title}',
+      ),
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(999),
       clipBehavior: Clip.antiAlias,
@@ -303,8 +311,12 @@ bool _isAgentInlineTool(Map<String, dynamic> cardData) {
   return false;
 }
 
-bool _usesInlineToolStyle(Map<String, dynamic> cardData) {
-  return _isInlineFileTool(cardData) || _isAgentInlineTool(cardData);
+bool _usesInlineToolStyle(
+  Map<String, dynamic> cardData, {
+  required bool useAgentToolPresentation,
+}) {
+  return _isInlineFileTool(cardData) ||
+      (useAgentToolPresentation && _isAgentInlineTool(cardData));
 }
 
 class _InlineToolCallCard extends StatefulWidget {

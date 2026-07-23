@@ -534,7 +534,7 @@ void main() {
     expect(find.byType(RefreshIndicator), findsNothing);
   });
 
-  testWidgets('completed agent run collapses to summary and final answer', (
+  testWidgets('completed Xiaowan run keeps Xiaowan presentation', (
     tester,
   ) async {
     final controller = ScrollController();
@@ -598,6 +598,7 @@ void main() {
           height: 520,
           child: ChatMessageList(
             messages: messages,
+            useAcpPresentation: true,
             scrollController: controller,
             onBeforeTaskExecute: () async {},
           ),
@@ -627,6 +628,26 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('已处理'), findsWidgets);
     expect(find.textContaining('已探索'), findsNothing);
+    final acpToolGroupToggle = find.byKey(
+      const ValueKey(
+        'agent-tool-call-group-toggle-task-1-task-1-tool-search-2-task-1-tool-search-1',
+      ),
+    );
+    expect(acpToolGroupToggle, findsOneWidget);
+
+    await tester.tap(acpToolGroupToggle);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('inline-file-diff-title-toggle')),
+      findsNWidgets(2),
+    );
+    expect(
+      find.byKey(
+        const ValueKey('agent-tool-summary-capsule-task-1-tool-search-1'),
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets(
@@ -648,6 +669,7 @@ void main() {
                 child: ChatMessageList(
                   messages: messages,
                   activeAgentTaskIds: activeTaskIds,
+                  useAcpPresentation: true,
                   scrollController: controller,
                   onBeforeTaskExecute: () async {},
                 ),
@@ -708,6 +730,7 @@ void main() {
             height: 520,
             child: ChatMessageList(
               messages: messages,
+              useAcpPresentation: true,
               scrollController: controller,
               onBeforeTaskExecute: () async {},
             ),
@@ -808,7 +831,7 @@ void main() {
     },
   );
 
-  testWidgets('adjacent tool calls collapse into an expandable group', (
+  testWidgets('adjacent Xiaowan tool calls render as independent capsules', (
     tester,
   ) async {
     final controller = ScrollController();
@@ -832,26 +855,37 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('agent-run-summary-task-1')));
     await tester.pumpAndSettle();
 
-    // The per-tool count summary is no longer surfaced anywhere — both the
-    // outer run header AND the inner tool-group capsule now read "已处理"
-    // (the user asked for the expanded UI to match the collapsed UI).
-    // There should be at least two "已处理" labels visible: the run header
-    // and the inner tool group capsule.
+    // 小万完成后的 turn 仍由外层“已处理”统一折叠，但展开后每次工具调用
+    // 必须保持为独立胶囊，不能套用 ACP 的并行工具合并胶囊。
     expect(find.text('已运行 1 条命令 · 已读取 1 个文件'), findsNothing);
-    expect(find.textContaining('已处理'), findsWidgets);
+    expect(find.textContaining('已处理'), findsOneWidget);
 
     final toolGroupToggle = find.byKey(
       const ValueKey(
         'agent-tool-call-group-toggle-task-1-task-1-tool-1-task-1-tool-2',
       ),
     );
-    expect(toolGroupToggle, findsOneWidget);
-    expect(find.text('运行 git status'), findsNothing);
-    expect(find.text('读取 README.md'), findsNothing);
-
-    await tester.tap(toolGroupToggle);
-    await tester.pumpAndSettle();
-
+    expect(toolGroupToggle, findsNothing);
+    expect(
+      find.byKey(const ValueKey('agent-run-task-1-task-1-tool-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('agent-run-task-1-task-1-tool-2')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('inline-file-diff-title-toggle')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('agent-tool-summary-capsule-task-1-tool-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('agent-tool-summary-capsule-task-1-tool-2')),
+      findsOneWidget,
+    );
     expect(find.text('运行 git status'), findsOneWidget);
     expect(find.text('读取 README.md'), findsOneWidget);
   });
@@ -1357,6 +1391,9 @@ List<ChatMessageModel> _buildCompletedAgentRunMessages({bool isFinal = true}) {
     ChatMessageModel.cardMessage(
       <String, dynamic>{
         'type': 'agent_tool_summary',
+        // 原生历史恢复层会给小万工具卡补上这个通用渲染样式；
+        // 它不能被当成 ACP Agent 身份标记。
+        'uiStyle': 'agent_tool',
         'status': 'success',
         'toolType': 'terminal',
         'toolTitle': '运行 git status',
@@ -1412,6 +1449,7 @@ List<ChatMessageModel> _buildCompletedAgentRunMessagesWithToolGroup() {
     ChatMessageModel.cardMessage(
       <String, dynamic>{
         'type': 'agent_tool_summary',
+        'uiStyle': 'agent_tool',
         'status': 'success',
         'toolType': 'workspace',
         'toolTitle': '读取 README.md',
@@ -1429,6 +1467,7 @@ List<ChatMessageModel> _buildCompletedAgentRunMessagesWithToolGroup() {
     ChatMessageModel.cardMessage(
       <String, dynamic>{
         'type': 'agent_tool_summary',
+        'uiStyle': 'agent_tool',
         'status': 'success',
         'toolType': 'terminal',
         'toolTitle': '运行 git status',

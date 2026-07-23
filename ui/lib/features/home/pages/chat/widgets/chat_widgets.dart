@@ -1608,6 +1608,7 @@ class ChatMessageList extends StatefulWidget {
   final Future<void> Function()? onLoadMore;
   final bool hasMore;
   final Set<String> activeAgentTaskIds;
+  final bool useAcpPresentation;
   final Set<String>? expandedAgentRunTaskIds;
   final ValueChanged<Set<String>>? onExpandedAgentRunTaskIdsChanged;
   final AppBackgroundVisualProfile visualProfile;
@@ -1637,6 +1638,7 @@ class ChatMessageList extends StatefulWidget {
     this.onLoadMore,
     this.hasMore = false,
     this.activeAgentTaskIds = const <String>{},
+    this.useAcpPresentation = false,
     this.expandedAgentRunTaskIds,
     this.onExpandedAgentRunTaskIdsChanged,
     this.visualProfile = AppBackgroundVisualProfile.defaultProfile,
@@ -2298,6 +2300,7 @@ class _ChatMessageListState extends State<ChatMessageList> {
         onStreamingTextLayoutChanged: _handleStreamingTextLayoutChanged,
         onToggleAgentRunGroup: _toggleAgentRunGroup,
         expandedAgentRunTaskIds: _expandedAgentRunTaskIds,
+        useAcpPresentation: widget.useAcpPresentation,
         visualProfile: widget.visualProfile,
         appearanceConfig: widget.appearanceConfig,
       );
@@ -2483,6 +2486,7 @@ class _ChatTimelineListRow extends StatelessWidget {
     this.onStreamingTextLayoutChanged,
     required this.onToggleAgentRunGroup,
     required this.expandedAgentRunTaskIds,
+    required this.useAcpPresentation,
     required this.visualProfile,
     required this.appearanceConfig,
   });
@@ -2503,6 +2507,7 @@ class _ChatTimelineListRow extends StatelessWidget {
   final VoidCallback? onStreamingTextLayoutChanged;
   final void Function(String taskId) onToggleAgentRunGroup;
   final Set<String> expandedAgentRunTaskIds;
+  final bool useAcpPresentation;
   final AppBackgroundVisualProfile visualProfile;
   final AppBackgroundConfig appearanceConfig;
 
@@ -2516,6 +2521,7 @@ class _ChatTimelineListRow extends StatelessWidget {
       padding: padding,
       child: AgentRunGroupMessage(
         group: group,
+        useAcpPresentation: useAcpPresentation,
         expanded: expandedAgentRunTaskIds.contains(group.taskId),
         onToggleExpanded: () => onToggleAgentRunGroup(group.taskId),
         onBeforeTaskExecute: onBeforeTaskExecute,
@@ -2546,6 +2552,7 @@ class _ChatTimelineListRow extends StatelessWidget {
       onContinueAgentMessage: () =>
           onContinueAgentMessage?.call(currentMessage),
       enableThinkingCollapse: true,
+      useAgentToolPresentation: useAcpPresentation,
       parentScrollController: parentScrollController,
       onParentScrollHandoff: onParentScrollHandoff,
       onRequestAuthorize: onRequestAuthorize,
@@ -2560,6 +2567,7 @@ class _ChatTimelineListRow extends StatelessWidget {
     );
     final agentId = currentMessage.agentId?.trim() ?? '';
     final showAcpAgentAvatar =
+        useAcpPresentation &&
         currentMessage.user == 2 &&
         currentMessage.type == 1 &&
         agentId.isNotEmpty;

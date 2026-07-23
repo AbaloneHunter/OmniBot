@@ -26,6 +26,7 @@ class CardWidgetFactory {
     void Function(String taskId)? onCancelTask,
     bool enableThinkingCollapse = false,
     bool thinkingAutoCollapseOnComplete = true,
+    bool useAgentToolPresentation = true,
     bool? showThinkingAvatarOverride,
     ScrollController? parentScrollController,
     VoidCallback? onParentScrollHandoff,
@@ -101,6 +102,7 @@ class CardWidgetFactory {
       case 'agent_tool_summary':
         return AgentToolSummaryCard(
           cardData: cardData,
+          useAgentToolPresentation: useAgentToolPresentation,
           parentScrollController: parentScrollController,
           visualProfile: visualProfile,
         );

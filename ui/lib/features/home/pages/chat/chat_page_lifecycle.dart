@@ -618,8 +618,18 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     // IM 等外部入口写入用户消息时，原生侧用 reason=external_user_message 通知前端：
     // 这条消息只在 DB 里、还没进入 runtime.messages，必须强制从 DB 重载，
     // 否则 agent 流事件先到时 hasInFlightTask=true 会让 in-memory 分支吞掉它。
-    final isExternalUserMessage =
-        event['reason']?.toString() == 'external_user_message';
+    final reason = event['reason']?.toString();
+    final isExternalUserMessage = reason == 'external_user_message';
+    // 流事件已经由 runtime reducer 直接维护。原生侧每次把流式快照落库后
+    // 还会发送 messages_replaced；若在这里重新安装同一份 in-memory 列表，
+    // 会重建消息 notifier 并清空 reducer 的排序状态，造成思考卡闪烁和
+    // 文本/思考时序跳动。
+    if (!shouldReloadConversationMessagesChanged(
+      reason: reason,
+      hasInFlightTask: runtime?.hasInFlightTask == true,
+    )) {
+      return;
+    }
     await loadConversation(
       conversationId,
       preferInMemory:

@@ -18,6 +18,7 @@ class AgentRunGroupMessage extends StatefulWidget {
   const AgentRunGroupMessage({
     super.key,
     required this.group,
+    this.useAcpPresentation = false,
     required this.expanded,
     required this.onToggleExpanded,
     required this.onBeforeTaskExecute,
@@ -33,6 +34,7 @@ class AgentRunGroupMessage extends StatefulWidget {
   });
 
   final AgentRunTimelineGroup group;
+  final bool useAcpPresentation;
   final bool expanded;
   final VoidCallback onToggleExpanded;
   final OnBeforeTaskExecute onBeforeTaskExecute;
@@ -154,6 +156,7 @@ class _AgentRunGroupMessageState extends State<AgentRunGroupMessage>
             key: ValueKey('agent-run-summary-${widget.group.taskId}'),
             group: widget.group,
             taskId: widget.group.taskId,
+            useAcpPresentation: widget.useAcpPresentation,
             expanded: widget.expanded,
             onTap: widget.onToggleExpanded,
           ),
@@ -170,6 +173,7 @@ class _AgentRunGroupMessageState extends State<AgentRunGroupMessage>
             onContinueAgentMessage: () =>
                 widget.onContinueAgentMessage?.call(message),
             enableThinkingCollapse: false,
+            useAgentToolPresentation: widget.useAcpPresentation,
             parentScrollController: widget.parentScrollController,
             onParentScrollHandoff: widget.onParentScrollHandoff,
             onRequestAuthorize: widget.onRequestAuthorize,
@@ -235,7 +239,7 @@ class _AgentRunGroupMessageState extends State<AgentRunGroupMessage>
     var index = 0;
     while (index < processMessages.length) {
       final message = processMessages[index];
-      if (_isAgentToolSummaryMessage(message)) {
+      if (_isAgentToolSummaryMessage(message) && widget.useAcpPresentation) {
         final toolMessages = <ChatMessageModel>[message];
         var nextIndex = index + 1;
         while (nextIndex < processMessages.length &&
@@ -295,6 +299,7 @@ class _AgentRunGroupMessageState extends State<AgentRunGroupMessage>
           widget.onContinueAgentMessage?.call(message),
       enableThinkingCollapse: true,
       thinkingAutoCollapseOnComplete: true,
+      useAgentToolPresentation: widget.useAcpPresentation,
       showThinkingAvatarOverride: hideAvatar ? false : null,
       parentScrollController: widget.parentScrollController,
       onParentScrollHandoff: widget.onParentScrollHandoff,
@@ -553,12 +558,14 @@ class _AgentRunSummaryHeader extends StatelessWidget {
     super.key,
     required this.group,
     required this.taskId,
+    required this.useAcpPresentation,
     required this.expanded,
     required this.onTap,
   });
 
   final AgentRunTimelineGroup group;
   final String taskId;
+  final bool useAcpPresentation;
   final bool expanded;
   final VoidCallback onTap;
 
@@ -567,7 +574,9 @@ class _AgentRunSummaryHeader extends StatelessWidget {
     final isEnglish =
         Localizations.maybeLocaleOf(context)?.languageCode == 'en';
     final palette = context.omniPalette;
-    final acpAgentId = _agentRunGroupAcpAgentId(group);
+    final acpAgentId = useAcpPresentation
+        ? _agentRunGroupAcpAgentId(group)
+        : null;
     // Both collapsed AND expanded show the same "已处理 <elapsed>" label.
     // The per-tool count summary was deliberately retired — the user wants
     // the header noise-free in both states. The elapsed-time suffix is
