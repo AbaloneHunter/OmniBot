@@ -323,7 +323,7 @@ class CodexEventReducer {
         cardId: cardId,
         taskId: parentTaskId,
         toolType: 'plan',
-        title: 'Codex plan',
+        title: 'Agent plan',
         status: 'running',
         summary: text,
         progress: text,
@@ -531,7 +531,7 @@ class CodexEventReducer {
         taskId: parentTaskId,
         toolType: (existing?['toolType'] ?? 'mcp').toString(),
         title:
-            (existing?['toolTitle'] ?? existing?['displayName'] ?? 'Codex tool')
+            (existing?['toolTitle'] ?? existing?['displayName'] ?? 'Agent tool')
                 .toString(),
         status: 'running',
         summary: progress,
@@ -930,7 +930,7 @@ class CodexEventReducer {
           cardId: '$itemId-codex-plan',
           taskId: taskId,
           toolType: 'plan',
-          title: 'Codex plan',
+          title: 'Agent plan',
           status: 'running',
           summary: text,
           progress: text,
@@ -2777,9 +2777,9 @@ class CodexEventReducer {
       return _commandTitle(params);
     }
     if (method.contains('fileChange')) {
-      return _fileChangeTitle(params, fallback: 'Codex file approval');
+      return _fileChangeTitle(params, fallback: 'Agent file approval');
     }
-    return 'Codex approval';
+    return 'Agent approval';
   }
 
   String _approvalDetail(Map<String, dynamic> params) {
@@ -2800,14 +2800,14 @@ class CodexEventReducer {
         ) ??
         _extractText(params['cmd']);
     if (command == null || command.trim().isEmpty) {
-      return 'Codex command';
+      return 'Agent command';
     }
     return _compactTitle(command, maxLength: 48);
   }
 
   String _fileChangeTitle(
     Map<String, dynamic> params, {
-    String fallback = 'Codex file change',
+    String fallback = 'Agent file change',
   }) {
     final path = _resolveFilePath(params);
     if (path == null) {
@@ -2946,7 +2946,7 @@ class CodexEventReducer {
             _string(first['label']) ??
             _string(first['title']) ??
             _string(first['question']) ??
-            'Codex needs input';
+            'Agent needs input';
         final detail =
             _string(first['description']) ??
             _string(first['placeholder']) ??
@@ -2959,7 +2959,7 @@ class CodexEventReducer {
     final title =
         _string(params['question']) ??
         _string(params['title']) ??
-        'Codex needs input';
+        'Agent needs input';
     final detail = _string(params['description']) ?? title;
     return _CodexQuestion(id: id, title: title, detail: detail);
   }

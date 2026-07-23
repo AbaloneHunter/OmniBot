@@ -336,7 +336,7 @@ class _ExperienceMiscSettingPageState
           _SettingItem(
             icon: Icons.screen_lock_portrait_outlined,
             title: context.trLegacy('防止任务运行时屏幕休眠'),
-            subtitle: context.trLegacy('任务运行期间保持屏幕常亮，适用于 Agent、Codex 和纯聊天'),
+            subtitle: context.trLegacy('任务运行期间保持屏幕常亮，适用于小万（OmniAi）、Agent 和纯聊天'),
             trailing: _buildSwitchTrailing(
               value: _preventScreenSleepDuringTasksEnabled,
               onToggle: _onPreventScreenSleepDuringTasksChanged,
@@ -345,7 +345,7 @@ class _ExperienceMiscSettingPageState
           _SettingItem(
             icon: Icons.notifications_active_outlined,
             title: context.trLegacy('任务完成通知'),
-            subtitle: context.trLegacy('Agent、Codex 和纯聊天完成后推送提醒'),
+            subtitle: context.trLegacy('小万（OmniAi）、Agent 和纯聊天完成后推送提醒'),
             trailing: _buildSwitchTrailing(
               value: _taskCompletionNotificationEnabled,
               onToggle: _onTaskCompletionNotificationChanged,

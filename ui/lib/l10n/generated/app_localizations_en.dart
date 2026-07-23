@@ -1593,10 +1593,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeDrawerPinnedConversations => 'Pinned conversations';
 
   @override
-  String get homeDrawerCodexSection => 'Codex';
+  String get homeDrawerCodexSection => 'Agent';
 
   @override
-  String get homeDrawerAgentSection => 'Agent';
+  String get homeDrawerAgentSection => 'OmniAi';
 
   @override
   String get homeDrawerChatOnlySection => 'Pure chat';

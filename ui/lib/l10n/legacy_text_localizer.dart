@@ -10,6 +10,7 @@ class LegacyTextLocalizer {
   static final Map<String, String> _exactEn = <String, String>{
     '宠物': 'Pet',
     '小万': 'Xiaowan',
+    '小万（OmniAi）': 'OmniAi',
     '默认的桌面悬浮窗宠物': 'Default desktop floating pet',
     '自定义宠物': 'Custom Pet',
     '已选': 'Selected',
@@ -36,11 +37,11 @@ class LegacyTextLocalizer {
     '地址': 'Address',
     'Token': 'Token',
     '防止任务运行时屏幕休眠': 'Prevent Screen Sleep During Tasks',
-    '任务运行期间保持屏幕常亮，适用于 Agent、Codex 和纯聊天':
-        'Keep the screen awake while Agent, Codex, or chat tasks run',
+    '任务运行期间保持屏幕常亮，适用于小万（OmniAi）、Agent 和纯聊天':
+        'Keep the screen awake while OmniAi, Agent, or chat tasks run',
     '任务完成通知': 'Task Completion Notifications',
-    'Agent、Codex 和纯聊天完成后推送提醒':
-        'Notify when Agent, Codex, or chat responses finish',
+    '小万（OmniAi）、Agent 和纯聊天完成后推送提醒':
+        'Notify when OmniAi, Agent, or chat responses finish',
     '需要开启通知权限': 'Notification permission is required',
     '未生成': 'Not generated',
     '复制地址': 'Copy Address',

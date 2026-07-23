@@ -934,7 +934,9 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
           profiles: [
             ModelProviderProfileSummary(
               id: _kCodexRunSettingsProviderId,
-              name: 'Codex',
+              name: refreshedSettings.agentName.trim().isNotEmpty
+                  ? refreshedSettings.agentName.trim()
+                  : 'Agent',
               baseUrl: '',
               apiKey: '',
               customHeaders: const <String, String>{},
@@ -1220,9 +1222,11 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
   }
 
   String _codexPermissionTooltip() {
+    final agentName = widget.codexRunSettings?.agentName.trim() ?? '';
+    final displayName = agentName.isNotEmpty ? agentName : 'Agent';
     return Localizations.localeOf(context).languageCode == 'en'
-        ? 'Codex permissions'
-        : 'Codex 权限';
+        ? '$displayName permissions'
+        : '$displayName 权限';
   }
 
   String _codexPermissionLabel(CodexPermissionMode mode) {

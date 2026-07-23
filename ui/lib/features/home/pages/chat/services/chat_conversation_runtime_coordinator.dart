@@ -538,6 +538,7 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
     );
     final result = _codexEventReducer.reduce(runtime: runtime, event: event);
     if (result.handled) {
+      _annotateCodexAgentMessages(runtime, event, result);
       notifyListeners();
       if (!isEphemeralRuntime(
         conversationId: conversationId,
@@ -551,6 +552,83 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
       }
     }
     return result;
+  }
+
+  void _annotateCodexAgentMessages(
+    ChatConversationRuntimeState runtime,
+    Map<String, dynamic> event,
+    CodexReduceResult result,
+  ) {
+    String? stringValue(dynamic value) {
+      final normalized = value?.toString().trim() ?? '';
+      return normalized.isEmpty ? null : normalized;
+    }
+
+    Map<String, dynamic>? stringMap(dynamic value) {
+      if (value is Map<String, dynamic>) {
+        return value;
+      }
+      if (value is Map) {
+        return value.map((key, entry) => MapEntry(key.toString(), entry));
+      }
+      return null;
+    }
+
+    final envelope = stringMap(event['message']);
+    final params = stringMap(event['params']) ?? stringMap(envelope?['params']);
+    final agentId =
+        stringValue(event['agentId']) ??
+        stringValue(params?['agentId']) ??
+        stringValue(envelope?['agentId']);
+    if (agentId == null) {
+      return;
+    }
+    final agentName =
+        stringValue(event['agentName']) ??
+        stringValue(params?['agentName']) ??
+        stringValue(envelope?['agentName']);
+    final taskId =
+        result.turnId ??
+        stringValue(event['turnId']) ??
+        stringValue(params?['turnId']);
+
+    for (var index = 0; index < runtime.messages.length; index += 1) {
+      final message = runtime.messages[index];
+      if (message.agentId != null) {
+        continue;
+      }
+      final cardData = message.cardData;
+      final isAcpMessage =
+          message.id.contains('-codex-') ||
+          (cardData?['uiStyle'] ?? '').toString() == 'codex_tool' ||
+          (cardData?['type'] ?? '').toString() == 'codex_request';
+      if (!isAcpMessage) {
+        continue;
+      }
+      final parentTaskId = stringValue(
+        message.streamMeta?['parentTaskId'] ??
+            cardData?['taskId'] ??
+            cardData?['taskID'],
+      );
+      if (taskId != null && parentTaskId != null && parentTaskId != taskId) {
+        continue;
+      }
+      final content = Map<String, dynamic>.from(
+        message.content ?? const <String, dynamic>{},
+      );
+      content['agentId'] = agentId;
+      if (agentName != null) {
+        content['agentName'] = agentName;
+      }
+      if (cardData != null) {
+        content['cardData'] = <String, dynamic>{
+          ...cardData,
+          'agentId': agentId,
+          if (agentName != null) 'agentName': agentName,
+        };
+      }
+      runtime.messages[index] = message.copyWith(content: content);
+    }
   }
 
   void clearPureChatThinking({

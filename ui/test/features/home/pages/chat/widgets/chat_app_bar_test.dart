@@ -9,6 +9,7 @@ import 'package:ui/features/home/pages/chat/widgets/chat_widgets.dart';
 import 'package:ui/services/app_background_service.dart';
 import 'package:ui/theme/omni_theme_palette.dart';
 import 'package:ui/theme/theme_context.dart';
+import 'package:ui/widgets/agent_brand_icon.dart';
 import 'package:ui/widgets/omni_glass.dart';
 
 class _SvgTestAssetBundle extends CachingAssetBundle {
@@ -646,7 +647,7 @@ void main() {
     expect(find.text('toggles:0'), findsOneWidget);
   });
 
-  testWidgets('opens mode menu with agent codex and pure chat actions', (
+  testWidgets('opens mode menu with OmniAi ACP Agent and pure chat actions', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -662,11 +663,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('chat-app-bar-mode-menu-agent')),
+      find.byKey(const ValueKey('chat-app-bar-mode-menu-omni-ai')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('chat-app-bar-mode-menu-codex')),
+      find.byKey(const ValueKey('chat-app-bar-mode-menu-acp-codex-acp')),
       findsOneWidget,
     );
     expect(
@@ -686,7 +687,7 @@ void main() {
     expect(find.text('纯聊天模式'), findsNothing);
 
     await tester.tap(
-      find.byKey(const ValueKey('chat-app-bar-mode-menu-agent')),
+      find.byKey(const ValueKey('chat-app-bar-mode-menu-omni-ai')),
     );
     await tester.pumpAndSettle();
 
@@ -697,7 +698,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.tap(
-      find.byKey(const ValueKey('chat-app-bar-mode-menu-codex')),
+      find.byKey(const ValueKey('chat-app-bar-mode-menu-acp-codex-acp')),
     );
     await tester.pumpAndSettle();
 
@@ -714,6 +715,132 @@ void main() {
 
     expect(find.text('selected:true'), findsOneWidget);
     expect(find.text('toggles:1'), findsOneWidget);
+  });
+
+  testWidgets('shows every ACP Agent with its brand icon and selects it', (
+    tester,
+  ) async {
+    String? selectedAgentId;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DefaultAssetBundle(
+          bundle: _SvgTestAssetBundle(),
+          child: Scaffold(
+            body: ChatAppBar(
+              onMenuTap: () {},
+              onAgentTap: () {},
+              onPureChatToggleTap: () {},
+              onAcpAgentTap: (agentId) {
+                selectedAgentId = agentId;
+              },
+              acpAgentModes: const <ChatAcpAgentModeOption>[
+                ChatAcpAgentModeOption(id: 'codex-acp', name: 'Codex'),
+                ChatAcpAgentModeOption(
+                  id: 'claude-code-acp',
+                  name: 'Claude Code',
+                ),
+                ChatAcpAgentModeOption(id: 'opencode-acp', name: 'OpenCode'),
+                ChatAcpAgentModeOption(
+                  id: 'codex-remote',
+                  name: 'Codex Remote',
+                ),
+              ],
+              activeAcpAgentId: 'codex-acp',
+              activeMode: ChatSurfaceMode.normal,
+              onModeChanged: (_) {},
+              onDisplayLayerChanged: (_) {},
+              onTerminalEnvironmentTap: (_) {},
+              onTerminalTap: () {},
+              onBrowserTap: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('chat-app-bar-pure-chat-button')),
+    );
+    await tester.pumpAndSettle();
+
+    for (final agentId in const <String>[
+      'codex-acp',
+      'claude-code-acp',
+      'opencode-acp',
+      'codex-remote',
+    ]) {
+      final row = find.byKey(ValueKey('chat-app-bar-mode-menu-acp-$agentId'));
+      expect(row, findsOneWidget);
+      final icon = tester.widget<AgentBrandIcon>(
+        find.descendant(of: row, matching: find.byType(AgentBrandIcon)),
+      );
+      expect(icon.agentId, agentId);
+    }
+
+    await tester.tap(
+      find.byKey(const ValueKey('chat-app-bar-mode-menu-acp-claude-code-acp')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(selectedAgentId, 'claude-code-acp');
+  });
+
+  testWidgets('keeps a long ACP Agent list scrollable and selectable', (
+    tester,
+  ) async {
+    _setTestViewport(tester, const Size(390, 640));
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    String? selectedAgentId;
+    final agents = List<ChatAcpAgentModeOption>.generate(
+      14,
+      (index) => ChatAcpAgentModeOption(
+        id: 'custom-agent-$index',
+        name: 'Custom Agent $index',
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatAppBar(
+            onMenuTap: () {},
+            onAgentTap: () {},
+            onPureChatToggleTap: () {},
+            onAcpAgentTap: (agentId) {
+              selectedAgentId = agentId;
+            },
+            acpAgentModes: agents,
+            activeAcpAgentId: agents.first.id,
+            activeMode: ChatSurfaceMode.normal,
+            onModeChanged: (_) {},
+            onDisplayLayerChanged: (_) {},
+            onTerminalEnvironmentTap: (_) {},
+            onTerminalTap: () {},
+            onBrowserTap: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('chat-app-bar-pure-chat-button')),
+    );
+    await tester.pumpAndSettle();
+
+    final lastAgent = find.byKey(
+      const ValueKey('chat-app-bar-mode-menu-acp-custom-agent-13'),
+    );
+    expect(lastAgent, findsOneWidget);
+    expect(find.byType(SingleChildScrollView), findsOneWidget);
+    await tester.ensureVisible(lastAgent);
+    await tester.pumpAndSettle();
+    await tester.tap(lastAgent);
+    await tester.pumpAndSettle();
+
+    expect(selectedAgentId, 'custom-agent-13');
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
@@ -741,13 +868,15 @@ void main() {
       );
       final selectedAgentIcon = tester.widget<SvgPicture>(
         find.descendant(
-          of: find.byKey(const ValueKey('chat-app-bar-mode-menu-agent')),
+          of: find.byKey(const ValueKey('chat-app-bar-mode-menu-omni-ai')),
           matching: find.byType(SvgPicture),
         ),
       );
       final unselectedCodexIcon = tester.widget<SvgPicture>(
         find.descendant(
-          of: find.byKey(const ValueKey('chat-app-bar-mode-menu-codex')),
+          of: find.byKey(
+            const ValueKey('chat-app-bar-mode-menu-acp-codex-acp'),
+          ),
           matching: find.byType(SvgPicture),
         ),
       );
@@ -826,7 +955,11 @@ void main() {
 
     expect(capsule, findsOneWidget);
     expect(find.descendant(of: capsule, matching: closeButton), findsOneWidget);
-    for (final action in const <String>['agent', 'codex', 'pure-chat']) {
+    for (final action in const <String>[
+      'omni-ai',
+      'acp-codex-acp',
+      'pure-chat',
+    ]) {
       expect(
         find.descendant(
           of: capsule,
@@ -953,7 +1086,7 @@ void main() {
     await tester.tap(modeMenu);
     await tester.pumpAndSettle();
     await tester.tap(
-      find.byKey(const ValueKey('chat-app-bar-mode-menu-codex')),
+      find.byKey(const ValueKey('chat-app-bar-mode-menu-acp-codex-acp')),
     );
     await tester.pumpAndSettle();
 
@@ -1059,21 +1192,24 @@ void main() {
       await tester.pump();
     }
 
-    String primaryIconAsset() {
-      final icon = tester.widget<SvgPicture>(
+    String primaryIconIdentity() {
+      final widget = tester.widget(
         find.byKey(const ValueKey('chat-mode-slider-primary-icon')),
       );
-      return icon.bytesLoader.toString();
+      if (widget is AgentBrandIcon) {
+        return 'agent:${widget.agentId}';
+      }
+      return (widget as SvgPicture).bytesLoader.toString();
     }
 
     await pumpAppBar(isAgentSelected: true);
-    expect(primaryIconAsset(), contains('assets/home/chat/agent.svg'));
+    expect(primaryIconIdentity(), contains('assets/home/chat/agent.svg'));
 
     await pumpAppBar(isCodexSelected: true);
-    expect(primaryIconAsset(), contains('assets/home/chat/codex.svg'));
+    expect(primaryIconIdentity(), 'agent:codex-acp');
 
     await pumpAppBar(isPureChatSelected: true);
-    expect(primaryIconAsset(), contains('assets/home/chat/pure_chat.svg'));
+    expect(primaryIconIdentity(), contains('assets/home/chat/pure_chat.svg'));
   });
 
   testWidgets('switches island directly between mode and tools layers', (

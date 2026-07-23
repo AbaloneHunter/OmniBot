@@ -7,6 +7,7 @@ import 'package:ui/l10n/legacy_text_localizer.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:ui/services/home_greeting_settings_service.dart';
 import 'package:ui/theme/theme_context.dart';
+import 'package:ui/widgets/agent_brand_icon.dart';
 import 'package:ui/widgets/glass_popup.dart';
 import 'package:ui/widgets/omni_glass.dart';
 import '../../../../../models/chat_message_model.dart';
@@ -22,7 +23,6 @@ import 'chat_empty_greeting.dart';
 const String _kChatAppBarUpdateSparklesAsset =
     'assets/home/chat/update_sparkles.svg';
 const String _kChatAppBarAgentIconAsset = 'assets/home/chat/agent.svg';
-const String _kChatAppBarCodexIconAsset = 'assets/home/chat/codex.svg';
 const String _kChatAppBarModeMenuClosedIconAsset =
     'assets/home/chat/mode_menu_closed.svg';
 const String _kChatAppBarModeMenuOpenIconAsset =
@@ -46,6 +46,13 @@ const Duration _kChatAppBarModeMenuCloseDuration = Duration(milliseconds: 180);
 
 enum ChatSurfaceMode { workspace, normal, openclaw }
 
+class ChatAcpAgentModeOption {
+  const ChatAcpAgentModeOption({required this.id, required this.name});
+
+  final String id;
+  final String name;
+}
+
 const List<ChatSurfaceMode> kVisibleChatSurfaceModes = <ChatSurfaceMode>[
   ChatSurfaceMode.normal,
   ChatSurfaceMode.workspace,
@@ -60,6 +67,7 @@ class ChatAppBar extends StatelessWidget {
   final VoidCallback? onAgentTap;
   final VoidCallback? onPureChatToggleTap;
   final VoidCallback? onCodexTap;
+  final ValueChanged<String>? onAcpAgentTap;
   final VoidCallback? onPrimaryModeTap;
   final ChatSurfaceMode activeMode;
   final ValueChanged<ChatSurfaceMode> onModeChanged;
@@ -76,6 +84,8 @@ class ChatAppBar extends StatelessWidget {
   final bool isCodexLoading;
   final bool isCodexSelected;
   final bool isAgentSelected;
+  final List<ChatAcpAgentModeOption> acpAgentModes;
+  final String? activeAcpAgentId;
   final bool showAppUpdateIndicator;
   final VoidCallback? onAppUpdateTap;
   final String? appUpdateTooltip;
@@ -100,6 +110,7 @@ class ChatAppBar extends StatelessWidget {
     this.onAgentTap,
     this.onPureChatToggleTap,
     this.onCodexTap,
+    this.onAcpAgentTap,
     this.onPrimaryModeTap,
     required this.activeMode,
     required this.onModeChanged,
@@ -116,6 +127,8 @@ class ChatAppBar extends StatelessWidget {
     this.isCodexLoading = false,
     this.isCodexSelected = false,
     this.isAgentSelected = true,
+    this.acpAgentModes = const <ChatAcpAgentModeOption>[],
+    this.activeAcpAgentId,
     this.showAppUpdateIndicator = false,
     this.onAppUpdateTap,
     this.appUpdateTooltip,
@@ -141,10 +154,15 @@ class ChatAppBar extends StatelessWidget {
         ? palette.textPrimary
         : Colors.grey[800]!;
     final primaryModeIconAsset = isCodexSelected
-        ? _kChatAppBarCodexIconAsset
+        ? null
         : isPureChatSelected
         ? _kChatAppBarPureChatIconAsset
         : _kChatAppBarAgentIconAsset;
+    final primaryModeAgentId = isCodexSelected
+        ? (activeAcpAgentId?.trim().isNotEmpty == true
+              ? activeAcpAgentId!.trim()
+              : 'codex-acp')
+        : null;
     const updateTint = Color(0xFFD4A017);
     final showWorkspaceButton =
         showWorkspacePaneButton && onWorkspacePaneTap != null;
@@ -276,6 +294,7 @@ class ChatAppBar extends StatelessWidget {
                         visualProfile: visualProfile,
                         showSurfaceLayer: showSurfaceSwitcher,
                         primaryModeIconAsset: primaryModeIconAsset,
+                        primaryModeAgentId: primaryModeAgentId,
                         onPrimaryModeTap: onPrimaryModeTap,
                       ),
                     ),
@@ -344,10 +363,13 @@ class ChatAppBar extends StatelessWidget {
                               isCodexLoading: isCodexLoading,
                               isCodexSelected: isCodexSelected,
                               isAgentSelected: isAgentSelected,
+                              acpAgentModes: acpAgentModes,
+                              activeAcpAgentId: activeAcpAgentId,
                               isPureChatSelected: isPureChatSelected,
                               isPureChatToggleLocked: isPureChatToggleLocked,
                               onAgentTap: onAgentTap,
                               onCodexTap: onCodexTap,
+                              onAcpAgentTap: onAcpAgentTap,
                               onPureChatToggleTap: onPureChatToggleTap,
                             ),
                           ),
@@ -365,7 +387,27 @@ class ChatAppBar extends StatelessWidget {
   }
 }
 
-enum _ChatAppBarModeShortcutAction { agent, codex, pureChat }
+enum _ChatAppBarModeShortcutKind { omniAi, acpAgent, pureChat }
+
+class _ChatAppBarModeShortcutAction {
+  const _ChatAppBarModeShortcutAction._(this.kind, [this.agentId]);
+
+  static const omniAi = _ChatAppBarModeShortcutAction._(
+    _ChatAppBarModeShortcutKind.omniAi,
+  );
+  static const pureChat = _ChatAppBarModeShortcutAction._(
+    _ChatAppBarModeShortcutKind.pureChat,
+  );
+
+  factory _ChatAppBarModeShortcutAction.acpAgent(String agentId) =>
+      _ChatAppBarModeShortcutAction._(
+        _ChatAppBarModeShortcutKind.acpAgent,
+        agentId,
+      );
+
+  final _ChatAppBarModeShortcutKind kind;
+  final String? agentId;
+}
 
 class _ChatAppBarPetButton extends StatelessWidget {
   const _ChatAppBarPetButton({
@@ -508,10 +550,13 @@ class _ChatAppBarModeShortcutButton extends StatefulWidget {
     required this.isCodexLoading,
     required this.isCodexSelected,
     required this.isAgentSelected,
+    required this.acpAgentModes,
+    required this.activeAcpAgentId,
     required this.isPureChatSelected,
     required this.isPureChatToggleLocked,
     required this.onAgentTap,
     required this.onCodexTap,
+    required this.onAcpAgentTap,
     required this.onPureChatToggleTap,
   });
 
@@ -519,10 +564,13 @@ class _ChatAppBarModeShortcutButton extends StatefulWidget {
   final bool isCodexLoading;
   final bool isCodexSelected;
   final bool isAgentSelected;
+  final List<ChatAcpAgentModeOption> acpAgentModes;
+  final String? activeAcpAgentId;
   final bool isPureChatSelected;
   final bool isPureChatToggleLocked;
   final VoidCallback? onAgentTap;
   final VoidCallback? onCodexTap;
+  final ValueChanged<String>? onAcpAgentTap;
   final VoidCallback? onPureChatToggleTap;
 
   @override
@@ -549,6 +597,13 @@ class _ChatAppBarModeShortcutButtonState
     final canSelectPureChat =
         widget.isCodexSelected ||
         (!widget.isPureChatToggleLocked && widget.onPureChatToggleTap != null);
+    final acpAgentModes = widget.acpAgentModes.isNotEmpty
+        ? widget.acpAgentModes
+        : widget.onCodexTap != null
+        ? const <ChatAcpAgentModeOption>[
+            ChatAcpAgentModeOption(id: 'codex-acp', name: 'Codex'),
+          ]
+        : const <ChatAcpAgentModeOption>[];
     final popupAnchor = Rect.fromLTWH(anchor.left, anchor.top, anchor.width, 0);
 
     final action = await showGlassPopup<_ChatAppBarModeShortcutAction>(
@@ -566,21 +621,25 @@ class _ChatAppBarModeShortcutButtonState
         headerIcon: _buildOpenIcon(selectedColor),
         items: [
           _ChatAppBarModeShortcutMenuItemData(
-            action: _ChatAppBarModeShortcutAction.agent,
+            action: _ChatAppBarModeShortcutAction.omniAi,
             iconAsset: _kChatAppBarAgentIconAsset,
-            tooltip: isEnglish ? 'Agent mode' : 'Agent 模式',
+            tooltip: isEnglish ? 'OmniAi' : '小万（OmniAi）',
             selected: widget.isAgentSelected,
             enabled: widget.onAgentTap != null,
             iconSize: 20,
           ),
-          _ChatAppBarModeShortcutMenuItemData(
-            action: _ChatAppBarModeShortcutAction.codex,
-            iconAsset: _kChatAppBarCodexIconAsset,
-            tooltip: isEnglish ? 'Codex mode' : 'Codex 模式',
-            selected: widget.isCodexSelected,
-            enabled: !widget.isCodexLoading && widget.onCodexTap != null,
-            iconSize: 20,
-          ),
+          for (final agent in acpAgentModes)
+            _ChatAppBarModeShortcutMenuItemData(
+              action: _ChatAppBarModeShortcutAction.acpAgent(agent.id),
+              agentId: agent.id,
+              tooltip: agent.name,
+              selected:
+                  widget.isCodexSelected && agent.id == widget.activeAcpAgentId,
+              enabled:
+                  !widget.isCodexLoading &&
+                  (widget.onAcpAgentTap != null || widget.onCodexTap != null),
+              iconSize: 20,
+            ),
           _ChatAppBarModeShortcutMenuItemData(
             action: _ChatAppBarModeShortcutAction.pureChat,
             iconAsset: _kChatAppBarPureChatIconAsset,
@@ -600,14 +659,19 @@ class _ChatAppBarModeShortcutButtonState
     if (mounted) {
       setState(() => _isOpen = false);
     }
-    switch (action) {
-      case _ChatAppBarModeShortcutAction.agent:
+    switch (action?.kind) {
+      case _ChatAppBarModeShortcutKind.omniAi:
         widget.onAgentTap?.call();
         break;
-      case _ChatAppBarModeShortcutAction.codex:
-        widget.onCodexTap?.call();
+      case _ChatAppBarModeShortcutKind.acpAgent:
+        final agentId = action?.agentId?.trim() ?? '';
+        if (agentId.isNotEmpty && widget.onAcpAgentTap != null) {
+          widget.onAcpAgentTap!(agentId);
+        } else {
+          widget.onCodexTap?.call();
+        }
         break;
-      case _ChatAppBarModeShortcutAction.pureChat:
+      case _ChatAppBarModeShortcutKind.pureChat:
         widget.onPureChatToggleTap?.call();
         break;
       case null:
@@ -616,9 +680,6 @@ class _ChatAppBarModeShortcutButtonState
   }
 
   String _closedIconAsset() {
-    if (widget.isCodexSelected) {
-      return _kChatAppBarCodexIconAsset;
-    }
     if (widget.isPureChatSelected) {
       return _kChatAppBarPureChatIconAsset;
     }
@@ -639,7 +700,17 @@ class _ChatAppBarModeShortcutButtonState
         ),
       );
     }
-    final iconSize = widget.isCodexSelected ? 22.0 : 20.0;
+    if (widget.isCodexSelected) {
+      return AgentBrandIcon(
+        key: ValueKey(
+          'chat-app-bar-active-agent-icon-${widget.activeAcpAgentId ?? 'codex-acp'}',
+        ),
+        agentId: widget.activeAcpAgentId ?? 'codex-acp',
+        size: 22,
+        tint: color,
+      );
+    }
+    const iconSize = 20.0;
     return SvgPicture.asset(
       _closedIconAsset(),
       width: iconSize,
@@ -696,7 +767,8 @@ class _ChatAppBarModeShortcutButtonState
 class _ChatAppBarModeShortcutMenuItemData {
   const _ChatAppBarModeShortcutMenuItemData({
     required this.action,
-    required this.iconAsset,
+    this.iconAsset,
+    this.agentId,
     required this.tooltip,
     required this.selected,
     required this.enabled,
@@ -704,7 +776,8 @@ class _ChatAppBarModeShortcutMenuItemData {
   });
 
   final _ChatAppBarModeShortcutAction action;
-  final String iconAsset;
+  final String? iconAsset;
+  final String? agentId;
   final String tooltip;
   final bool selected;
   final bool enabled;
@@ -733,47 +806,67 @@ class _ChatAppBarModeShortcutMenuContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
+    final mediaQuery = MediaQuery.of(context);
+    final maxHeight =
+        mediaQuery.size.height -
+        mediaQuery.padding.vertical -
+        mediaQuery.viewInsets.vertical -
+        16;
     return SizedBox(
       width: width,
-      child: OmniGlassPanel(
-        key: const ValueKey('chat-app-bar-mode-menu-capsule'),
-        borderRadius: BorderRadius.circular(width / 2),
-        // 40px 宽、20px 顶部圆角时，top: 0 的 1px 高光会被圆弧裁成
-        // 顶部中央的一颗亮点；此处关闭局部高光，保留完整边框与阴影。
-        showTopHighlight: false,
-        surfaceColor: palette.surfaceElevated,
-        child: Material(
-          color: Colors.transparent,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Tooltip(
-                message: closeTooltip,
-                child: InkWell(
-                  key: const ValueKey('chat-app-bar-mode-menu-close'),
-                  onTap: () => Navigator.of(context).pop(),
-                  borderRadius: BorderRadius.vertical(
-                    top: Radius.circular(width / 2),
-                  ),
-                  child: SizedBox(
-                    height: _kChatAppBarAccessoryButtonSize,
-                    child: Center(child: headerIcon),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: maxHeight.clamp(120.0, 720.0).toDouble(),
+        ),
+        child: OmniGlassPanel(
+          key: const ValueKey('chat-app-bar-mode-menu-capsule'),
+          borderRadius: BorderRadius.circular(width / 2),
+          // 40px 宽、20px 顶部圆角时，top: 0 的 1px 高光会被圆弧裁成
+          // 顶部中央的一颗亮点；此处关闭局部高光，保留完整边框与阴影。
+          showTopHighlight: false,
+          surfaceColor: palette.surfaceElevated,
+          child: Material(
+            color: Colors.transparent,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Tooltip(
+                  message: closeTooltip,
+                  child: InkWell(
+                    key: const ValueKey('chat-app-bar-mode-menu-close'),
+                    onTap: () => Navigator.of(context).pop(),
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(width / 2),
+                    ),
+                    child: SizedBox(
+                      height: _kChatAppBarAccessoryButtonSize,
+                      child: Center(child: headerIcon),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 6),
-              for (final item in items)
-                _ChatAppBarModeShortcutMenuRow(
-                  key: ValueKey(
-                    'chat-app-bar-mode-menu-${_chatModeShortcutActionSlug(item.action)}',
+                const SizedBox(height: 6),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final item in items)
+                          _ChatAppBarModeShortcutMenuRow(
+                            key: ValueKey(
+                              'chat-app-bar-mode-menu-${_chatModeShortcutActionSlug(item.action)}',
+                            ),
+                            item: item,
+                            selectedColor: selectedColor,
+                            iconTint: iconTint,
+                            disabledTint: disabledTint,
+                          ),
+                      ],
+                    ),
                   ),
-                  item: item,
-                  selectedColor: selectedColor,
-                  iconTint: iconTint,
-                  disabledTint: disabledTint,
                 ),
-              const SizedBox(height: 6),
-            ],
+                const SizedBox(height: 6),
+              ],
+            ),
           ),
         ),
       ),
@@ -782,10 +875,10 @@ class _ChatAppBarModeShortcutMenuContent extends StatelessWidget {
 }
 
 String _chatModeShortcutActionSlug(_ChatAppBarModeShortcutAction action) {
-  return switch (action) {
-    _ChatAppBarModeShortcutAction.agent => 'agent',
-    _ChatAppBarModeShortcutAction.codex => 'codex',
-    _ChatAppBarModeShortcutAction.pureChat => 'pure-chat',
+  return switch (action.kind) {
+    _ChatAppBarModeShortcutKind.omniAi => 'omni-ai',
+    _ChatAppBarModeShortcutKind.acpAgent => 'acp-${action.agentId ?? 'agent'}',
+    _ChatAppBarModeShortcutKind.pureChat => 'pure-chat',
   };
 }
 
@@ -818,12 +911,18 @@ class _ChatAppBarModeShortcutMenuRow extends StatelessWidget {
         child: SizedBox(
           height: 40,
           child: Center(
-            child: SvgPicture.asset(
-              item.iconAsset,
-              width: item.iconSize,
-              height: item.iconSize,
-              colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-            ),
+            child: item.agentId?.trim().isNotEmpty == true
+                ? AgentBrandIcon(
+                    agentId: item.agentId!,
+                    size: item.iconSize,
+                    tint: color,
+                  )
+                : SvgPicture.asset(
+                    item.iconAsset!,
+                    width: item.iconSize,
+                    height: item.iconSize,
+                    colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+                  ),
           ),
         ),
       ),
@@ -847,6 +946,7 @@ class _ChatIslandSwitcher extends StatefulWidget {
     this.visualProfile = AppBackgroundVisualProfile.defaultProfile,
     this.showSurfaceLayer = true,
     required this.primaryModeIconAsset,
+    this.primaryModeAgentId,
     this.onPrimaryModeTap,
   });
 
@@ -863,7 +963,8 @@ class _ChatIslandSwitcher extends StatefulWidget {
   final bool translucent;
   final AppBackgroundVisualProfile visualProfile;
   final bool showSurfaceLayer;
-  final String primaryModeIconAsset;
+  final String? primaryModeIconAsset;
+  final String? primaryModeAgentId;
   final VoidCallback? onPrimaryModeTap;
 
   @override
@@ -961,10 +1062,12 @@ class _ChatIslandSwitcherState extends State<_ChatIslandSwitcher> {
             onChanged: widget.onModeChanged,
             visualProfile: widget.visualProfile,
             primaryIconAsset: widget.primaryModeIconAsset,
+            primaryAgentId: widget.primaryModeAgentId,
             onPrimaryModeTap: widget.onPrimaryModeTap,
           )
         : _ChatSingleModePill(
             iconAsset: widget.primaryModeIconAsset,
+            agentId: widget.primaryModeAgentId,
             onTap: widget.onPrimaryModeTap,
           );
     final currentOrder = _layerOrder(_effectiveDisplayLayer);
@@ -1227,9 +1330,14 @@ class _ChatToolSlider extends StatelessWidget {
 }
 
 class _ChatSingleModePill extends StatelessWidget {
-  const _ChatSingleModePill({required this.iconAsset, this.onTap});
+  const _ChatSingleModePill({
+    required this.iconAsset,
+    this.agentId,
+    this.onTap,
+  });
 
-  final String iconAsset;
+  final String? iconAsset;
+  final String? agentId;
   final VoidCallback? onTap;
 
   @override
@@ -1257,16 +1365,23 @@ class _ChatSingleModePill extends StatelessWidget {
             borderRadius: BorderRadius.circular(999),
           ),
           child: Center(
-            child: SvgPicture.asset(
-              iconAsset,
-              key: const ValueKey('chat-island-single-mode-icon'),
-              width: 16,
-              height: 16,
-              colorFilter: ColorFilter.mode(
-                Theme.of(context).colorScheme.onPrimary,
-                BlendMode.srcIn,
-              ),
-            ),
+            child: agentId?.trim().isNotEmpty == true
+                ? AgentBrandIcon(
+                    key: const ValueKey('chat-island-single-mode-icon'),
+                    agentId: agentId!,
+                    size: 16,
+                    tint: Theme.of(context).colorScheme.onPrimary,
+                  )
+                : SvgPicture.asset(
+                    iconAsset!,
+                    key: const ValueKey('chat-island-single-mode-icon'),
+                    width: 16,
+                    height: 16,
+                    colorFilter: ColorFilter.mode(
+                      Theme.of(context).colorScheme.onPrimary,
+                      BlendMode.srcIn,
+                    ),
+                  ),
           ),
         ),
       ),
@@ -1278,7 +1393,8 @@ class ChatModeSlider extends StatefulWidget {
   final ChatSurfaceMode activeMode;
   final ValueChanged<ChatSurfaceMode> onChanged;
   final AppBackgroundVisualProfile visualProfile;
-  final String primaryIconAsset;
+  final String? primaryIconAsset;
+  final String? primaryAgentId;
   final VoidCallback? onPrimaryModeTap;
 
   const ChatModeSlider({
@@ -1287,6 +1403,7 @@ class ChatModeSlider extends StatefulWidget {
     required this.onChanged,
     this.visualProfile = AppBackgroundVisualProfile.defaultProfile,
     this.primaryIconAsset = _kChatAppBarAgentIconAsset,
+    this.primaryAgentId,
     this.onPrimaryModeTap,
   });
 
@@ -1388,12 +1505,22 @@ class _ChatModeSliderState extends State<ChatModeSlider> {
                 Expanded(
                   child: _buildModeIcon(
                     isSelected: widget.activeMode == ChatSurfaceMode.normal,
-                    child: SvgPicture.asset(
-                      widget.primaryIconAsset,
-                      key: const ValueKey('chat-mode-slider-primary-icon'),
-                      width: 16,
-                      height: 16,
-                    ),
+                    child: widget.primaryAgentId?.trim().isNotEmpty == true
+                        ? AgentBrandIcon(
+                            key: const ValueKey(
+                              'chat-mode-slider-primary-icon',
+                            ),
+                            agentId: widget.primaryAgentId!,
+                            size: 16,
+                          )
+                        : SvgPicture.asset(
+                            widget.primaryIconAsset!,
+                            key: const ValueKey(
+                              'chat-mode-slider-primary-icon',
+                            ),
+                            width: 16,
+                            height: 16,
+                          ),
                   ),
                 ),
                 Expanded(

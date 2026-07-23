@@ -11,7 +11,8 @@ const String _kAgentConversationSectionKey = '__home_drawer_agent__';
 const String _kChatOnlyConversationSectionKey = '__home_drawer_chat_only__';
 const String _kAgentDateSectionNamespace = 'agent';
 const String _kChatOnlyDateSectionNamespace = 'chat_only';
-const String _kCodexSectionIconAssetPath = 'assets/home/chat/codex.svg';
+const String _kCodexSectionIconAssetPath =
+    'assets/home/chat/mode_menu_closed.svg';
 const String _kAgentSectionIconAssetPath = 'assets/home/chat/agent.svg';
 const String _kChatOnlySectionIconAssetPath = 'assets/home/chat/pure_chat.svg';
 const String _kCodexProjectIconAssetPath =

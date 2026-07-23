@@ -708,6 +708,60 @@ void main() {
     );
   });
 
+  test('records the active ACP Agent on text and tool messages', () {
+    const conversationId = 2002;
+    coordinator.ensureRuntime(
+      conversationId: conversationId,
+      mode: kChatRuntimeModeCodex,
+    );
+
+    coordinator.applyCodexEvent(
+      conversationId: conversationId,
+      event: {
+        'agentId': 'claude-code-acp',
+        'agentName': 'Claude Code',
+        'message': {
+          'method': 'item/agentMessage/delta',
+          'params': {'turnId': 'turn-claude', 'delta': 'Claude reply'},
+        },
+      },
+    );
+    coordinator.applyCodexEvent(
+      conversationId: conversationId,
+      event: {
+        'agentId': 'claude-code-acp',
+        'agentName': 'Claude Code',
+        'message': {
+          'method': 'item/started',
+          'params': {
+            'turnId': 'turn-claude',
+            'item': {
+              'id': 'tool-1',
+              'type': 'commandExecution',
+              'command': 'pwd',
+              'status': 'running',
+            },
+          },
+        },
+      },
+    );
+
+    final runtime = coordinator.runtimeFor(
+      conversationId: conversationId,
+      mode: kChatRuntimeModeCodex,
+    )!;
+    final assistant = runtime.messages.singleWhere(
+      (message) => message.user == 2,
+    );
+    final tool = runtime.messages.singleWhere(
+      (message) => message.cardData?['type'] == 'agent_tool_summary',
+    );
+    expect(assistant.agentId, 'claude-code-acp');
+    expect(assistant.agentName, 'Claude Code');
+    expect(tool.agentId, 'claude-code-acp');
+    expect(tool.agentName, 'Claude Code');
+  });
+
   test('replaces divergent agent snapshots instead of concatenating', () async {
     const conversationId = 1003;
     const taskId = 'agent-task-divergent-snapshot';

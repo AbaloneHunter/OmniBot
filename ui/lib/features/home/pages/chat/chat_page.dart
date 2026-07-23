@@ -99,6 +99,8 @@ enum ChatPageMode { normal, openclaw, codex }
 
 enum _SlashCommandPanelRoute { root, effort, codexModel }
 
+const String _kRemoteCodexModeAgentId = 'codex-remote';
+
 class ChatPage extends StatefulWidget {
   final ConversationThreadTarget? threadTarget;
 
@@ -447,6 +449,51 @@ abstract class _ChatPageStateBase extends State<ChatPage>
       GlobalKey<CodexRemoteWorkspaceBrowserState>();
 
   ChatPageMode get _activeMode => _activeConversationMode;
+
+  String? get _activeAcpAgentId {
+    if (_codexStatus.runtime == 'remote' || _codexStatus.remoteEnabled) {
+      return _kRemoteCodexModeAgentId;
+    }
+    final activeId =
+        _codexStatus.activeAgentId ?? _codexAgentCatalog?.selectedAgentId;
+    return activeId?.trim().isNotEmpty == true ? activeId!.trim() : null;
+  }
+
+  String get _activeAcpAgentDisplayName {
+    if (_codexStatus.runtime == 'remote' || _codexStatus.remoteEnabled) {
+      return 'Codex';
+    }
+    final name =
+        _codexStatus.activeAgentName ?? _codexAgentCatalog?.selectedAgent?.name;
+    return name?.trim().isNotEmpty == true ? name!.trim() : 'Agent';
+  }
+
+  List<ChatAcpAgentModeOption> get _chatAcpAgentModeOptions {
+    final profiles = _codexAgentCatalog?.agents ?? const <AcpAgentProfile>[];
+    final options = <ChatAcpAgentModeOption>[
+      for (final profile in profiles)
+        if (profile.enabled)
+          ChatAcpAgentModeOption(id: profile.id, name: profile.name),
+      if (_codexStatus.remoteConfigured)
+        const ChatAcpAgentModeOption(
+          id: _kRemoteCodexModeAgentId,
+          name: 'Codex Remote',
+        ),
+    ];
+    final activeId = _activeAcpAgentId;
+    if (options.isEmpty && activeId != null) {
+      options.add(
+        ChatAcpAgentModeOption(
+          id: activeId,
+          name: _codexStatus.activeAgentName?.trim().isNotEmpty == true
+              ? _codexStatus.activeAgentName!.trim()
+              : 'ACP Agent',
+        ),
+      );
+    }
+    return options;
+  }
+
   ConversationMode _conversationModeForPageMode(ChatPageMode mode) {
     if (mode == ChatPageMode.codex) {
       return ConversationMode.codex;
@@ -1649,7 +1696,9 @@ abstract class _ChatPageStateBase extends State<ChatPage>
 
   Future<void> _selectCodexModel(String modelId, {bool clearComposer = true});
 
-  Future<void> _selectCodexAgent(String agentId);
+  Future<bool> _selectCodexAgent(String agentId);
+
+  Future<void> _handleAcpAgentModeShortcutTap(String agentId);
 
   Future<void> _selectCodexReasoningEffort(String effort);
 

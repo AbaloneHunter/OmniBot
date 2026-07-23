@@ -44,6 +44,7 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
         _codexStatus = status;
         _isCodexStatusLoading = false;
       });
+      unawaited(_loadCodexAgentCatalog());
       if (_activeMode == ChatPageMode.codex) {
         unawaited(_loadCodexModelOptionsWhenReady());
       }
@@ -109,6 +110,41 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
     final target = _newCodexThreadTarget();
     if (!mounted) return;
     await _applyConversationThreadTarget(target);
+  }
+
+  @override
+  Future<void> _handleAcpAgentModeShortcutTap(String agentId) async {
+    final normalized = agentId.trim();
+    if (normalized.isEmpty || _isCodexStatusLoading) {
+      return;
+    }
+    final isRemoteActive =
+        _codexStatus.runtime == 'remote' || _codexStatus.remoteEnabled;
+    final selectsRemote = normalized == _kRemoteCodexModeAgentId;
+    final isCurrentAgent =
+        (isRemoteActive && selectsRemote) ||
+        (!isRemoteActive &&
+            !selectsRemote &&
+            normalized ==
+                (_codexStatus.activeAgentId ??
+                    _codexAgentCatalog?.selectedAgentId));
+    if (_activeMode == ChatPageMode.codex && isCurrentAgent) {
+      return;
+    }
+    final selected = selectsRemote
+        ? await _selectRemoteCodexRuntime()
+        : await _selectCodexAgent(normalized);
+    if (!selected) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    if (_activeMode == ChatPageMode.codex) {
+      await _applyConversationThreadTarget(_newCodexThreadTarget());
+      return;
+    }
+    await _handleCodexTap();
   }
 
   Future<void> _leaveCodexMode() async {
@@ -530,21 +566,38 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
   }
 
   @override
-  Future<void> _selectCodexAgent(String agentId) async {
+  Future<bool> _selectCodexAgent(String agentId) async {
     final normalized = agentId.trim();
-    if (normalized.isEmpty ||
+    if (normalized.isEmpty) {
+      return false;
+    }
+    if (normalized == _kRemoteCodexModeAgentId) {
+      return _selectRemoteCodexRuntime();
+    }
+    final wasRemote =
+        _codexStatus.runtime == 'remote' || _codexStatus.remoteEnabled;
+    if (!wasRemote &&
         normalized ==
             (_codexStatus.activeAgentId ??
                 _codexAgentCatalog?.selectedAgentId)) {
-      return;
+      return true;
     }
     try {
+      if (wasRemote) {
+        final remote = await CodexAppServerService.readRemoteBridgeConfig();
+        await CodexAppServerService.writeRemoteBridgeConfig(
+          remoteEnabled: false,
+          remoteBridgeUrl: remote.remoteBridgeUrl,
+          remoteBridgeToken: remote.remoteBridgeToken,
+          remoteCwd: remote.remoteCwd,
+        );
+      }
       final catalog = await CodexAppServerService.selectAgent(normalized);
       var status = await CodexAppServerService.status();
       if (status.ready && !status.connected) {
         status = await CodexAppServerService.connect();
       }
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() {
         _codexAgentCatalog = catalog;
         _codexStatus = status;
@@ -558,14 +611,76 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
         _codexModelListRequestId++;
       });
       await _loadCodexModelOptions(force: true);
+      return true;
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted) return false;
       showToast(
         LegacyTextLocalizer.isEnglish
             ? 'Failed to switch ACP agent: $error'
             : '切换 ACP Agent 失败：$error',
         type: ToastType.error,
       );
+      return false;
+    }
+  }
+
+  Future<bool> _selectRemoteCodexRuntime() async {
+    final isRemote =
+        _codexStatus.runtime == 'remote' || _codexStatus.remoteEnabled;
+    if (isRemote) {
+      return true;
+    }
+    try {
+      final remote = await CodexAppServerService.readRemoteBridgeConfig();
+      if (!remote.remoteConfigured) {
+        if (mounted) {
+          _showSnackBar(
+            LegacyTextLocalizer.isEnglish
+                ? 'Remote Codex Bridge is not configured'
+                : '远程 Codex Bridge 尚未配置',
+          );
+          GoRouterManager.push('/home/codex_setting');
+        }
+        return false;
+      }
+      await CodexAppServerService.writeRemoteBridgeConfig(
+        remoteEnabled: true,
+        remoteBridgeUrl: remote.remoteBridgeUrl,
+        remoteBridgeToken: remote.remoteBridgeToken,
+        remoteCwd: remote.remoteCwd,
+      );
+      var status = await CodexAppServerService.status();
+      if (status.ready && !status.connected) {
+        status = await CodexAppServerService.connect();
+      }
+      if (!mounted) return false;
+      setState(() {
+        _codexStatus = status;
+        _activeCodexThreadId = null;
+        _activeCodexTurnId = null;
+        _activeCodexModelId = null;
+        _activeCodexReasoningEffort = null;
+        _activeCodexCollaborationMode = null;
+        _codexModelOptions = const <String>[];
+        _codexReasoningEffortOptions = const <String>[];
+        _codexCollaborationModes = const <String>[];
+        _codexModelListError = null;
+        _codexCollaborationModeListError = null;
+        _loadedCodexModelSourceKey = null;
+        _loadingCodexModelSourceKey = null;
+        _codexModelListRequestId++;
+      });
+      await _loadCodexModelOptions(force: true);
+      return true;
+    } catch (error) {
+      if (!mounted) return false;
+      showToast(
+        LegacyTextLocalizer.isEnglish
+            ? 'Failed to switch to Remote Codex: $error'
+            : '切换到远程 Codex 失败：$error',
+        type: ToastType.error,
+      );
+      return false;
     }
   }
 
@@ -747,8 +862,8 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
         _hideSlashCommandPanel();
         _showSnackBar(
           LegacyTextLocalizer.isEnglish
-              ? 'Unsupported Codex command'
-              : '不支持的 Codex 命令',
+              ? 'Unsupported Agent command'
+              : '不支持的 Agent 命令',
         );
         return true;
     }
@@ -775,7 +890,7 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
       status = await _refreshConnectedCodexStatus();
     } catch (error) {
       if (mounted) {
-        handleAgentError('Codex review 启动失败: $error');
+        handleAgentError('Agent review 启动失败: $error');
       }
       return;
     }
@@ -846,7 +961,7 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
       await _writeCodexCommandPreferencesForCurrentConversation();
     } catch (error) {
       if (!mounted) return;
-      handleAgentError('Codex review 启动失败: $error');
+      handleAgentError('Agent review 启动失败: $error');
     }
   }
 
@@ -1071,7 +1186,7 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
     } catch (error) {
       if (mounted) {
         _currentDispatchTaskId = aiMessageId;
-        handleAgentError('Codex 连接失败: $error');
+        handleAgentError('Agent 连接失败: $error');
       }
       return;
     }
@@ -1174,7 +1289,7 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
       await _writeCodexCommandPreferencesForCurrentConversation();
     } catch (error) {
       if (!mounted) return;
-      handleAgentError('Codex 启动失败: $error');
+      handleAgentError('$_activeAcpAgentDisplayName 启动失败: $error');
     }
   }
 
@@ -3272,6 +3387,11 @@ List<ChatMessageModel> _codexMessagesFromThreadResponse(
   String? activeTurnId,
 }) {
   final thread = _asCodexMap(response['thread']) ?? response;
+  final agentId =
+      _asCodexString(thread['agentId'] ?? response['agentId']) ?? 'codex-acp';
+  final agentName = _asCodexString(
+    thread['agentName'] ?? response['agentName'],
+  );
   final rawTurns = thread['turns'] ?? response['turns'];
   if (rawTurns is! List) {
     return const <ChatMessageModel>[];
@@ -3703,10 +3823,44 @@ List<ChatMessageModel> _codexMessagesFromThreadResponse(
   }
   final messages = chronological.reversed.toList(growable: false);
   return _normalizeCodexLoadingThinkingCards(
-    messages,
-    activeTaskId: effectiveActiveTurnId,
-    isAiResponding: active,
+        messages,
+        activeTaskId: effectiveActiveTurnId,
+        isAiResponding: active,
+      )
+      .map(
+        (message) => _withAcpAgentIdentity(
+          message,
+          agentId: agentId,
+          agentName: agentName,
+        ),
+      )
+      .toList(growable: false);
+}
+
+ChatMessageModel _withAcpAgentIdentity(
+  ChatMessageModel message, {
+  required String agentId,
+  String? agentName,
+}) {
+  if (message.user == 1 || message.agentId != null) {
+    return message;
+  }
+  final content = Map<String, dynamic>.from(
+    message.content ?? const <String, dynamic>{},
   );
+  content['agentId'] = agentId;
+  if (agentName != null) {
+    content['agentName'] = agentName;
+  }
+  final cardData = message.cardData;
+  if (cardData != null) {
+    content['cardData'] = <String, dynamic>{
+      ...cardData,
+      'agentId': agentId,
+      if (agentName != null) 'agentName': agentName,
+    };
+  }
+  return message.copyWith(content: content);
 }
 
 @visibleForTesting
@@ -4173,7 +4327,7 @@ _CodexHistoricalQuestion _codexHistoricalFirstQuestion(
             first['title'],
             first['question'],
           ]) ??
-          'Codex needs input';
+          'Agent needs input';
       final detail =
           _codexFirstText([first['description'], first['placeholder']]) ??
           title;
@@ -4192,7 +4346,7 @@ _CodexHistoricalQuestion _codexHistoricalFirstQuestion(
         params?['question'],
         params?['title'],
       ]) ??
-      'Codex needs input';
+      'Agent needs input';
   final detail =
       _codexFirstText([
         item['description'],
@@ -4213,7 +4367,7 @@ String _codexHistoricalApprovalTitle(Map<String, dynamic> item) {
   if (command != null) {
     return _truncateCodexText(command, 48);
   }
-  return 'Codex approval';
+  return 'Agent approval';
 }
 
 String _codexHistoricalApprovalDetail(Map<String, dynamic> item) {

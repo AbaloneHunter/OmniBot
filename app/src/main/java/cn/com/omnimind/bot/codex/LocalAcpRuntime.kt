@@ -633,7 +633,8 @@ internal class LocalAcpRuntime(
                     "cwd" to session.cwd,
                     "title" to session.title,
                     "updatedAt" to session.updatedAt,
-                    "agentId" to activeAgentId()
+                    "agentId" to activeAgentId(),
+                    "agentName" to activeAgentName()
                 )
             }
         } else {
@@ -645,7 +646,8 @@ internal class LocalAcpRuntime(
                     "id" to session.sessionId.value,
                     "threadId" to session.sessionId.value,
                     "cwd" to sessionCwds[session.sessionId.value],
-                    "agentId" to activeAgentId()
+                    "agentId" to activeAgentId(),
+                    "agentName" to activeAgentName()
                 )
             }
         }
@@ -1371,6 +1373,7 @@ internal class LocalAcpRuntime(
         "conversationId" to conversationId,
         "cwd" to sessionCwds[session.sessionId.value],
         "agentId" to activeAgentId(),
+        "agentName" to activeAgentName(),
         "active" to activeTurnIds.containsKey(session.sessionId.value),
         "activeTurnId" to activeTurnIds[session.sessionId.value],
         "configOptions" to sessionConfigOptions(session).map(::configOptionPayload)

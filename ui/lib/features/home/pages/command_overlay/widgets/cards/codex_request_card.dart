@@ -77,7 +77,13 @@ class _CodexRequestCardState extends State<CodexRequestCard>
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
     final kind = (widget.cardData['requestKind'] ?? '').toString();
-    final title = (widget.cardData['title'] ?? 'Codex request').toString();
+    final agentName = (widget.cardData['agentName'] ?? 'Agent')
+        .toString()
+        .trim();
+    final title =
+        (widget.cardData['title'] ??
+                '${agentName.isEmpty ? 'Agent' : agentName} request')
+            .toString();
     final detail = _requestVisibleDetail(
       title,
       (widget.cardData['detail'] ?? '').toString(),
@@ -164,6 +170,7 @@ class _CodexRequestCardState extends State<CodexRequestCard>
                 inputKey: _answerInputKey,
                 controller: _answerController,
                 focusNode: _answerFocusNode,
+                agentName: agentName.isEmpty ? 'Agent' : agentName,
                 enabled: isPending,
                 onTap: () {
                   setState(() {
@@ -526,6 +533,7 @@ class _CustomAnswerInput extends StatelessWidget {
     required this.inputKey,
     required this.controller,
     required this.focusNode,
+    required this.agentName,
     required this.enabled,
     required this.onTap,
     required this.onChanged,
@@ -534,6 +542,7 @@ class _CustomAnswerInput extends StatelessWidget {
   final Key inputKey;
   final TextEditingController controller;
   final FocusNode focusNode;
+  final String agentName;
   final bool enabled;
   final VoidCallback onTap;
   final ValueChanged<String> onChanged;
@@ -543,8 +552,8 @@ class _CustomAnswerInput extends StatelessWidget {
     final isEnglish =
         Localizations.maybeLocaleOf(context)?.languageCode == 'en';
     final hint = isEnglish
-        ? 'No, tell Codex how to adjust'
-        : '否，请告知 Codex 如何调整';
+        ? 'No, tell $agentName how to adjust'
+        : '否，请告知 $agentName 如何调整';
     final view = View.of(context);
     final viewKeyboardInset = view.viewInsets.bottom / view.devicePixelRatio;
     final mediaQueryKeyboardInset =

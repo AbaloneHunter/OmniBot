@@ -13,6 +13,7 @@ class AgentBrandIcon extends StatelessWidget {
     required this.agentId,
     this.size = 20,
     this.fallbackColor,
+    this.tint,
   });
 
   /// [AcpAgentProfile.id]（例如 `codex-acp`、`claude-code-acp`、`opencode-acp`）。
@@ -24,8 +25,12 @@ class AgentBrandIcon extends StatelessWidget {
   /// 回退图标（自定义 Agent）的着色；默认取主题主色。
   final Color? fallbackColor;
 
+  /// 可选的统一着色。菜单等需要表达选中态时使用；未提供时保留品牌色。
+  final Color? tint;
+
   static const Map<String, _AgentBrand> _brands = {
     'codex-acp': _AgentBrand('assets/agents/codex.svg'),
+    'codex-remote': _AgentBrand('assets/agents/codex.svg'),
     'claude-code-acp': _AgentBrand(
       'assets/agents/claude_code.svg',
       brandColor: Color(0xFFD97757),
@@ -41,17 +46,17 @@ class AgentBrandIcon extends StatelessWidget {
       return Icon(
         Icons.smart_toy_outlined,
         size: size,
-        color: fallbackColor ?? palette.accentPrimary,
+        color: tint ?? fallbackColor ?? palette.accentPrimary,
       );
     }
     // 单色品牌图标使用 currentColor，这里按品牌色或主题文字色着色，
     // 使其在深浅色主题下都清晰可见。
-    final tint = brand.brandColor ?? palette.textPrimary;
+    final effectiveTint = tint ?? brand.brandColor ?? palette.textPrimary;
     return SvgPicture.asset(
       brand.asset,
       width: size,
       height: size,
-      colorFilter: ColorFilter.mode(tint, BlendMode.srcIn),
+      colorFilter: ColorFilter.mode(effectiveTint, BlendMode.srcIn),
     );
   }
 }

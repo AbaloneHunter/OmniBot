@@ -22,11 +22,12 @@ enum ConversationMode {
   }
 
   String get displayLabel => switch (this) {
-    ConversationMode.normal => LegacyTextLocalizer.localize('普通'),
+    ConversationMode.normal => LegacyTextLocalizer.localize('小万（OmniAi）'),
     ConversationMode.chatOnly => LegacyTextLocalizer.localize('纯聊天'),
     ConversationMode.openclaw => 'OpenClaw',
     ConversationMode.subagent => 'SubAgent',
-    ConversationMode.codex => 'Codex',
+    // `codex` 仅作为向后兼容的持久化值；本地运行时已承载所有 ACP Agent。
+    ConversationMode.codex => 'Agent',
   };
 }
 

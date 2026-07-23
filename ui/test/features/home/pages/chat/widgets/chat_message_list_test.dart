@@ -6,6 +6,7 @@ import 'package:ui/features/home/pages/chat/chat_page_models.dart';
 import 'package:ui/features/home/pages/chat/widgets/chat_widgets.dart';
 import 'package:ui/l10n/generated/app_localizations.dart';
 import 'package:ui/models/chat_message_model.dart';
+import 'package:ui/widgets/agent_brand_icon.dart';
 import 'package:ui/widgets/agent_avatar.dart';
 import 'package:ui/widgets/streaming_text.dart';
 
@@ -584,56 +585,52 @@ void main() {
     expect(find.byType(AgentAvatarButton), findsNothing);
   });
 
-  testWidgets(
-    'codex agent run shows codex avatar and "已处理" label when collapsed',
-    (tester) async {
-      final controller = ScrollController();
-      final messages = _buildCompletedCodexAgentRunMessages();
+  testWidgets('ACP Agent run shows its own brand avatar and processed label', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    final messages = _buildCompletedCodexAgentRunMessages();
 
-      await tester.pumpWidget(
-        _buildLocalizedApp(
-          child: SizedBox(
-            width: 400,
-            height: 520,
-            child: ChatMessageList(
-              messages: messages,
-              scrollController: controller,
-              onBeforeTaskExecute: () async {},
-            ),
+    await tester.pumpWidget(
+      _buildLocalizedApp(
+        child: SizedBox(
+          width: 400,
+          height: 520,
+          child: ChatMessageList(
+            messages: messages,
+            scrollController: controller,
+            onBeforeTaskExecute: () async {},
           ),
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      // Collapsed: header reads "已处理 …" (possibly suffixed with an
-      // elapsed-time string), NEVER "已探索 N 次搜索 …".
-      expect(find.textContaining('已处理'), findsOneWidget);
-      expect(find.text('已探索 2 次搜索'), findsNothing);
-      // Codex group must surface the codex glyph instead of the default
-      // user-configurable agent avatar.
-      expect(
-        find.byKey(const ValueKey('agent-run-codex-avatar-task-1')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('agent-run-avatar-task-1')),
-        findsNothing,
-      );
+    // Collapsed: header reads "已处理 …" (possibly suffixed with an
+    // elapsed-time string), NEVER "已探索 N 次搜索 …".
+    expect(find.textContaining('已处理'), findsOneWidget);
+    expect(find.text('已探索 2 次搜索'), findsNothing);
+    final acpAvatar = find.byKey(const ValueKey('agent-run-acp-avatar-task-1'));
+    expect(acpAvatar, findsOneWidget);
+    final brandIcon = tester.widget<AgentBrandIcon>(
+      find.descendant(of: acpAvatar, matching: find.byType(AgentBrandIcon)),
+    );
+    expect(brandIcon.agentId, 'claude-code-acp');
+    expect(find.byKey(const ValueKey('agent-run-avatar-task-1')), findsNothing);
 
-      // Expanded: header still says "已处理 …" — and any inner tool-group
-      // capsule (when consecutive tool cards group together) ALSO says
-      // "已处理" instead of the previous count summary. So we expect AT
-      // LEAST one widget with "已处理" (could be the outer header alone,
-      // or outer + inner capsule depending on the messages).
-      await tester.tap(find.byKey(const ValueKey('agent-run-summary-task-1')));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('已处理'), findsWidgets);
-      expect(find.textContaining('已探索'), findsNothing);
-    },
-  );
+    // Expanded: header still says "已处理 …" — and any inner tool-group
+    // capsule (when consecutive tool cards group together) ALSO says
+    // "已处理" instead of the previous count summary. So we expect AT
+    // LEAST one widget with "已处理" (could be the outer header alone,
+    // or outer + inner capsule depending on the messages).
+    await tester.tap(find.byKey(const ValueKey('agent-run-summary-task-1')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('已处理'), findsWidgets);
+    expect(find.textContaining('已探索'), findsNothing);
+  });
 
   testWidgets(
-    'codex text run without tool cards still shows codex avatar when collapsed',
+    'legacy ACP text run falls back to Codex avatar when identity is absent',
     (tester) async {
       final controller = ScrollController();
       final messages = _buildCompletedCodexTextRunMessages();
@@ -655,7 +652,7 @@ void main() {
 
       expect(find.textContaining('已处理'), findsOneWidget);
       expect(
-        find.byKey(const ValueKey('agent-run-codex-avatar-task-1')),
+        find.byKey(const ValueKey('agent-run-acp-avatar-task-1')),
         findsOneWidget,
       );
       expect(
@@ -1397,15 +1394,19 @@ List<ChatMessageModel> _buildCompletedAgentRunMessagesWithToolGroup() {
 }
 
 List<ChatMessageModel> _buildCompletedCodexAgentRunMessages() {
-  // Same shape as _buildCompletedAgentRunMessages but every tool card carries
-  // cardData.uiStyle = 'codex_tool', so the AgentRunGroup widget classifies
-  // the group as a codex run (collapsed → "已处理", avatar → codex SVG).
+  // ACP reducer keeps the legacy codex uiStyle for storage compatibility, but
+  // the persisted Agent identity drives the visible avatar.
   return <ChatMessageModel>[
     ChatMessageModel(
       id: 'task-1-text',
       type: 1,
       user: 2,
-      content: const <String, dynamic>{'text': '最终回答', 'id': 'task-1-text'},
+      content: const <String, dynamic>{
+        'text': '最终回答',
+        'id': 'task-1-text',
+        'agentId': 'claude-code-acp',
+        'agentName': 'Claude Code',
+      },
       streamMeta: const <String, dynamic>{
         'parentTaskId': 'task-1',
         'kind': 'text_snapshot',
@@ -1418,6 +1419,8 @@ List<ChatMessageModel> _buildCompletedCodexAgentRunMessages() {
       <String, dynamic>{
         'type': 'agent_tool_summary',
         'uiStyle': 'codex_tool',
+        'agentId': 'claude-code-acp',
+        'agentName': 'Claude Code',
         'status': 'success',
         'toolType': 'search',
         'toolTitle': 'rg foo',
@@ -1436,6 +1439,8 @@ List<ChatMessageModel> _buildCompletedCodexAgentRunMessages() {
       <String, dynamic>{
         'type': 'agent_tool_summary',
         'uiStyle': 'codex_tool',
+        'agentId': 'claude-code-acp',
+        'agentName': 'Claude Code',
         'status': 'success',
         'toolType': 'search',
         'toolTitle': 'rg bar',
@@ -1453,6 +1458,8 @@ List<ChatMessageModel> _buildCompletedCodexAgentRunMessages() {
     ChatMessageModel.cardMessage(
       <String, dynamic>{
         'type': 'deep_thinking',
+        'agentId': 'claude-code-acp',
+        'agentName': 'Claude Code',
         'thinkingContent': 'codex 在思考',
         'stage': 4,
         'isLoading': false,

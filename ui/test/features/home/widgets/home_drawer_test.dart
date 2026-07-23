@@ -460,7 +460,7 @@ void main() {
 
     expect(find.text('Scheduled tasks'), findsOneWidget);
     expect(find.text('Pinned conversations'), findsOneWidget);
-    expect(find.text('Agent'), findsOneWidget);
+    expect(find.text('OmniAi'), findsOneWidget);
   });
 
   testWidgets('scrolls promoted sections together with history', (
@@ -537,9 +537,9 @@ void main() {
 
     final sectionHeaderLeft = tester.getTopLeft(find.text('定时任务')).dx;
 
-    // 顶层区块标题（定时任务/置顶会话/Agent）左对齐；置顶条目与标题共用缩进。
+    // 顶层区块标题（定时任务/置顶会话/小万）左对齐；置顶条目与标题共用缩进。
     expect(tester.getTopLeft(find.text('置顶会话')).dx, sectionHeaderLeft);
-    expect(tester.getTopLeft(find.text('Agent')).dx, sectionHeaderLeft);
+    expect(tester.getTopLeft(find.text('小万（OmniAi）')).dx, sectionHeaderLeft);
     expect(tester.getTopLeft(find.text('重点对话')).dx, sectionHeaderLeft);
 
     // 定时任务、置顶区块与历史记录在同一个滚动列表内，上滑时随列表一起
@@ -1022,8 +1022,8 @@ void main() {
     await tester.pumpAndSettle();
 
     // 三个模式区块并列展示。
-    expect(find.text('Codex'), findsOneWidget);
     expect(find.text('Agent'), findsOneWidget);
+    expect(find.text('小万（OmniAi）'), findsOneWidget);
     expect(find.text('纯聊天'), findsOneWidget);
 
     // Codex 区块内按项目名分组，且项目按最近活跃排序。
@@ -1042,7 +1042,7 @@ void main() {
     // 日期分组下的会话标题不再缩进：与区块标题、日期分组行共用同一左缘。
     expect(
       tester.getTopLeft(find.text('Agent 会话')).dx,
-      tester.getTopLeft(find.text('Agent')).dx,
+      tester.getTopLeft(find.text('小万（OmniAi）')).dx,
     );
 
     // Codex 条目展示相对时间标签而非日期分组。
@@ -1055,8 +1055,8 @@ void main() {
     expect(find.text('写周报脚本').hitTestable(), findsNothing);
     expect(find.text('优化首页响应式').hitTestable(), findsOneWidget);
 
-    // 折叠整个 Codex 区块后项目行一并隐藏。
-    await tester.tap(find.text('Codex'));
+    // 折叠整个 Agent 区块后项目行一并隐藏。
+    await tester.tap(find.text('Agent'));
     await tester.pumpAndSettle();
     expect(find.text('blog').hitTestable(), findsNothing);
     expect(find.text('CoffeeMux').hitTestable(), findsNothing);

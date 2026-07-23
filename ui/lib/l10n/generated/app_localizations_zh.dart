@@ -1495,10 +1495,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get homeDrawerPinnedConversations => '置顶会话';
 
   @override
-  String get homeDrawerCodexSection => 'Codex';
+  String get homeDrawerCodexSection => 'Agent';
 
   @override
-  String get homeDrawerAgentSection => 'Agent';
+  String get homeDrawerAgentSection => '小万（OmniAi）';
 
   @override
   String get homeDrawerChatOnlySection => '纯聊天';

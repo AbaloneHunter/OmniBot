@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/features/home/pages/chat/tool_activity_utils.dart';
 import 'package:ui/features/home/pages/chat/utils/agent_run_timeline.dart';
@@ -11,6 +10,7 @@ import 'package:ui/models/chat_message_model.dart';
 import 'package:ui/services/agent_avatar_service.dart';
 import 'package:ui/services/app_background_service.dart';
 import 'package:ui/theme/theme_context.dart';
+import 'package:ui/widgets/agent_brand_icon.dart';
 import 'package:ui/widgets/agent_avatar.dart';
 
 class AgentRunGroupMessage extends StatefulWidget {
@@ -328,23 +328,25 @@ bool _isAgentToolSummaryMessage(ChatMessageModel message) {
       kAgentToolSummaryCardType;
 }
 
-const String _kCodexAgentRunAvatarAsset = 'assets/home/chat/codex.svg';
-
-/// A run group is treated as "codex" if any of its messages (visible or
-/// collapsed) was produced by the codex reducer. Tool cards carry
-/// cardData.uiStyle == 'codex_tool', while text-only codex turns use stable
-/// entry ids like `*-codex-agent` / `*-codex-thinking`.
-bool _agentRunGroupIsCodex(AgentRunTimelineGroup group) {
+/// ACP 消息沿用旧的 codex reducer/entry id 以兼容历史数据，但头像必须按
+/// 消息记录的 Agent 身份渲染。旧消息没有身份时才回退到 Codex。
+String? _agentRunGroupAcpAgentId(AgentRunTimelineGroup group) {
   for (final message in group.processMessagesNewestFirst) {
-    if (_isCodexRunMessage(message)) return true;
+    if (message.agentId != null) return message.agentId;
   }
   for (final message in group.visibleMessagesNewestFirst) {
-    if (_isCodexRunMessage(message)) return true;
+    if (message.agentId != null) return message.agentId;
   }
-  return false;
+  for (final message in group.processMessagesNewestFirst) {
+    if (_isAcpRunMessage(message)) return 'codex-acp';
+  }
+  for (final message in group.visibleMessagesNewestFirst) {
+    if (_isAcpRunMessage(message)) return 'codex-acp';
+  }
+  return null;
 }
 
-bool _isCodexRunMessage(ChatMessageModel message) {
+bool _isAcpRunMessage(ChatMessageModel message) {
   final cardData = message.cardData;
   if ((cardData?['uiStyle'] ?? '').toString().trim() == 'codex_tool') {
     return true;
@@ -564,7 +566,7 @@ class _AgentRunSummaryHeader extends StatelessWidget {
     final isEnglish =
         Localizations.maybeLocaleOf(context)?.languageCode == 'en';
     final palette = context.omniPalette;
-    final isCodexGroup = _agentRunGroupIsCodex(group);
+    final acpAgentId = _agentRunGroupAcpAgentId(group);
     // Both collapsed AND expanded show the same "已处理 <elapsed>" label.
     // The per-tool count summary was deliberately retired — the user wants
     // the header noise-free in both states. The elapsed-time suffix is
@@ -592,9 +594,10 @@ class _AgentRunSummaryHeader extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                if (isCodexGroup)
-                  _CodexAgentRunAvatar(
-                    key: ValueKey('agent-run-codex-avatar-$taskId'),
+                if (acpAgentId != null)
+                  _AcpAgentRunAvatar(
+                    key: ValueKey('agent-run-acp-avatar-$taskId'),
+                    agentId: acpAgentId,
                     color: labelColor,
                   )
                 else
@@ -700,12 +703,15 @@ String _agentRunElapsedLabel(AgentRunTimelineGroup group) {
   return '${hours}h ${remainingMinutes}m';
 }
 
-/// Drop-in replacement for `AgentAvatarCircle` used by codex agent runs:
-/// renders the codex glyph (`assets/home/chat/codex.svg`) inside a 30px
-/// circular surface so the visual rhythm matches the user-avatar variant.
-class _CodexAgentRunAvatar extends StatelessWidget {
-  const _CodexAgentRunAvatar({super.key, required this.color});
+/// ACP Agent 的品牌头像，外层尺寸与小万头像保持一致。
+class _AcpAgentRunAvatar extends StatelessWidget {
+  const _AcpAgentRunAvatar({
+    super.key,
+    required this.agentId,
+    required this.color,
+  });
 
+  final String agentId;
   final Color color;
 
   @override
@@ -726,12 +732,7 @@ class _CodexAgentRunAvatar extends StatelessWidget {
         shape: BoxShape.circle,
         border: Border.all(color: borderColor, width: 0.5),
       ),
-      child: SvgPicture.asset(
-        _kCodexAgentRunAvatarAsset,
-        width: 18,
-        height: 18,
-        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-      ),
+      child: AgentBrandIcon(agentId: agentId, size: 18, tint: color),
     );
   }
 }

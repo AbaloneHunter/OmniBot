@@ -52,7 +52,7 @@ void main() {
     expect(find.text('Plan'), findsOneWidget);
     expect(find.text('Chat'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
-    expect(find.text('No, tell Codex how to adjust'), findsOneWidget);
+    expect(find.text('No, tell Claude Code how to adjust'), findsOneWidget);
     expect(find.text('ESC'), findsNothing);
 
     await tester.tap(find.text('Chat'));
@@ -121,7 +121,7 @@ void main() {
     expect(find.text('submitted: Chat'), findsNothing);
     expect(find.text('Plan'), findsOneWidget);
     expect(find.text('Chat'), findsOneWidget);
-    expect(find.text('No, tell Codex how to adjust'), findsOneWidget);
+    expect(find.text('No, tell Claude Code how to adjust'), findsOneWidget);
   });
 
   testWidgets('pending request restores exact submitted cache after refresh', (
@@ -144,7 +144,7 @@ void main() {
 
     expect(find.text('submitted: Chat'), findsOneWidget);
     expect(find.text('Plan'), findsNothing);
-    expect(find.text('No, tell Codex how to adjust'), findsNothing);
+    expect(find.text('No, tell Claude Code how to adjust'), findsNothing);
   });
 
   testWidgets('does not render duplicate title and detail question text', (
@@ -188,7 +188,10 @@ void main() {
     expect(textField.minLines, 1);
     expect(textField.maxLines, 1);
     expect(textField.textInputAction, TextInputAction.done);
-    expect(textField.decoration?.labelText, 'No, tell Codex how to adjust');
+    expect(
+      textField.decoration?.labelText,
+      'No, tell Claude Code how to adjust',
+    );
     expect(textField.decoration?.hintText, 'Describe the adjustment');
     expect(textField.style?.fontSize, 13);
     expect(
@@ -279,6 +282,8 @@ void main() {
 Map<String, dynamic> _requestCardData({String detail = 'Pick one'}) {
   return <String, dynamic>{
     'type': 'codex_request',
+    'agentId': 'claude-code-acp',
+    'agentName': 'Claude Code',
     'requestId': 'request-1',
     'cardId': 'request-1-card',
     'requestKind': 'user_input',

@@ -2879,13 +2879,13 @@ abstract class AppLocalizations {
   /// No description provided for @homeDrawerCodexSection.
   ///
   /// In zh, this message translates to:
-  /// **'Codex'**
+  /// **'Agent'**
   String get homeDrawerCodexSection;
 
   /// No description provided for @homeDrawerAgentSection.
   ///
   /// In zh, this message translates to:
-  /// **'Agent'**
+  /// **'小万（OmniAi）'**
   String get homeDrawerAgentSection;
 
   /// No description provided for @homeDrawerChatOnlySection.

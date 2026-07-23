@@ -286,8 +286,8 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
             : (_activeCodexModelId!),
         summary: _activeCodexModelId == null
             ? (LegacyTextLocalizer.isEnglish
-                  ? 'Choose a Codex model'
-                  : '选择 Codex 模型')
+                  ? 'Choose a model for $_activeAcpAgentDisplayName'
+                  : '选择 $_activeAcpAgentDisplayName 的模型')
             : (LegacyTextLocalizer.isEnglish
                   ? 'Current model: $_activeCodexModelId'
                   : '当前模型：$_activeCodexModelId'),
@@ -314,8 +314,8 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
             ? 'Review changes in the current workspace'
             : '审查当前工作区改动',
         progress: LegacyTextLocalizer.isEnglish
-            ? 'Runs Codex review on the active thread'
-            : '在当前线程中启动 Codex review',
+            ? 'Runs an Agent review on the active thread'
+            : '在当前线程中启动 Agent review',
       ),
       _buildCodexCommandCard(
         cardId: 'slash-command-codex-init',
@@ -328,8 +328,8 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
             ? 'Generate or update AGENTS.md'
             : '生成或更新 AGENTS.md',
         progress: LegacyTextLocalizer.isEnglish
-            ? 'Creates Codex initialization guidance'
-            : '生成 Codex 初始化指引',
+            ? 'Creates $_activeAcpAgentDisplayName initialization guidance'
+            : '生成 $_activeAcpAgentDisplayName 初始化指引',
       ),
       _buildCodexCommandCard(
         cardId: 'slash-command-codex-plan',
@@ -417,8 +417,8 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                         ? 'Loading available models'
                         : '正在加载可用模型')
                   : (LegacyTextLocalizer.isEnglish
-                        ? 'Open /model to load Codex models'
-                        : '输入 /model 加载 Codex 模型')),
+                        ? 'Open /model to load $_activeAcpAgentDisplayName models'
+                        : '输入 /model 加载 $_activeAcpAgentDisplayName 模型')),
           progress: query.isEmpty ? '/model' : query,
         ),
       ];
@@ -1228,6 +1228,9 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
               onCodexTap: () {
                 unawaited(_handleCodexTap());
               },
+              onAcpAgentTap: (agentId) {
+                unawaited(_handleAcpAgentModeShortcutTap(agentId));
+              },
               onPrimaryModeTap: _activeMode == ChatPageMode.codex
                   ? () => GoRouterManager.push('/home/codex_sessions')
                   : null,
@@ -1251,6 +1254,8 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
               isCodexSelected: _activeMode == ChatPageMode.codex,
               isAgentSelected:
                   _activeMode == ChatPageMode.normal && !_isPureChatSelected,
+              acpAgentModes: _chatAcpAgentModeOptions,
+              activeAcpAgentId: _activeAcpAgentId,
               showAppUpdateIndicator: showAppUpdateIndicator,
               appUpdateTooltip: appUpdateTooltip,
               onAppUpdateTap: showAppUpdateIndicator

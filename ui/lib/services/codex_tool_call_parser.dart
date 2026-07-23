@@ -724,7 +724,7 @@ String _resolveToolTitle(
     }
     return fallbackTitle?.trim().isNotEmpty == true
         ? _compactTitle(fallbackTitle!, maxLength: 48)
-        : 'Codex command';
+        : 'Agent command';
   }
 
   if (canonicalItemType == 'fileChange' || toolType == 'file') {
@@ -737,7 +737,7 @@ String _resolveToolTitle(
     }
     return fallbackTitle?.trim().isNotEmpty == true
         ? _compactTitle(fallbackTitle!, maxLength: 48)
-        : 'Codex file change';
+        : 'Agent file change';
   }
 
   if (canonicalItemType == 'webSearch' || itemType == 'web_search_call') {
@@ -775,7 +775,7 @@ String _resolveToolTitle(
     }
     return fallbackTitle?.trim().isNotEmpty == true
         ? _compactTitle(fallbackTitle!, maxLength: 48)
-        : 'Codex search';
+        : 'Agent search';
   }
 
   if (canonicalItemType == 'imageView') {
@@ -804,7 +804,7 @@ String _resolveToolTitle(
   }
 
   if (canonicalItemType == 'plan' || toolType == 'plan') {
-    return 'Codex plan';
+    return 'Agent plan';
   }
 
   if (isCodexToolOutputItemType(itemType)) {
@@ -814,7 +814,7 @@ String _resolveToolTitle(
     }
     return fallbackTitle?.trim().isNotEmpty == true
         ? _compactTitle(fallbackTitle!, maxLength: 48)
-        : 'Codex tool output';
+        : 'Agent tool output';
   }
 
   // node_repl/js and other MCP/dynamic/custom/function invocations frequently
@@ -886,7 +886,7 @@ String _resolveToolTitle(
   if (shortName != null && shortName.isNotEmpty) {
     return _compactTitle(shortName, maxLength: 48);
   }
-  return 'Codex tool';
+  return 'Agent tool';
 }
 
 String? _operationTitle(String? shortName, String detail) {

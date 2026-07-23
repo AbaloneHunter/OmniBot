@@ -1108,6 +1108,20 @@ class CodexAppServerManager private constructor(
             activeTurnsByThreadId.remove(threadId)
         }
 
+        val eventAgentId = if (activeRuntime == CodexRuntimeKind.REMOTE) {
+            AcpAgentProfileStore.DEFAULT_CODEX_AGENT_ID
+        } else {
+            threadId?.let(acpAgentProfileStore::agentIdForSession)
+                ?: localAcpRuntime.activeAgentId()
+        }
+        val eventAgentName = if (activeRuntime == CodexRuntimeKind.REMOTE) {
+            "Codex"
+        } else {
+            acpAgentProfileStore.list()
+                .firstOrNull { it.id == eventAgentId }
+                ?.name
+                ?: localAcpRuntime.activeAgentName()
+        }
         val localConversationId = syncMessage(method, message, params, threadId)
         if (method == "turn/completed" ||
             protocolEventType == "task_complete" ||
@@ -1115,8 +1129,8 @@ class CodexAppServerManager private constructor(
             TaskRuntimeSettings.onTaskFinished(appContext)
             TaskRuntimeSettings.notifyTaskFinished(
                 context = appContext,
-                title = "Codex task completed",
-                message = "Tap to view the completed Codex turn.",
+                title = "$eventAgentName task completed",
+                message = "Tap to view the completed Agent turn.",
                 conversationId = localConversationId,
                 conversationMode = "codex"
             )
@@ -1128,6 +1142,8 @@ class CodexAppServerManager private constructor(
                 "threadId" to threadId,
                 "turnId" to turnId,
                 "conversationId" to localConversationId,
+                "agentId" to eventAgentId,
+                "agentName" to eventAgentName,
                 "params" to params,
                 "message" to message
             )
