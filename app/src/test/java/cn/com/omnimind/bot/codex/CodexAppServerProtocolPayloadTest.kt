@@ -322,6 +322,82 @@ class CodexAppServerProtocolPayloadTest {
     }
 
     @Test
+    fun localApiConfigMustBeCompleteBeforeStartingCodex() {
+        val error = runCatching {
+            requireLocalCodexConfig(
+                CodexLocalConfig(
+                    authMode = CodexLocalAuthMode.API,
+                    baseUrl = "https://example.com/v1",
+                    apiModel = "",
+                    apiKey = "secret"
+                )
+            )
+        }.exceptionOrNull()
+
+        assertTrue(error is IllegalArgumentException)
+        assertTrue(error?.message.orEmpty().contains("model"))
+        requireLocalCodexConfig(
+            CodexLocalConfig(
+                authMode = CodexLocalAuthMode.API,
+                baseUrl = "https://example.com/v1",
+                apiModel = "custom-codex",
+                apiKey = "secret"
+            )
+        )
+    }
+
+    @Test
+    fun localApiModelCatalogUsesStoredCredentialsWhenRequestHasNoOverrides() {
+        val source = resolveLocalApiModelSource(
+            args = emptyMap(),
+            storedConfig = CodexLocalConfig(
+                authMode = CodexLocalAuthMode.API,
+                baseUrl = " https://stored.example/v1 ",
+                apiModel = "custom-codex",
+                apiKey = " stored-secret "
+            )
+        )
+
+        assertEquals("https://stored.example/v1", source.baseUrl)
+        assertEquals("stored-secret", source.apiKey)
+    }
+
+    @Test
+    fun localApiModelCatalogPrefersExplicitSettingsCredentials() {
+        val source = resolveLocalApiModelSource(
+            args = mapOf(
+                "baseUrl" to " https://edited.example/v1 ",
+                "apiKey" to " edited-secret "
+            ),
+            storedConfig = CodexLocalConfig(
+                authMode = CodexLocalAuthMode.API,
+                baseUrl = "https://stored.example/v1",
+                apiModel = "custom-codex",
+                apiKey = "stored-secret"
+            )
+        )
+
+        assertEquals("https://edited.example/v1", source.baseUrl)
+        assertEquals("edited-secret", source.apiKey)
+    }
+
+    @Test
+    fun storedLocalModelOverridesMissingAppServerRunConfig() {
+        val merged = mergeStoredLocalRunConfig(
+            response = mapOf("config" to emptyMap<String, Any?>()),
+            localConfig = CodexLocalConfig(
+                authMode = CodexLocalAuthMode.API,
+                baseUrl = "https://example.com/v1",
+                apiModel = "custom-codex",
+                apiKey = "secret"
+            )
+        )
+
+        assertEquals("custom-codex", merged["model"])
+        assertEquals("xhigh", merged["modelReasoningEffort"])
+    }
+
+    @Test
     fun migrateLegacyCodexConfigRecognizesChatGptTokensWithoutConfigToml() {
         val config = migrateLegacyCodexLocalConfig(
             configToml = "",

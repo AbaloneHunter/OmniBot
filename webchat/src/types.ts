@@ -12,6 +12,7 @@ export interface Conversation {
   messageCount?: number;
   updatedAt?: number;
   isArchived?: boolean;
+  isPinned?: boolean;
 }
 
 export interface Attachment {

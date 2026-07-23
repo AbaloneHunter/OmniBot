@@ -1093,6 +1093,19 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
         }
     }
 
+    fun hasActiveAgentRun(
+        conversationId: Long,
+        conversationMode: String
+    ): Boolean {
+        val normalizedMode = conversationMode.trim().lowercase().ifEmpty { "normal" }
+        return synchronized(activeAgentLock) {
+            activeAgentRuns.values.any { run ->
+                run.conversationId == conversationId &&
+                    run.conversationMode.trim().lowercase() == normalizedMode
+            }
+        }
+    }
+
     suspend fun invokeFlutterMethodForAgent(method: String, arguments: Map<String, Any?>): Any? {
         val targetChannel = mainEngineChannel ?: if (this::channel.isInitialized) channel else null
         if (targetChannel == null) {
@@ -4073,9 +4086,11 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
                     val normalizedConversationId = conversationId ?: return
                     val repository = historyRepository ?: return
                     try {
+                        // 流式快照仍属于活跃任务，不能在读取时按“中断恢复”收尾思考/工具条目。
                         val messages = repository.listConversationMessages(
                             conversationId = normalizedConversationId,
-                            conversationMode = resolvedConversationMode
+                            conversationMode = resolvedConversationMode,
+                            finalizeInterruptedEntries = false
                         )
                         RealtimeHub.publish(
                             "messages_replaced",

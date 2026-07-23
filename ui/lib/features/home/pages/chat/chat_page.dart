@@ -1639,7 +1639,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
 
   Future<void> _refreshCodexCommandPreferences();
 
-  Future<void> _loadCodexModelOptionsWhenReady();
+  Future<void> _loadCodexModelOptionsWhenReady({bool force = false});
 
   Future<void> _loadCodexModelOptions({bool force = false});
 

@@ -283,7 +283,7 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
   }
 
   @override
-  Future<void> _loadCodexModelOptionsWhenReady() async {
+  Future<void> _loadCodexModelOptionsWhenReady({bool force = false}) async {
     late CodexStatus status;
     try {
       status = await CodexAppServerService.status();
@@ -303,7 +303,8 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
       return;
     }
     final sourceKey = codexModelSourceKey(status);
-    if ((_loadedCodexModelSourceKey == sourceKey &&
+    if ((!force &&
+            _loadedCodexModelSourceKey == sourceKey &&
             _codexModelOptions.isNotEmpty &&
             (_activeCodexModelId ?? '').trim().isNotEmpty &&
             (_activeCodexReasoningEffort ?? '').trim().isNotEmpty) ||
@@ -336,22 +337,16 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
     });
     try {
       final configSettings = await _readCodexRunSettingsFromServerConfig();
-      final useConfiguredApiModelOnly =
-          statusForRequest.runtime != 'remote' &&
-          !statusForRequest.remoteEnabled &&
-          statusForRequest.localAuthMode == CodexLocalAuthMode.api;
-      final response = useConfiguredApiModelOnly
-          ? const <String, dynamic>{}
-          : await CodexAppServerService.listModels();
-      final models = useConfiguredApiModelOnly
-          ? <String>[
-              if ((configSettings.modelId ?? '').trim().isNotEmpty)
-                configSettings.modelId!.trim(),
-            ]
-          : _extractCodexOptionIds(response, _kCodexModelListResponseKeys);
+      final response = await CodexAppServerService.listModelsForStatus(
+        statusForRequest,
+      );
+      final models = _extractCodexOptionIds(
+        response,
+        _kCodexModelListResponseKeys,
+      );
       if (models.isEmpty) {
         debugPrint(
-          '[Codex] model/list returned no parseable models: ${jsonEncode(response)}',
+          '[Codex] model catalog returned no parseable models: ${jsonEncode(response)}',
         );
       }
       final preferredModel =
@@ -370,16 +365,14 @@ mixin _ChatPageCodexMixin on _ChatPageStateBase {
                   : scopedModel)
               ?.trim() ??
           '';
-      final effectiveModel = useConfiguredApiModelOnly
-          ? preferredModel
-          : (activeModel.isNotEmpty ? activeModel : preferredModel);
-      final modelOptions = useConfiguredApiModelOnly
-          ? models
-          : _mergeCodexOptionIds(
-              current: effectiveModel,
-              preferred: preferredModel,
-              options: models,
-            );
+      final effectiveModel = activeModel.isNotEmpty
+          ? activeModel
+          : preferredModel;
+      final modelOptions = _mergeCodexOptionIds(
+        current: effectiveModel,
+        preferred: preferredModel,
+        options: models,
+      );
       final modelDefaultEffort = _extractCodexModelDefaultReasoningEffort(
         response,
         effectiveModel,

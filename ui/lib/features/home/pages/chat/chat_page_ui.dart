@@ -1352,7 +1352,7 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                           : null,
                       onCodexRunSettingsOpened:
                           _activeMode == ChatPageMode.codex
-                          ? _loadCodexModelOptionsWhenReady
+                          ? () => _loadCodexModelOptionsWhenReady(force: true)
                           : null,
                       onCodexRunSettingsChanged:
                           _activeMode == ChatPageMode.codex

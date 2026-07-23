@@ -265,12 +265,16 @@ class AgentConversationHistoryRepository(
 
     suspend fun listConversationMessages(
         conversationId: Long,
-        conversationMode: String
+        conversationMode: String,
+        finalizeInterruptedEntries: Boolean = true
     ): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
-        val normalized = normalizeEntriesForDisplay(
-            loadThreadEntriesDescSafe(conversationId, conversationMode)
-        )
-        val messagePayloads = normalized.mapNotNull { entry -> entryToMessagePayload(entry) }
+        val entries = loadThreadEntriesDescSafe(conversationId, conversationMode)
+        val displayEntries = if (finalizeInterruptedEntries) {
+            normalizeEntriesForDisplay(entries)
+        } else {
+            entries
+        }
+        val messagePayloads = displayEntries.mapNotNull { entry -> entryToMessagePayload(entry) }
         ConversationSnapshotOrdering.sortForDisplay(messagePayloads)
     }
 

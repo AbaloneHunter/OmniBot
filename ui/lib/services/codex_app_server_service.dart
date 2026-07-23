@@ -111,11 +111,10 @@ String? selectCodexRequestModel({
       status.runtime != 'remote' &&
       !status.remoteEnabled &&
       status.localAuthMode == CodexLocalAuthMode.api;
-  if (isLocalApi) {
-    return _stringOrNull(configuredApiModel);
-  }
   return _stringOrNull(
-    overrideModel ?? (activeModelSourceMatches ? activeModel : scopedModel),
+    overrideModel ??
+        (activeModelSourceMatches ? activeModel : scopedModel) ??
+        (isLocalApi ? configuredApiModel : null),
   );
 }
 
@@ -487,6 +486,17 @@ class CodexAppServerService {
 
   static Future<Map<String, dynamic>> listModels() {
     return _invokeMap('model/list', {'limit': 100});
+  }
+
+  static Future<Map<String, dynamic>> listModelsForStatus(CodexStatus status) {
+    final useConfiguredLocalApi =
+        status.runtime != 'remote' &&
+        !status.remoteEnabled &&
+        status.localAuthMode == CodexLocalAuthMode.api;
+    if (useConfiguredLocalApi) {
+      return _invokeMap('config/local/models');
+    }
+    return listModels();
   }
 
   static Future<Map<String, dynamic>> listCollaborationModes() {

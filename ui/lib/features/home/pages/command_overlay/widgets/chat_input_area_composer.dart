@@ -54,6 +54,7 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
   );
   OverlayGlassPopupHandle<_CodexRunSettingsMenuAction>?
   _codexRunSettingsMenuHandle;
+  bool _isOpeningCodexRunSettingsMenu = false;
   OverlayGlassPopupHandle<CodexPermissionMode>? _codexPermissionMenuHandle;
 
   @override
@@ -856,45 +857,62 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
     final buttonKey = _codexRunSettingsButtonKey;
 
     Future<void> openMenu() async {
-      if (_codexRunSettingsMenuHandle != null) {
+      if (_codexRunSettingsMenuHandle != null ||
+          _isOpeningCodexRunSettingsMenu) {
+        return;
+      }
+      _isOpeningCodexRunSettingsMenu = true;
+      if (buttonKey.currentContext == null) {
+        _isOpeningCodexRunSettingsMenu = false;
+        return;
+      }
+      final opened = widget.onCodexRunSettingsOpened;
+      try {
+        if (opened != null) {
+          await Future<void>.sync(opened);
+          await WidgetsBinding.instance.endOfFrame;
+        }
+      } finally {
+        _isOpeningCodexRunSettingsMenu = false;
+      }
+      if (!mounted) {
         return;
       }
       final anchorContext = buttonKey.currentContext;
-      if (anchorContext == null) {
+      if (anchorContext == null || !anchorContext.mounted) {
         return;
       }
       final anchor = glassPopupAnchorFromContext(anchorContext);
       if (anchor == null) {
         return;
       }
-      final opened = widget.onCodexRunSettingsOpened;
-      if (opened != null) {
-        unawaited(Future<void>.sync(opened));
-      }
+      final refreshedSettings = widget.codexRunSettings ?? settings;
+      final refreshedModelId = refreshedSettings.modelId.trim();
+      final refreshedEffort = refreshedSettings.reasoningEffort.trim();
       final modelOptions = _codexRunSettingsOptions(
-        current: modelId,
-        options: settings.modelOptions,
+        current: refreshedModelId,
+        options: refreshedSettings.modelOptions,
       );
       final effortOptions = _codexRunSettingsOptions(
-        current: effort,
-        options: settings.reasoningEffortOptions.isEmpty
+        current: refreshedEffort,
+        options: refreshedSettings.reasoningEffortOptions.isEmpty
             ? _kDefaultCodexReasoningEfforts
-            : settings.reasoningEffortOptions,
+            : refreshedSettings.reasoningEffortOptions,
       );
-      final disabledModelLabel = settings.isLoadingModels
+      final disabledModelLabel = refreshedSettings.isLoadingModels
           ? (english ? 'Loading...' : '正在获取模型...')
-          : (settings.modelListError?.trim().isNotEmpty ?? false)
+          : (refreshedSettings.modelListError?.trim().isNotEmpty ?? false)
           ? (english ? 'Load failed' : '模型获取失败')
           : (english ? 'No models available' : '未获取到可用模型');
       final models = [
         for (final option in modelOptions)
           ProviderModelOption(id: option, displayName: option),
       ];
-      final currentSelection = modelId.isEmpty
+      final currentSelection = refreshedModelId.isEmpty
           ? null
           : ConversationModelSelection(
               providerProfileId: _kCodexRunSettingsProviderId,
-              modelId: modelId,
+              modelId: refreshedModelId,
             );
       final handle = showOverlayGlassPopup<_CodexRunSettingsMenuAction>(
         context: anchorContext,
@@ -941,7 +959,7 @@ mixin _ChatInputAreaComposerMixin on _ChatInputAreaStateBase {
                   label: _codexReasoningEffortLabel(option),
                 ),
             ],
-            selectedEffort: effort,
+            selectedEffort: refreshedEffort,
             selectedColor: selectedColor,
             textColor: menuTextColor,
             onSelect: (value) {

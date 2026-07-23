@@ -9,6 +9,11 @@ import {
 import { agentAvatarUrl, isRecord } from "../api";
 import { formatBytes, markdownToHtml, messageContent, messageTime } from "../format";
 import type { Attachment, ChatMessage, Conversation } from "../types";
+import {
+  ComposerAttachmentIcon,
+  ComposerSendIcon,
+  ComposerStopIcon,
+} from "./ComposerIcons";
 import { Icon } from "./Icon";
 
 interface ChatPanelProps {
@@ -186,26 +191,59 @@ function MessageAttachments({ attachments }: { attachments: Record<string, unkno
 function DeepThinkingMessage({
   card,
   classes,
+  active = false,
   showAvatar = true,
 }: {
   card: Record<string, unknown>;
   classes: string;
+  active?: boolean;
   showAvatar?: boolean;
 }) {
   const startTime = Number(card.startTime ?? 0);
   const endTime = Number(card.endTime ?? 0);
   const stage = Number(card.stage ?? 0);
-  const loading = card.isLoading === true || stage === 0 || (stage > 0 && stage < 4);
+  const stageCompleted = stage === 4 || stage === 5;
+  const completed = stageCompleted && !active;
+  const loading = active || (
+    !stageCompleted
+    && (card.isLoading === true || stage === 0 || (stage > 0 && stage < 4))
+  );
   const thinkingText = String(card.thinkingContent ?? "").trim();
-  const elapsed = useElapsedTime(startTime, endTime, loading);
+  const thinkingBodyRef = useRef<HTMLDivElement>(null);
+  const [expanded, setExpanded] = useState(loading);
+  const elapsed = useElapsedTime(startTime, loading ? 0 : endTime, loading);
   const timeLabel = elapsed > 0 ? formatThinkTime(elapsed) : "";
   const title = loading ? "正在思考" : "思考完成";
   const label = timeLabel ? `${title} (用时${timeLabel})` : title;
 
+  useEffect(() => {
+    if (loading) {
+      setExpanded(true);
+    } else if (completed) {
+      setExpanded(false);
+    }
+  }, [completed, loading]);
+
+  useEffect(() => {
+    const body = thinkingBodyRef.current;
+    if (loading && body) body.scrollTop = body.scrollHeight;
+  }, [loading, thinkingText]);
+
   return (
     <article className={classes}>
       <div className="message-content">
-        <details className={`message-reasoning${loading ? " streaming" : ""}`} open={loading || undefined}>
+        <details
+          className={`message-reasoning${loading ? " streaming" : ""}`}
+          open={expanded}
+          onToggle={(event) => {
+            const nextExpanded = event.currentTarget.open;
+            if (loading && !nextExpanded) {
+              event.currentTarget.open = true;
+              return;
+            }
+            setExpanded(nextExpanded);
+          }}
+        >
           <summary>
             {showAvatar && <AgentAvatar className="reasoning-avatar" />}
             <span className="reasoning-toggle-label">
@@ -219,7 +257,7 @@ function DeepThinkingMessage({
             </span>
           )}
           {thinkingText && (
-            <div className="reasoning-body">
+            <div className="reasoning-body" aria-live="polite" ref={thinkingBodyRef}>
               <div className="message-text" dangerouslySetInnerHTML={{ __html: markdownToHtml(thinkingText) }} />
             </div>
           )}
@@ -275,10 +313,12 @@ function toolIcon(card: Record<string, unknown>): "terminal" | "browser" | "sear
 
 function Message({
   message,
+  active = false,
   suppressReasoning = false,
   suppressThinkingAvatar = false,
 }: {
   message: ChatMessage;
+  active?: boolean;
   suppressReasoning?: boolean;
   suppressThinkingAvatar?: boolean;
 }) {
@@ -300,6 +340,7 @@ function Message({
       <DeepThinkingMessage
         card={card}
         classes={classes}
+        active={active}
         showAvatar={!suppressThinkingAvatar}
       />
     );
@@ -334,14 +375,15 @@ function Message({
   }
 
   const text = String(content.text ?? "");
+  const reasoningStreaming = active || Boolean(message.isLoading);
   return (
     <article className={classes}>
       <div className="message-content">
         {reasoning && !suppressReasoning && (
-          <details className={`message-reasoning${message.isLoading ? " streaming" : ""}`} open={Boolean(message.isLoading)}>
+          <details className={`message-reasoning${reasoningStreaming ? " streaming" : ""}`} open={reasoningStreaming}>
             <summary>
               <span className="reasoning-toggle-label">
-                <span className="reasoning-label">{message.isLoading ? "正在思考" : "思考过程"}</span>
+                <span className="reasoning-label">{reasoningStreaming ? "正在思考" : "思考过程"}</span>
                 <Icon className="reasoning-chevron" name="chevron-down" size={16} />
               </span>
             </summary>
@@ -595,6 +637,14 @@ function AgentRunGroup({ group }: { group: RunGroup }) {
   const elapsed = Math.max(0, Math.round((group.endTime - group.startTime) / 1000));
   const timeLabel = formatRunTime(elapsed);
   const label = timeLabel ? `已处理  ${timeLabel}` : "已处理";
+  const groupMessages = [...group.processMessages, ...group.visibleMessages];
+  const activeTailMessage = group.active && groupMessages.length
+    ? newestBySequence(groupMessages)
+    : null;
+
+  useEffect(() => {
+    setExpanded(group.active);
+  }, [group.active]);
 
   return (
     <div className={`agent-run-group${expanded ? " expanded" : ""}`}>
@@ -609,6 +659,7 @@ function AgentRunGroup({ group }: { group: RunGroup }) {
         {group.processMessages.map((msg, index) => (
           <Message
             message={msg}
+            active={msg === activeTailMessage}
             suppressReasoning={group.hasThinking}
             suppressThinkingAvatar={isDeepThinkingMessage(msg)}
             key={String(msg.id ?? `${messageTime(msg)}-${index}`)}
@@ -616,7 +667,12 @@ function AgentRunGroup({ group }: { group: RunGroup }) {
         ))}
       </div>
       {group.visibleMessages.map((msg, index) => (
-        <Message message={msg} suppressReasoning={group.hasThinking} key={String(msg.id ?? `${messageTime(msg)}-v${index}`)} />
+        <Message
+          message={msg}
+          active={msg === activeTailMessage}
+          suppressReasoning={group.hasThinking}
+          key={String(msg.id ?? `${messageTime(msg)}-v${index}`)}
+        />
       ))}
     </div>
   );
@@ -643,11 +699,34 @@ export function ChatPanel({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const sortedMessages = [...messages].sort((left, right) => messageTime(left) - messageTime(right));
-  const hasThinkingCard = sortedMessages.some((message) => {
-    const c = messageContent(message);
-    const cardData = isRecord(c.cardData) ? c.cardData : null;
-    return (Number(message.type) === 2 || cardData) && String(cardData?.type ?? "") === "deep_thinking";
-  });
+  const normalizedActiveTaskId = activeTaskId?.trim() || null;
+  const thinkingTaskIds = new Set(
+    sortedMessages
+      .filter(isDeepThinkingMessage)
+      .map(agentRunParentTaskId)
+      .filter((taskId): taskId is string => Boolean(taskId)),
+  );
+  const firstThinkingMessageByTask = new Map<string, ChatMessage>();
+  sortedMessages
+    .filter(isDeepThinkingMessage)
+    .sort(compareOldestFirst)
+    .forEach((message) => {
+      const taskId = agentRunParentTaskId(message);
+      if (taskId && !firstThinkingMessageByTask.has(taskId)) {
+        firstThinkingMessageByTask.set(taskId, message);
+      }
+    });
+  const activeTaskMessages = normalizedActiveTaskId
+    ? sortedMessages.filter(
+      (message) => (
+        agentRunParentTaskId(message) === normalizedActiveTaskId
+        && isAgentRunCandidateMessage(message)
+      ),
+    )
+    : [];
+  const activeTailMessage = activeTaskMessages.length
+    ? newestBySequence(activeTaskMessages)
+    : null;
   const isProcessing = sending || Boolean(activeTaskId && !clarifyTaskId);
   const canSend = !isProcessing && (clarifyTaskId ? Boolean(draft.trim()) : Boolean(draft.trim() || attachments.length));
 
@@ -732,17 +811,26 @@ export function ChatPanel({
 
       <div className="message-list" aria-live="polite" ref={messageListRef}>
         {!sortedMessages.length && <EmptyGreeting />}
-        {buildGroups(sortedMessages, activeTaskId).map((item, index) =>
-          item.kind === "single" ? (
+        {buildGroups(sortedMessages, activeTaskId).map((item, index) => {
+          if (item.kind === "run") {
+            return <AgentRunGroup group={item.group} key={`run-${item.group.taskId}`} />;
+          }
+          const taskId = agentRunParentTaskId(item.message);
+          const isThinking = isDeepThinkingMessage(item.message);
+          return (
             <Message
               message={item.message}
-              suppressReasoning={hasThinkingCard}
+              active={item.message === activeTailMessage}
+              suppressReasoning={thinkingTaskIds.has(taskId ?? "")}
+              suppressThinkingAvatar={Boolean(
+                isThinking
+                && taskId
+                && firstThinkingMessageByTask.get(taskId) !== item.message
+              )}
               key={String(item.message.id ?? `${messageTime(item.message)}-${index}`)}
             />
-          ) : (
-            <AgentRunGroup group={item.group} key={`run-${item.group.taskId}`} />
-          ),
-        )}
+          );
+        })}
       </div>
 
       <div className="composer-region">
@@ -792,17 +880,17 @@ export function ChatPanel({
               title="添加附件"
               onClick={() => attachmentInputRef.current?.click()}
             >
-              <Icon name="paperclip" size={20} />
+              <ComposerAttachmentIcon />
             </button>
             <input ref={attachmentInputRef} type="file" multiple hidden onChange={(event) => void addAttachments(event)} />
             <span className="composer-hint">Enter 发送 · Shift + Enter 换行</span>
             {activeTaskId && !clarifyTaskId ? (
               <button className="send-button stop" type="button" aria-label="停止" title="停止" onClick={onCancel}>
-                <Icon name="square" size={18} />
+                <ComposerStopIcon />
               </button>
             ) : (
               <button className={`send-button${sending ? " loading" : ""}`} type="submit" aria-label="发送" disabled={!canSend}>
-                <Icon name="arrow-up" size={18} />
+                <ComposerSendIcon />
               </button>
             )}
           </div>

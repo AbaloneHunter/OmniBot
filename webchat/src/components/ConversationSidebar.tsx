@@ -1,16 +1,42 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import {
+  Archive,
+  ArchiveRestore,
+  Pin,
+  PinOff,
+  Trash2,
+} from "lucide-react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type RefObject,
+} from "react";
 import { conversationKey, modeLabel, relativeDate } from "../format";
 import type { ConnectionStatus, Conversation, ConversationMode } from "../types";
 import { Icon, type IconName } from "./Icon";
 
 interface ConversationSidebarProps {
   conversations: Conversation[];
+  archivedConversations: Conversation[];
+  archivedLoading: boolean;
   selected: Conversation | null;
-  archivedOnly: boolean;
   connectionStatus: ConnectionStatus;
   onCreate: (mode: ConversationMode) => void;
   onSelect: (conversation: Conversation) => void;
-  onToggleArchived: () => void;
+  onLoadArchived: () => Promise<void>;
+  onArchive: (conversation: Conversation) => Promise<void>;
+  onRestore: (conversation: Conversation) => Promise<void>;
+  onSetPinned: (conversation: Conversation, pinned: boolean) => Promise<void>;
+  onDelete: (conversation: Conversation) => Promise<void>;
+}
+
+interface ContextMenuState {
+  conversation: Conversation;
+  x: number;
+  y: number;
 }
 
 const STATUS_LABELS: Record<ConnectionStatus, string> = {
@@ -19,14 +45,21 @@ const STATUS_LABELS: Record<ConnectionStatus, string> = {
   connecting: "正在连接实时事件",
 };
 
-const SECTION_ORDER = ["codex", "agent", "chat"] as const;
+const SECTION_ORDER = ["pinned", "codex", "agent", "chat"] as const;
 
 type ConversationSection = typeof SECTION_ORDER[number];
 
 const SECTION_LABELS: Record<ConversationSection, string> = {
+  pinned: "置顶会话",
   codex: "Codex",
   agent: "Agent",
   chat: "纯聊天",
+};
+
+const SECTION_ICONS: Record<Exclude<ConversationSection, "pinned">, IconName> = {
+  codex: "codex",
+  agent: "agent",
+  chat: "chat",
 };
 
 const CREATE_OPTIONS: ReadonlyArray<{
@@ -40,26 +73,44 @@ const CREATE_OPTIONS: ReadonlyArray<{
 ];
 
 function conversationSection(conversation: Conversation): ConversationSection {
+  if (conversation.isPinned) return "pinned";
   if (conversation.mode === "codex") return "codex";
   if (conversation.mode === "chat_only") return "chat";
   return "agent";
 }
 
+function clampMenuPosition(value: number, size: number, viewportSize: number): number {
+  const margin = 8;
+  return Math.max(margin, Math.min(value, viewportSize - size - margin));
+}
+
 export function ConversationSidebar({
   conversations,
+  archivedConversations,
+  archivedLoading,
   selected,
-  archivedOnly,
   connectionStatus,
   onCreate,
   onSelect,
-  onToggleArchived,
+  onLoadArchived,
+  onArchive,
+  onRestore,
+  onSetPinned,
+  onDelete,
 }: ConversationSidebarProps) {
   const [search, setSearch] = useState("");
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const [archivePanelOpen, setArchivePanelOpen] = useState(false);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [busyConversationKeys, setBusyConversationKeys] = useState<Set<string>>(new Set());
   const createMenuAnchorRef = useRef<HTMLDivElement>(null);
   const createButtonRef = useRef<HTMLButtonElement>(null);
   const createMenuRef = useRef<HTMLDivElement>(null);
+  const archivePanelAnchorRef = useRef<HTMLDivElement>(null);
+  const archiveButtonRef = useRef<HTMLButtonElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+  const contextMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const query = search.trim().toLowerCase();
 
   useEffect(() => {
@@ -87,9 +138,65 @@ export function ConversationSidebar({
     };
   }, [createMenuOpen]);
 
-  function handleCreateMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+  useEffect(() => {
+    if (!archivePanelOpen) return undefined;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!archivePanelAnchorRef.current?.contains(event.target as Node)) {
+        setArchivePanelOpen(false);
+      }
+    };
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setArchivePanelOpen(false);
+      archiveButtonRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [archivePanelOpen]);
+
+  useEffect(() => {
+    if (!contextMenu) return undefined;
+    const focusFrame = window.requestAnimationFrame(() => {
+      contextMenuRef.current?.querySelector<HTMLButtonElement>("[role='menuitem']")?.focus();
+    });
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!contextMenuRef.current?.contains(event.target as Node)) {
+        setContextMenu(null);
+      }
+    };
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setContextMenu(null);
+      contextMenuTriggerRef.current?.focus();
+    };
+    const closeMenu = () => setContextMenu(null);
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("blur", closeMenu);
+    window.addEventListener("resize", closeMenu);
+    window.addEventListener("scroll", closeMenu, true);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("blur", closeMenu);
+      window.removeEventListener("resize", closeMenu);
+      window.removeEventListener("scroll", closeMenu, true);
+    };
+  }, [contextMenu]);
+
+  function handleMenuKeyDown(
+    event: KeyboardEvent<HTMLDivElement>,
+    menuRef: RefObject<HTMLDivElement | null>,
+  ) {
     if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
-    const items = [...(createMenuRef.current?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? [])];
+    const items = [...(menuRef.current?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? [])];
     if (!items.length) return;
     event.preventDefault();
     const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
@@ -108,6 +215,20 @@ export function ConversationSidebar({
     onCreate(mode);
   }
 
+  function toggleCreateMenu() {
+    setArchivePanelOpen(false);
+    setContextMenu(null);
+    setCreateMenuOpen((open) => !open);
+  }
+
+  function toggleArchivePanel() {
+    const opening = !archivePanelOpen;
+    setCreateMenuOpen(false);
+    setContextMenu(null);
+    setArchivePanelOpen(opening);
+    if (opening) void onLoadArchived();
+  }
+
   function toggleSection(id: string) {
     setCollapsedSections((prev) => {
       const next = new Set(prev);
@@ -115,6 +236,65 @@ export function ConversationSidebar({
       else next.add(id);
       return next;
     });
+  }
+
+  function openContextMenuAt(
+    conversation: Conversation,
+    trigger: HTMLButtonElement,
+    x: number,
+    y: number,
+  ) {
+    contextMenuTriggerRef.current = trigger;
+    setCreateMenuOpen(false);
+    setArchivePanelOpen(false);
+    setContextMenu({
+      conversation,
+      x: clampMenuPosition(x, 176, window.innerWidth),
+      y: clampMenuPosition(y, 132, window.innerHeight),
+    });
+  }
+
+  function openContextMenu(
+    event: ReactMouseEvent<HTMLButtonElement>,
+    conversation: Conversation,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    openContextMenuAt(conversation, event.currentTarget, event.clientX, event.clientY);
+  }
+
+  function handleConversationKeyDown(
+    event: KeyboardEvent<HTMLButtonElement>,
+    conversation: Conversation,
+  ) {
+    if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    openContextMenuAt(conversation, event.currentTarget, rect.left + 24, rect.top + rect.height / 2);
+  }
+
+  async function runConversationAction(
+    conversation: Conversation,
+    action: () => Promise<void>,
+  ) {
+    const key = conversationKey(conversation);
+    setBusyConversationKeys((current) => new Set(current).add(key));
+    try {
+      await action();
+    } finally {
+      setBusyConversationKeys((current) => {
+        const next = new Set(current);
+        next.delete(key);
+        return next;
+      });
+    }
+  }
+
+  function runContextMenuAction(action: (conversation: Conversation) => Promise<void>) {
+    if (!contextMenu) return;
+    const { conversation } = contextMenu;
+    setContextMenu(null);
+    void runConversationAction(conversation, () => action(conversation));
   }
 
   const sections = useMemo(() => {
@@ -151,15 +331,100 @@ export function ConversationSidebar({
             </button>
           )}
         </div>
-        <button
-          className={`sidebar-round-button${archivedOnly ? " active" : ""}`}
-          type="button"
-          aria-label={archivedOnly ? "返回当前对话" : "查看归档对话"}
-          title={archivedOnly ? "返回当前对话" : "查看归档对话"}
-          onClick={onToggleArchived}
+        <div
+          className="archive-popover-anchor"
+          ref={archivePanelAnchorRef}
         >
-          {archivedOnly ? <Icon name="chevron-left" size={18} /> : <Icon name="archive" size={17} />}
-        </button>
+          <button
+            className={`sidebar-round-button${archivePanelOpen ? " active" : ""}`}
+            type="button"
+            aria-label="查看归档对话"
+            aria-haspopup="dialog"
+            aria-expanded={archivePanelOpen}
+            aria-controls={archivePanelOpen ? "archived-conversation-card" : undefined}
+            title="查看归档对话"
+            ref={archiveButtonRef}
+            onClick={toggleArchivePanel}
+          >
+            <Archive aria-hidden="true" size={17} strokeWidth={1.8} />
+          </button>
+          {archivePanelOpen && (
+            <section
+              className="archive-popover"
+              id="archived-conversation-card"
+              role="dialog"
+              aria-labelledby="archived-conversation-title"
+            >
+              <header className="archive-popover-header">
+                <span>
+                  <strong id="archived-conversation-title">已归档</strong>
+                  <small>{archivedConversations.length}</small>
+                </span>
+                <button
+                  type="button"
+                  aria-label="关闭归档会话"
+                  onClick={() => {
+                    setArchivePanelOpen(false);
+                    archiveButtonRef.current?.focus();
+                  }}
+                >
+                  <Icon name="x" size={14} />
+                </button>
+              </header>
+              <div className="archive-popover-list" aria-busy={archivedLoading} aria-live="polite">
+                {archivedLoading ? (
+                  <div className="archive-popover-status">正在加载归档会话…</div>
+                ) : archivedConversations.length ? (
+                  archivedConversations.map((conversation) => {
+                    const key = conversationKey(conversation);
+                    const busy = busyConversationKeys.has(key);
+                    return (
+                      <article className="archive-conversation-item" key={key}>
+                        <span className="archive-conversation-copy">
+                          <strong>{conversation.title || "新对话"}</strong>
+                          <time>{relativeDate(conversation.updatedAt)}</time>
+                        </span>
+                        <span className="archive-conversation-actions">
+                          <button
+                            className="archive-item-action restore"
+                            type="button"
+                            aria-label={`恢复“${conversation.title || "新对话"}”`}
+                            title="恢复会话"
+                            disabled={busy}
+                            onClick={() => void runConversationAction(
+                              conversation,
+                              () => onRestore(conversation),
+                            )}
+                          >
+                            <ArchiveRestore aria-hidden="true" size={16} strokeWidth={1.8} />
+                          </button>
+                          <button
+                            className="archive-item-action delete"
+                            type="button"
+                            aria-label={`删除“${conversation.title || "新对话"}”`}
+                            title="删除会话"
+                            disabled={busy}
+                            onClick={() => void runConversationAction(
+                              conversation,
+                              () => onDelete(conversation),
+                            )}
+                          >
+                            <Trash2 aria-hidden="true" size={16} strokeWidth={1.8} />
+                          </button>
+                        </span>
+                      </article>
+                    );
+                  })
+                ) : (
+                  <div className="archive-popover-status empty">
+                    <Archive aria-hidden="true" size={20} strokeWidth={1.7} />
+                    <span>暂无归档会话</span>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+        </div>
         <div
           className="new-conversation-anchor"
           ref={createMenuAnchorRef}
@@ -178,7 +443,7 @@ export function ConversationSidebar({
             aria-controls={createMenuOpen ? "new-conversation-menu" : undefined}
             title="新建对话"
             ref={createButtonRef}
-            onClick={() => setCreateMenuOpen((open) => !open)}
+            onClick={toggleCreateMenu}
           >
             <Icon name="plus" size={18} />
           </button>
@@ -189,7 +454,7 @@ export function ConversationSidebar({
               role="menu"
               aria-label="选择新对话模式"
               ref={createMenuRef}
-              onKeyDown={handleCreateMenuKeyDown}
+              onKeyDown={(event) => handleMenuKeyDown(event, createMenuRef)}
             >
               {CREATE_OPTIONS.map((option) => (
                 <button
@@ -220,7 +485,7 @@ export function ConversationSidebar({
         {!resultCount && (
           <div className="list-empty">
             <Icon name={query ? "search" : "agent"} size={24} />
-            <strong>{query ? "没有找到相关对话" : archivedOnly ? "没有归档对话" : "还没有对话"}</strong>
+            <strong>{query ? "没有找到相关对话" : "还没有对话"}</strong>
             <span>{query ? "换个关键词试试" : "点击右上角开始新对话"}</span>
           </div>
         )}
@@ -234,7 +499,11 @@ export function ConversationSidebar({
                 aria-expanded={!collapsed}
                 onClick={() => toggleSection(section.id)}
               >
-                <Icon name="agent" size={14} />
+                {section.id === "pinned" ? (
+                  <Pin aria-hidden="true" size={14} strokeWidth={1.8} />
+                ) : (
+                  <Icon name={SECTION_ICONS[section.id]} size={14} />
+                )}
                 <span>{SECTION_LABELS[section.id]}</span>
                 <small>{section.items.length}</small>
                 <Icon
@@ -252,7 +521,13 @@ export function ConversationSidebar({
                       key={conversationKey(conversation)}
                       className={`conversation-item${active ? " active" : ""}`}
                       type="button"
-                      onClick={() => onSelect(conversation)}
+                      aria-keyshortcuts="Shift+F10"
+                      onClick={() => {
+                        setContextMenu(null);
+                        onSelect(conversation);
+                      }}
+                      onContextMenu={(event) => openContextMenu(event, conversation)}
+                      onKeyDown={(event) => handleConversationKeyDown(event, conversation)}
                     >
                       <span className="conversation-item-heading">
                         <strong>{conversation.title || "新对话"}</strong>
@@ -272,6 +547,50 @@ export function ConversationSidebar({
         <span className={`connection-dot ${connectionStatus === "connecting" ? "" : connectionStatus}`} />
         <span>{STATUS_LABELS[connectionStatus]}</span>
       </footer>
+
+      {contextMenu && (
+        <div
+          className="conversation-context-menu"
+          role="menu"
+          aria-label={`“${contextMenu.conversation.title || "新对话"}”操作`}
+          ref={contextMenuRef}
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onKeyDown={(event) => handleMenuKeyDown(event, contextMenuRef)}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => runContextMenuAction(onArchive)}
+          >
+            <Archive aria-hidden="true" size={16} strokeWidth={1.8} />
+            <span>归档</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => runContextMenuAction((conversation) => (
+              onSetPinned(conversation, !conversation.isPinned)
+            ))}
+          >
+            {contextMenu.conversation.isPinned ? (
+              <PinOff aria-hidden="true" size={16} strokeWidth={1.8} />
+            ) : (
+              <Pin aria-hidden="true" size={16} strokeWidth={1.8} />
+            )}
+            <span>{contextMenu.conversation.isPinned ? "取消置顶" : "置顶"}</span>
+          </button>
+          <div className="conversation-context-menu-separator" role="separator" />
+          <button
+            className="danger"
+            type="button"
+            role="menuitem"
+            onClick={() => runContextMenuAction(onDelete)}
+          >
+            <Trash2 aria-hidden="true" size={16} strokeWidth={1.8} />
+            <span>删除</span>
+          </button>
+        </div>
+      )}
     </aside>
   );
 }

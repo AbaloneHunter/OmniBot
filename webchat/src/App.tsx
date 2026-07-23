@@ -48,9 +48,10 @@ export default function App() {
   const [loginError, setLoginError] = useState("");
   const [globalError, setGlobalError] = useState("");
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
+  const [archivedLoading, setArchivedLoading] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [archivedOnly, setArchivedOnly] = useState(false);
   const [sending, setSending] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [clarifyTaskId, setClarifyTaskId] = useState<string | null>(null);
@@ -135,13 +136,13 @@ export default function App() {
     }
   }
 
-  async function loadConversations(preserveSelection = true, archived = archivedOnly) {
+  async function loadConversations(preserveSelection = true) {
     const payload = await request<Conversation[]>("/conversations", {
-      query: { includeArchived: archived, archivedOnly: archived },
+      query: { includeArchived: false },
     });
     const previousKey = preserveSelection ? conversationKey(selectedRef.current) : null;
     const nextConversations = (Array.isArray(payload) ? payload : [])
-      .filter((item) => archived ? item.isArchived : !item.isArchived)
+      .filter((item) => !item.isArchived)
       .sort((left, right) => Number(right.updatedAt ?? 0) - Number(left.updatedAt ?? 0));
     const nextSelected = nextConversations.find((item) => conversationKey(item) === previousKey)
       ?? nextConversations[0]
@@ -152,6 +153,24 @@ export default function App() {
     recordConversationNavigation(nextSelected);
     if (nextSelected) await loadMessages(nextSelected);
     else setMessages([]);
+  }
+
+  async function loadArchivedConversations(reportError = true) {
+    setArchivedLoading(true);
+    try {
+      const payload = await request<Conversation[]>("/conversations", {
+        query: { includeArchived: true, archivedOnly: true },
+      });
+      setArchivedConversations(
+        (Array.isArray(payload) ? payload : [])
+          .filter((item) => item.isArchived)
+          .sort((left, right) => Number(right.updatedAt ?? 0) - Number(left.updatedAt ?? 0)),
+      );
+    } catch (error) {
+      if (reportError) showError(error);
+    } finally {
+      setArchivedLoading(false);
+    }
   }
 
   async function loadWorkspace(path = workspacePathRef.current, reportError = true) {
@@ -188,7 +207,7 @@ export default function App() {
         window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
       }
       await Promise.all([
-        loadConversations(false, false),
+        loadConversations(false),
         rootPath ? loadWorkspace(rootPath, false) : Promise.resolve(),
       ]);
     } catch (error) {
@@ -207,11 +226,10 @@ export default function App() {
         method: "POST",
         body: { title: "新对话", mode },
       });
-      setArchivedOnly(false);
       selectedRef.current = conversation;
       setSelectedConversation(conversation);
       recordConversationNavigation(conversation);
-      await loadConversations(true, false);
+      await loadConversations(true);
       setConversationsOpen(false);
     } catch (error) {
       showError(error);
@@ -226,37 +244,50 @@ export default function App() {
     await loadMessages(conversation);
   }
 
-  async function toggleArchivedFilter() {
-    const next = !archivedOnly;
-    setArchivedOnly(next);
-    try {
-      await loadConversations(false, next);
-    } catch (error) {
-      showError(error);
-    }
-  }
-
-  async function updateArchiveState() {
-    const conversation = selectedRef.current;
+  async function updateArchiveState(
+    conversation: Conversation | null = selectedRef.current,
+    nextArchived?: boolean,
+  ) {
     if (!conversation) return;
+    const archived = nextArchived ?? !conversation.isArchived;
     try {
       await request(`/conversations/${conversation.id}`, {
         method: "PATCH",
-        body: { isArchived: !conversation.isArchived },
+        body: { isArchived: archived },
       });
-      await loadConversations(false);
+      await Promise.all([
+        loadConversations(true),
+        loadArchivedConversations(false),
+      ]);
+      showToast(archived ? "已归档" : "已恢复到会话列表");
     } catch (error) {
       showError(error);
     }
   }
 
-  async function deleteConversation() {
-    const conversation = selectedRef.current;
+  async function updatePinState(conversation: Conversation, pinned: boolean) {
+    try {
+      await request(`/conversations/${conversation.id}`, {
+        method: "PATCH",
+        body: { isPinned: pinned },
+      });
+      await loadConversations(true);
+      showToast(pinned ? "已置顶" : "已取消置顶");
+    } catch (error) {
+      showError(error);
+    }
+  }
+
+  async function deleteConversation(conversation: Conversation | null = selectedRef.current) {
     if (!conversation) return;
     if (!window.confirm(`删除“${conversation.title || "当前对话"}”？此操作无法撤销。`)) return;
     try {
       await request(`/conversations/${conversation.id}`, { method: "DELETE" });
-      await loadConversations(false);
+      await Promise.all([
+        loadConversations(true),
+        loadArchivedConversations(false),
+      ]);
+      showToast("会话已删除");
     } catch (error) {
       showError(error);
     }
@@ -283,7 +314,6 @@ export default function App() {
         });
         selectedRef.current = conversation;
         setSelectedConversation(conversation);
-        setArchivedOnly(false);
       }
       const result = await request<RunResult>(`/conversations/${conversation.id}/runs`, {
         method: "POST",
@@ -294,7 +324,7 @@ export default function App() {
         },
       });
       setActiveTaskId(String(result?.taskId ?? "") || null);
-      void loadConversations(true, false).catch(showError);
+      void loadConversations(true).catch(showError);
       return true;
     } catch (error) {
       showError(error);
@@ -381,6 +411,7 @@ export default function App() {
   function handleRealtimeEvent(eventName: RealtimeEventName, data: RealtimeEventData) {
     if (["conversation_created", "conversation_updated", "conversation_deleted"].includes(eventName)) {
       void loadConversations(true).catch(showError);
+      void loadArchivedConversations(false);
       return;
     }
     if (eventName === "messages_replaced" && sameSelectedConversation(data)) {
@@ -526,12 +557,17 @@ export default function App() {
         </header>
         <ConversationSidebar
           conversations={conversations}
+          archivedConversations={archivedConversations}
+          archivedLoading={archivedLoading}
           selected={selectedConversation}
-          archivedOnly={archivedOnly}
           connectionStatus={connectionStatus}
           onCreate={(mode) => void createConversation(mode)}
           onSelect={(conversation) => void selectConversation(conversation)}
-          onToggleArchived={() => void toggleArchivedFilter()}
+          onLoadArchived={() => loadArchivedConversations()}
+          onArchive={(conversation) => updateArchiveState(conversation, true)}
+          onRestore={(conversation) => updateArchiveState(conversation, false)}
+          onSetPinned={(conversation, pinned) => updatePinState(conversation, pinned)}
+          onDelete={(conversation) => deleteConversation(conversation)}
         />
         <ChatPanel
           conversation={selectedConversation}

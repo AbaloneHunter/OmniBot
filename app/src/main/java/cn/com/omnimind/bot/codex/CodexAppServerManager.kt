@@ -16,6 +16,8 @@ import cn.com.omnimind.bot.agent.AgentWorkspaceAttachmentSupport
 import cn.com.omnimind.bot.agent.AgentWorkspaceManager
 import cn.com.omnimind.bot.util.TaskRuntimeSettings
 import com.google.gson.JsonParser
+import com.rk.libcommons.OmnibotTerminalEnvironment
+import com.rk.terminal.runtime.TerminalDistribution
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -46,6 +48,8 @@ class CodexAppServerManager private constructor(
     @Volatile
     private var activeRuntime: CodexRuntimeKind? = null
     @Volatile
+    private var activeLocalDistributionId: String? = null
+    @Volatile
     private var eventListener: ((Map<String, Any?>) -> Unit)? = null
 
     fun setEventListener(listener: ((Map<String, Any?>) -> Unit)?) {
@@ -59,7 +63,12 @@ class CodexAppServerManager private constructor(
         } else {
             localConfigStore.read()
         }
-        val connected = session?.isRunning == true && activeRuntime == runtime.kind
+        val localDistributionId = if (runtime.kind == CodexRuntimeKind.LOCAL) {
+            TerminalDistribution.selected().id
+        } else {
+            null
+        }
+        val connected = isActiveSessionFor(runtime.kind, localDistributionId)
         val probe = when (runtime.kind) {
             CodexRuntimeKind.REMOTE -> probeRemoteCodex(runtime.remoteConfig)
             CodexRuntimeKind.LOCAL -> probeCodex()
@@ -87,18 +96,28 @@ class CodexAppServerManager private constructor(
     suspend fun connect(): Map<String, Any?> {
         sessionMutex.withLock {
             val runtime = resolveRuntime()
-            val existing = session
-            if (existing?.isRunning == true && activeRuntime == runtime.kind) {
+            val localDistributionId = if (runtime.kind == CodexRuntimeKind.LOCAL) {
+                TerminalDistribution.selected().id
+            } else {
+                null
+            }
+            if (isActiveSessionFor(runtime.kind, localDistributionId)) {
                 return status()
             }
+            val existing = session
             existing?.disconnect()
             session = null
             activeRuntime = null
+            activeLocalDistributionId = null
             activeTurnsByThreadId.clear()
             val localConfig = if (runtime.kind == CodexRuntimeKind.LOCAL) {
                 resolveStoredLocalConfig(allowReadFailure = false)
             } else {
                 localConfigStore.read()
+            }
+            if (runtime.kind == CodexRuntimeKind.LOCAL) {
+                requireLocalCodexConfig(localConfig)
+                writeLocalConfigToml(localConfig)
             }
             val nextSession = CodexAppServerSession(
                 context = appContext,
@@ -126,6 +145,7 @@ class CodexAppServerManager private constructor(
             )
             session = nextSession
             activeRuntime = runtime.kind
+            activeLocalDistributionId = localDistributionId
             try {
                 nextSession.start(clientVersion = BuildConfig.VERSION_NAME)
             } catch (error: Throwable) {
@@ -134,6 +154,7 @@ class CodexAppServerManager private constructor(
                 }
                 if (activeRuntime == runtime.kind) {
                     activeRuntime = null
+                    activeLocalDistributionId = null
                 }
                 throw error
             }
@@ -146,6 +167,7 @@ class CodexAppServerManager private constructor(
             session?.disconnect()
             session = null
             activeRuntime = null
+            activeLocalDistributionId = null
             activeTurnsByThreadId.clear()
         }
         return status()
@@ -169,6 +191,7 @@ class CodexAppServerManager private constructor(
                 args.ifEmpty { mapOf("limit" to 100) },
                 "models"
             )
+            "config/read" -> readEffectiveRunConfig()
             "collaborationMode/list" -> requestWrappedList(
                 "collaborationMode/list",
                 args,
@@ -451,6 +474,23 @@ class CodexAppServerManager private constructor(
         )
     }
 
+    private suspend fun readEffectiveRunConfig(): Map<String, Any?> {
+        val response = request("config/read", emptyMap<String, Any?>())
+        val normalized = when (response) {
+            is Map<*, *> -> response.entries.associate { (key, value) ->
+                key.toString() to value
+            }
+            else -> emptyMap()
+        }
+        if (resolveRuntime().kind != CodexRuntimeKind.LOCAL) {
+            return normalized
+        }
+        return mergeStoredLocalRunConfig(
+            response = normalized,
+            localConfig = localConfigStore.read()
+        )
+    }
+
     private suspend fun resolveStoredLocalConfig(
         allowReadFailure: Boolean
     ): CodexLocalConfig {
@@ -562,6 +602,7 @@ class CodexAppServerManager private constructor(
             session?.disconnect()
             session = null
             activeRuntime = null
+            activeLocalDistributionId = null
             activeTurnsByThreadId.clear()
         }
         return buildCodexLocalConfigPayload(
@@ -667,13 +708,13 @@ class CodexAppServerManager private constructor(
     }
 
     private suspend fun listLocalApiModels(args: Map<String, Any?>): Map<String, Any?> {
-        val baseUrl = args.stringValue("baseUrl").orEmpty()
-        val apiKey = args.stringValue("apiKey").orEmpty()
-        require(baseUrl.isNotBlank()) { "Custom API base URL is required." }
-        require(apiKey.isNotBlank()) { "Custom API key is required." }
+        val source = resolveLocalApiModelSource(
+            args = args,
+            storedConfig = resolveStoredLocalConfig(allowReadFailure = false)
+        )
         val models = HttpController.fetchProviderModels(
-            apiBase = baseUrl,
-            apiKey = apiKey,
+            apiBase = source.baseUrl,
+            apiKey = source.apiKey,
             protocolType = "openai_compatible",
             wireApi = OpenAiWireApi.RESPONSES
         )
@@ -856,12 +897,31 @@ class CodexAppServerManager private constructor(
     }
 
     private suspend fun ensureConnectedSession(): CodexAppServerSession {
+        val runtime = resolveRuntime()
+        val localDistributionId = if (runtime.kind == CodexRuntimeKind.LOCAL) {
+            TerminalDistribution.selected().id
+        } else {
+            null
+        }
         val existing = session
-        if (existing?.isRunning == true) {
+        if (isActiveSessionFor(runtime.kind, localDistributionId)) {
             return existing
+                ?: throw IllegalStateException("Codex app-server session is unavailable.")
         }
         connect()
         return session ?: throw IllegalStateException("Codex app-server is not connected.")
+    }
+
+    private fun isActiveSessionFor(
+        runtimeKind: CodexRuntimeKind,
+        localDistributionId: String?
+    ): Boolean {
+        return session?.isRunning == true &&
+            activeRuntime == runtimeKind &&
+            (
+                runtimeKind != CodexRuntimeKind.LOCAL ||
+                    activeLocalDistributionId == localDistributionId
+                )
     }
 
     private suspend fun handleServerMessage(message: Map<String, Any?>) {
@@ -1476,28 +1536,68 @@ internal fun buildCodexConfigToml(
     baseUrl: String,
     model: String
 ): String {
-    val lines = mutableListOf("model_provider = ${tomlString(authMode.providerId)}")
-    model.trim().takeIf { it.isNotEmpty() }?.let {
-        lines += "model = ${tomlString(it)}"
-    }
-    lines += "model_reasoning_effort = \"xhigh\""
-    lines += "disable_response_storage = true"
-    if (authMode == CodexLocalAuthMode.CHATGPT) {
-        lines += "cli_auth_credentials_store = \"file\""
-    } else {
-        lines += ""
-        lines += "[model_providers.omnimind]"
-        lines += "name = \"omnimind\""
-        lines += "base_url = ${tomlString(baseUrl.trim())}"
-        lines += "wire_api = \"responses\""
-        lines += "env_key = ${tomlString(CODEX_CUSTOM_API_KEY_ENV)}"
-        lines += "requires_openai_auth = false"
-    }
-    return lines.joinToString(separator = "\n", postfix = "\n")
+    return OmnibotTerminalEnvironment.buildManagedCodexConfigToml(
+        authMode = authMode.payloadValue,
+        baseUrl = baseUrl,
+        model = model
+    )
 }
 
-private val CodexLocalAuthMode.providerId: String
-    get() = if (this == CodexLocalAuthMode.CHATGPT) "openai" else "omnimind"
+internal fun requireLocalCodexConfig(localConfig: CodexLocalConfig) {
+    if (localConfig.authMode == CodexLocalAuthMode.CHATGPT) {
+        return
+    }
+    require(localConfig.baseUrl.isNotBlank()) {
+        "Local Codex API base URL is required."
+    }
+    require(localConfig.apiModel.isNotBlank()) {
+        "Local Codex API model is required."
+    }
+    require(localConfig.apiKey.isNotBlank()) {
+        "Local Codex API key is required."
+    }
+}
+
+internal data class CodexLocalApiModelSource(
+    val baseUrl: String,
+    val apiKey: String
+)
+
+internal fun resolveLocalApiModelSource(
+    args: Map<String, Any?>,
+    storedConfig: CodexLocalConfig
+): CodexLocalApiModelSource {
+    val baseUrl = if (args.containsKey("baseUrl")) {
+        args["baseUrl"]?.toString().orEmpty().trim()
+    } else {
+        storedConfig.baseUrl.trim()
+    }
+    val apiKey = if (args.containsKey("apiKey")) {
+        args["apiKey"]?.toString().orEmpty().trim()
+    } else {
+        storedConfig.apiKey.trim()
+    }
+    require(baseUrl.isNotBlank()) { "Custom API base URL is required." }
+    require(apiKey.isNotBlank()) { "Custom API key is required." }
+    return CodexLocalApiModelSource(baseUrl = baseUrl, apiKey = apiKey)
+}
+
+internal fun mergeStoredLocalRunConfig(
+    response: Map<String, Any?>,
+    localConfig: CodexLocalConfig
+): Map<String, Any?> {
+    val selectedModel = when (localConfig.authMode) {
+        CodexLocalAuthMode.CHATGPT -> localConfig.officialModel
+        CodexLocalAuthMode.API -> localConfig.apiModel
+    }.trim()
+    if (selectedModel.isEmpty()) {
+        return response
+    }
+    return LinkedHashMap(response).apply {
+        put("model", selectedModel)
+        putIfAbsent("modelReasoningEffort", "xhigh")
+    }
+}
 
 private fun Map<String, Any?>.stringValueOrStored(key: String, stored: String): String {
     if (!containsKey(key)) {
@@ -1674,32 +1774,6 @@ private fun extractTomlTableBody(source: String, table: String): String? {
     val nextHeader = Regex(pattern = """(?m)^\s*\[""").find(source, bodyStart)
     val bodyEnd = nextHeader?.range?.first ?: source.length
     return source.substring(bodyStart, bodyEnd)
-}
-
-private fun tomlString(value: String): String {
-    return buildString {
-        append('"')
-        value.forEach { char ->
-            when (char) {
-                '\\' -> append("\\\\")
-                '"' -> append("\\\"")
-                '\b' -> append("\\b")
-                '\t' -> append("\\t")
-                '\n' -> append("\\n")
-                '\u000C' -> append("\\f")
-                '\r' -> append("\\r")
-                else -> {
-                    if (char.code < 0x20) {
-                        append("\\u")
-                        append(char.code.toString(16).padStart(4, '0'))
-                    } else {
-                        append(char)
-                    }
-                }
-            }
-        }
-        append('"')
-    }
 }
 
 private fun unescapeTomlBasicString(value: String): String {

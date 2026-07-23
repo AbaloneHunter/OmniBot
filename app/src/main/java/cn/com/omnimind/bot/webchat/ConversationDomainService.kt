@@ -121,7 +121,11 @@ class ConversationDomainService(
             } else {
                 existing.scheduledTaskId
             },
-            summary = conversationMap["summary"]?.toString(),
+            summary = if (conversationMap.containsKey("summary")) {
+                conversationMap["summary"]?.toString()
+            } else {
+                existing.summary
+            },
             contextSummary = incomingContextSummary
                 ?.takeIf { it.isNotEmpty() }
                 ?: existing.contextSummary,
@@ -232,11 +236,13 @@ class ConversationDomainService(
 
     suspend fun listConversationMessages(
         conversationId: Long,
-        conversationMode: String
+        conversationMode: String,
+        finalizeInterruptedEntries: Boolean = true
     ): List<Map<String, Any?>> {
         return historyRepository.listConversationMessages(
             conversationId = conversationId,
-            conversationMode = normalizeConversationMode(conversationMode)
+            conversationMode = normalizeConversationMode(conversationMode),
+            finalizeInterruptedEntries = finalizeInterruptedEntries
         )
     }
 

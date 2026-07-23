@@ -238,6 +238,49 @@ void main() {
     });
   });
 
+  test(
+    'local API input model picker uses configured provider catalog',
+    () async {
+      MethodCall? capturedCall;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        capturedCall = call;
+        return <String, dynamic>{'models': <dynamic>[]};
+      });
+
+      await CodexAppServerService.listModelsForStatus(
+        const CodexStatus(
+          connected: true,
+          ready: true,
+          runtime: 'local',
+          localAuthMode: CodexLocalAuthMode.api,
+        ),
+      );
+
+      expect(capturedCall?.method, 'config/local/models');
+      expect(capturedCall?.arguments, isEmpty);
+    },
+  );
+
+  test('ChatGPT input model picker keeps using Codex model list', () async {
+    MethodCall? capturedCall;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      capturedCall = call;
+      return <String, dynamic>{'models': <dynamic>[]};
+    });
+
+    await CodexAppServerService.listModelsForStatus(
+      const CodexStatus(
+        connected: true,
+        ready: true,
+        runtime: 'local',
+        localAuthMode: CodexLocalAuthMode.chatgpt,
+      ),
+    );
+
+    expect(capturedCall?.method, 'model/list');
+    expect(capturedCall?.arguments, {'limit': 100});
+  });
+
   test('keeps Codex model sources separate', () {
     expect(
       codexModelSourceKey(
@@ -274,7 +317,7 @@ void main() {
     );
   });
 
-  test('local API requests always use the configured model', () {
+  test('local API requests use the selected input model', () {
     final model = selectCodexRequestModel(
       status: const CodexStatus(
         connected: true,
@@ -282,9 +325,27 @@ void main() {
         runtime: 'local',
         localAuthMode: CodexLocalAuthMode.api,
       ),
-      overrideModel: 'remote-override',
-      activeModel: 'chatgpt-active',
+      overrideModel: null,
+      activeModel: 'input-selected',
       scopedModel: 'api-scoped',
+      configuredApiModel: 'api-current',
+      activeModelSourceMatches: true,
+    );
+
+    expect(model, 'input-selected');
+  });
+
+  test('local API requests fall back to the configured model', () {
+    final model = selectCodexRequestModel(
+      status: const CodexStatus(
+        connected: true,
+        ready: true,
+        runtime: 'local',
+        localAuthMode: CodexLocalAuthMode.api,
+      ),
+      overrideModel: null,
+      activeModel: null,
+      scopedModel: null,
       configuredApiModel: 'api-current',
       activeModelSourceMatches: true,
     );

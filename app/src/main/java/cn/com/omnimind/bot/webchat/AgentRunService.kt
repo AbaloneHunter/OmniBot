@@ -308,6 +308,16 @@ class AgentRunService(
 ) {
     private val runContexts = ConcurrentHashMap<String, WebAgentRunContext>()
 
+    fun hasActiveConversationRun(
+        conversationId: Long,
+        conversationMode: String
+    ): Boolean {
+        return AssistsCoreManager.sharedInstanceOrCreate(context).hasActiveAgentRun(
+            conversationId = conversationId,
+            conversationMode = conversationMode
+        )
+    }
+
     suspend fun startConversationRun(
         conversationId: Long,
         request: Map<String, Any?>

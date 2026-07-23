@@ -236,6 +236,78 @@ void main() {
     expect(selectedEffort, 'xhigh');
   });
 
+  testWidgets('codex run settings waits for models before opening', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    final focusNode = FocusNode();
+    addTearDown(controller.dispose);
+    addTearDown(focusNode.dispose);
+    var settings = const CodexRunSettings(
+      modelId: '',
+      reasoningEffort: 'xhigh',
+    );
+    late StateSetter rebuild;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              rebuild = setState;
+              return ChatInputArea(
+                controller: controller,
+                focusNode: focusNode,
+                isProcessing: false,
+                onSendMessage: () {},
+                onCancelTask: () {},
+                useLargeComposerStyle: true,
+                codexRunSettings: settings,
+                onCodexRunSettingsOpened: () async {
+                  await Future<void>.delayed(const Duration(milliseconds: 10));
+                  rebuild(() {
+                    settings = const CodexRunSettings(
+                      modelId: 'custom-codex',
+                      reasoningEffort: 'xhigh',
+                      modelOptions: <String>['custom-codex'],
+                    );
+                  });
+                },
+                onCodexRunSettingsChanged: ({modelId, reasoningEffort}) {},
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(
+      find.byKey(const ValueKey('chat-input-codex-run-settings-button')),
+    );
+    await tester.pump();
+    expect(
+      find.byKey(
+        const ValueKey(
+          'chat-input-codex-run-settings-option-model-custom-codex',
+        ),
+      ),
+      findsNothing,
+    );
+
+    await tester.pump(const Duration(milliseconds: 20));
+    await tester.pump();
+
+    expect(find.text('未获取到可用模型'), findsNothing);
+    expect(
+      find.byKey(
+        const ValueKey(
+          'chat-input-codex-run-settings-option-model-custom-codex',
+        ),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('normal chat model picker renders inside input actions', (
     tester,
   ) async {

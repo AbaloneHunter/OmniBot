@@ -75,6 +75,35 @@ class CodexAppServerSessionTest {
     }
 
     @Test
+    fun configReadRequestSendsObjectParams() = runBlocking {
+        val harness = CodexSessionHarness(
+            """
+            read init
+            printf '{"id":1,"result":{}}\n'
+            read initialized
+            read request
+            printf '%s\n' "${'$'}request" >> "${'$'}OMNI_TEST_LOG"
+            printf '{"id":2,"result":{"config":{"model":"custom-codex"}}}\n'
+            sleep 5
+            """.trimIndent()
+        )
+        try {
+            harness.session.start(clientVersion = "1.2.3")
+            harness.session.sendRequest(
+                method = "config/read",
+                params = emptyMap<String, Any?>()
+            )
+            waitUntil { harness.logFile.readLinesOrEmpty().isNotEmpty() }
+
+            val request = harness.logFile.readText()
+            assertTrue(request.contains("\"method\":\"config/read\""))
+            assertTrue(request.contains("\"params\":{}"))
+        } finally {
+            harness.close()
+        }
+    }
+
+    @Test
     fun stdoutParseErrorIsForwardedAsEvent() = runBlocking {
         val harness = CodexSessionHarness(
             """
