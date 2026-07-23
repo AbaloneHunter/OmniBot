@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_switch/flutter_switch.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:ui/features/home/pages/codex/codex_setting_page.dart';
+import 'package:ui/features/home/pages/agent/remote_codex_setting_page.dart';
 import 'package:ui/features/home/pages/scene_model_setting/scene_model_setting_page.dart';
 import 'package:ui/l10n/generated/app_localizations.dart';
 import 'package:ui/services/storage_service.dart';
@@ -36,7 +36,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const channel = MethodChannel('cn.com.omnimind.bot/AssistCoreEvent');
-  const codexChannel = MethodChannel('cn.com.omnimind.bot/CodexAppServer');
+  const agentRuntimeChannel = MethodChannel('cn.com.omnimind.bot/AgentRuntime');
 
   Widget buildTestApp(Widget child, {Locale locale = const Locale('zh')}) {
     return MaterialApp(
@@ -52,31 +52,19 @@ void main() {
   late Map<String, dynamic> savedVoiceConfig;
   late Map<String, dynamic> codexReadConfig;
   late Map<String, dynamic>? savedCodexConfig;
-  late List<Map<String, dynamic>> fetchedProviderModels;
-  late Map<String, dynamic>? fetchProviderModelsArguments;
-  late bool failCodexWrite;
   late int codexWriteCount;
-  late int codexConnectCount;
-  late int codexModelListCount;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     await StorageService.init();
     await VoicePlaybackCoordinator.instance.debugResetForTest();
     codexWriteCount = 0;
-    codexConnectCount = 0;
-    codexModelListCount = 0;
-    failCodexWrite = false;
     savedCodexConfig = null;
-    fetchedProviderModels = <Map<String, dynamic>>[];
-    fetchProviderModelsArguments = null;
     codexReadConfig = <String, dynamic>{
-      'baseUrl': 'https://example.com/v1',
-      'model': 'gpt-5.5',
-      'officialModel': 'gpt-5.5',
-      'apiKey': 'test-key',
-      'localAuthMode': 'api',
-      'codexHome': '/root/.codex',
+      'remoteEnabled': true,
+      'remoteBridgeUrl': 'ws://192.168.1.2:17321/codex',
+      'remoteBridgeToken': 'test-token',
+      'remoteCwd': '/Users/name/code/project',
     };
     savedVoiceConfig = <String, dynamic>{
       'autoPlay': false,
@@ -155,42 +143,16 @@ void main() {
           }
         });
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(codexChannel, (call) async {
+        .setMockMethodCallHandler(agentRuntimeChannel, (call) async {
           switch (call.method) {
-            case 'config/local/read':
+            case 'config/remote/read':
               return codexReadConfig;
-            case 'config/local/write':
-              if (failCodexWrite) {
-                throw PlatformException(code: 'write_failed');
-              }
+            case 'config/remote/write':
               savedCodexConfig = Map<String, dynamic>.from(
                 (call.arguments as Map).cast<String, dynamic>(),
               );
               codexWriteCount += 1;
-              return <String, dynamic>{
-                ...savedCodexConfig!,
-                'codexHome': '/root/.codex',
-              };
-            case 'connect':
-              codexConnectCount += 1;
-              return <String, dynamic>{
-                'connected': true,
-                'runtime': 'local',
-                'localAuthMode': codexReadConfig['localAuthMode'],
-              };
-            case 'model/list':
-              codexModelListCount += 1;
-              return <String, dynamic>{
-                'data': <Map<String, dynamic>>[
-                  <String, dynamic>{'id': 'gpt-5.5-codex'},
-                  <String, dynamic>{'id': 'gpt-5.6-codex'},
-                ],
-              };
-            case 'config/local/models':
-              fetchProviderModelsArguments = Map<String, dynamic>.from(
-                (call.arguments as Map).cast<String, dynamic>(),
-              );
-              return <String, dynamic>{'models': fetchedProviderModels};
+              return <String, dynamic>{...savedCodexConfig!};
             default:
               return null;
           }
@@ -201,7 +163,7 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(codexChannel, null);
+        .setMockMethodCallHandler(agentRuntimeChannel, null);
     await VoicePlaybackCoordinator.instance.debugResetForTest();
   });
 
@@ -258,7 +220,7 @@ void main() {
     expect(codexWriteCount, 0);
   });
 
-  testWidgets('codex setting page autosaves after fields are complete', (
+  testWidgets('remote bridge setting autosaves only bridge fields', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1080, 2200);
@@ -266,19 +228,20 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(buildTestApp(const CodexSettingPage()));
+    await tester.pumpWidget(buildTestApp(const RemoteCodexSettingPage()));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.byKey(const Key('codex-config-save-button')), findsNothing);
+    expect(find.text('远程 PC Bridge'), findsWidgets);
+    expect(find.textContaining('本地终端环境 Codex'), findsNothing);
+    expect(find.textContaining('自定义 API'), findsNothing);
 
-    final baseUrlField = find.byKey(const Key('codex-config-base-url-field'));
-    final modelField = find.byKey(const Key('codex-config-model-field'));
-    final apiKeyField = find.byKey(const Key('codex-config-api-key-field'));
-    await tester.ensureVisible(baseUrlField);
-    await tester.enterText(baseUrlField, 'https://new.example/v1');
-    await tester.enterText(modelField, 'gpt-5.6');
-    await tester.enterText(apiKeyField, 'new-key');
+    final urlField = find.byKey(
+      const Key('codex-config-remote-bridge-url-field'),
+    );
+    final cwdField = find.byKey(const Key('codex-config-remote-cwd-field'));
+    await tester.enterText(urlField, 'ws://10.0.0.2:17321/codex');
+    await tester.enterText(cwdField, '/Users/new/project');
 
     expect(codexWriteCount, 0);
     await tester.pump(const Duration(milliseconds: 750));
@@ -286,149 +249,11 @@ void main() {
 
     expect(codexWriteCount, 1);
     expect(savedCodexConfig, <String, dynamic>{
-      'baseUrl': 'https://new.example/v1',
-      'model': 'gpt-5.6',
-      'apiKey': 'new-key',
-      'officialModel': 'gpt-5.5',
-      'localAuthMode': 'api',
-      'remoteEnabled': false,
-      'remoteBridgeUrl': '',
-      'remoteBridgeToken': '',
-      'remoteCwd': '',
+      'remoteEnabled': true,
+      'remoteBridgeUrl': 'ws://10.0.0.2:17321/codex',
+      'remoteBridgeToken': 'test-token',
+      'remoteCwd': '/Users/new/project',
     });
-    expect(find.text('已自动保存，将使用本地自定义 API。'), findsOneWidget);
-  });
-
-  testWidgets('codex custom API fetches models and keeps model ID editable', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(1080, 2200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    fetchedProviderModels = <Map<String, dynamic>>[
-      <String, dynamic>{'id': 'custom-codex-a'},
-      <String, dynamic>{'id': 'custom-codex-b'},
-    ];
-
-    await tester.pumpWidget(buildTestApp(const CodexSettingPage()));
-    await tester.pumpAndSettle();
-
-    final modelField = find.byKey(const Key('codex-config-model-field'));
-    expect(
-      tester
-          .widget<TextField>(
-            find.byKey(const Key('codex-config-base-url-field')),
-          )
-          .controller
-          ?.text,
-      'https://example.com/v1',
-    );
-    expect(
-      tester
-          .widget<TextField>(
-            find.byKey(const Key('codex-config-api-key-field')),
-          )
-          .controller
-          ?.text,
-      'test-key',
-    );
-    expect(tester.widget<TextField>(modelField).readOnly, isFalse);
-
-    await tester.tap(find.byKey(const Key('codex-config-api-model-refresh')));
-    await tester.pumpAndSettle();
-
-    expect(fetchProviderModelsArguments?['baseUrl'], 'https://example.com/v1');
-    expect(fetchProviderModelsArguments?['apiKey'], 'test-key');
-
-    await tester.tap(find.byKey(const Key('codex-config-api-model-menu')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('custom-codex-b'));
-    await tester.pump();
-
-    expect(
-      tester.widget<TextField>(modelField).controller?.text,
-      'custom-codex-b',
-    );
-
-    await tester.enterText(
-      find.byKey(const Key('codex-config-base-url-field')),
-      'https://other.example.com/v1',
-    );
-    await tester.pump();
-
-    expect(
-      tester
-          .widget<PopupMenuButton<String>>(
-            find.byKey(const Key('codex-config-api-model-menu')),
-          )
-          .enabled,
-      isFalse,
-    );
-  });
-
-  testWidgets('codex ChatGPT mode uses the official model catalog', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(1080, 2200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    codexReadConfig = <String, dynamic>{
-      ...codexReadConfig,
-      'localAuthMode': 'chatgpt',
-      'officialModel': 'gpt-5.5-codex',
-    };
-
-    await tester.pumpWidget(buildTestApp(const CodexSettingPage()));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('codex-chatgpt-login-button')), findsOneWidget);
-    expect(find.byKey(const Key('codex-config-base-url-field')), findsNothing);
-    expect(find.byKey(const Key('codex-config-api-key-field')), findsNothing);
-
-    final officialField = find.byKey(
-      const Key('codex-config-official-model-field'),
-    );
-    expect(tester.widget<TextField>(officialField).readOnly, isTrue);
-
-    await tester.tap(
-      find.byKey(const Key('codex-config-official-model-refresh')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('codex-config-official-model-menu')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('gpt-5.6-codex'));
-    await tester.pump();
-
-    expect(
-      tester.widget<TextField>(officialField).controller?.text,
-      'gpt-5.6-codex',
-    );
-  });
-
-  testWidgets('official model loading stops when auth mode save fails', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(1080, 2200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    failCodexWrite = true;
-
-    await tester.pumpWidget(buildTestApp(const CodexSettingPage()));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const Key('codex-local-auth-chatgpt')));
-    await tester.pump();
-    await tester.tap(
-      find.byKey(const Key('codex-config-official-model-refresh')),
-    );
-    await tester.pumpAndSettle();
-
-    expect(codexWriteCount, 0);
-    expect(codexConnectCount, 0);
-    expect(codexModelListCount, 0);
-    expect(find.textContaining('Codex 配置保存失败'), findsOneWidget);
+    expect(find.text('已自动保存。'), findsOneWidget);
   });
 }

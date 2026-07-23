@@ -637,24 +637,24 @@ object DatabaseHelper {
         getDatabase().conversationDao().incrementMessageCount(id, System.currentTimeMillis())
     }
 
-    suspend fun upsertCodexThreadBinding(binding: CodexThreadBinding) {
-        getDatabase().codexThreadBindingDao().upsert(binding)
+    suspend fun upsertAgentSessionBinding(binding: AgentSessionBinding) {
+        getDatabase().agentSessionBindingDao().upsert(binding)
     }
 
-    suspend fun getAllCodexThreadBindings(): List<CodexThreadBinding> {
-        return getDatabase().codexThreadBindingDao().getAll()
+    suspend fun getAllAgentSessionBindings(): List<AgentSessionBinding> {
+        return getDatabase().agentSessionBindingDao().getAll()
     }
 
-    suspend fun getCodexThreadBindingByConversationId(conversationId: Long): CodexThreadBinding? {
-        return getDatabase().codexThreadBindingDao().getByConversationId(conversationId)
+    suspend fun getAgentSessionBindingByConversationId(conversationId: Long): AgentSessionBinding? {
+        return getDatabase().agentSessionBindingDao().getByConversationId(conversationId)
     }
 
-    suspend fun getCodexThreadBindingByThreadId(threadId: String): CodexThreadBinding? {
-        return getDatabase().codexThreadBindingDao().getByThreadId(threadId)
+    suspend fun getAgentSessionBindingByThreadId(threadId: String): AgentSessionBinding? {
+        return getDatabase().agentSessionBindingDao().getByThreadId(threadId)
     }
 
-    suspend fun deleteCodexThreadBindingByConversationId(conversationId: Long): Int {
-        return getDatabase().codexThreadBindingDao().deleteByConversationId(conversationId)
+    suspend fun deleteAgentSessionBindingByConversationId(conversationId: Long): Int {
+        return getDatabase().agentSessionBindingDao().deleteByConversationId(conversationId)
     }
 
 }

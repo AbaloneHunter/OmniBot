@@ -58,6 +58,30 @@ void main() {
   );
 
   test(
+    'buildAgentToolTranscript hides legacy Codex namespace for Claude tools',
+    () {
+      final transcript = buildAgentToolTranscript({
+        'agentId': 'claude-code-acp',
+        'agentName': 'Claude Code',
+        'toolName': 'codex.tool',
+        'toolTitle': 'Read settings.json',
+        'displayName': 'Read settings.json',
+        'toolType': 'workspace',
+        'argsJson': jsonEncode({
+          'id': 'tool-call-42',
+          'path': '/root/.claude/settings.json',
+        }),
+        'resultPreviewJson': jsonEncode({'status': 'ok'}),
+        'status': 'success',
+      });
+
+      expect(transcript.promptLine, 'Claude Code · Read settings.json');
+      expect(transcript.promptLine, isNot(contains('codex.tool')));
+      expect(transcript.promptLine, isNot(contains('--id')));
+    },
+  );
+
+  test(
     'buildAgentToolTranscript hides generic running placeholder for terminal output area',
     () {
       final transcript = buildAgentToolTranscript({

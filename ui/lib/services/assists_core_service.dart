@@ -3,7 +3,8 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:ui/models/agent_stream_event.dart';
 import 'package:ui/services/agent_schedule_bridge_service.dart';
-import 'package:ui/services/codex_tool_call_parser.dart';
+import 'package:ui/services/agent_tool_call_parser.dart';
+import 'package:ui/services/agent_message_kinds.dart';
 
 // 卡片推送
 typedef CardPushCallback<T> = void Function(Map<String, dynamic> cardData);
@@ -148,7 +149,7 @@ class AgentToolEventData {
       ),
     );
     final itemType = _asNonEmptyString(raw['type']);
-    final normalized = normalizeCodexToolCall(
+    final normalized = normalizeAgentToolCall(
       raw,
       itemType: itemType,
       fallbackToolType: _asNonEmptyString(raw['toolType']) ?? 'builtin',
@@ -157,8 +158,8 @@ class AgentToolEventData {
           _asNonEmptyString(raw['displayName']),
       fallbackStatus: _asNonEmptyString(raw['status']) ?? '',
     );
-    final explicitStatus = codexToolStatusIsExplicit(raw);
-    final isCodexTool = itemType != null && isCodexToolItemType(itemType);
+    final explicitStatus = agentToolStatusIsExplicit(raw);
+    final isAgentTool = itemType != null && isAgentToolItemType(itemType);
     return AgentToolEventData(
       taskId: (raw['taskId'] ?? '').toString(),
       cardId: (raw['cardId'] ?? '').toString(),
@@ -172,7 +173,7 @@ class AgentToolEventData {
       uiStyle:
           _asNonEmptyString(raw['uiStyle']) ??
           _asNonEmptyString(raw['ui_style']) ??
-          (isCodexTool ? 'codex_tool' : ''),
+          (isAgentTool ? kAgentToolUiStyle : ''),
       serverName: _asNonEmptyString(raw['serverName']) ?? normalized.serverName,
       status: explicitStatus ? normalized.status : '',
       argsJson:
@@ -1144,20 +1145,6 @@ class AssistsMessageService {
     } on PlatformException catch (e) {
       print('获取桌面包名失败: ${e.message}');
       return null;
-    }
-  }
-
-  /// 同步“任务完成后自动回聊天”设置到原生层
-  static Future<bool> setAutoBackToChatAfterTaskEnabled(bool enabled) async {
-    try {
-      final result = await assistCore.invokeMethod<String>(
-        'setAutoBackToChatAfterTaskEnabled',
-        {'enabled': enabled},
-      );
-      return result == 'SUCCESS';
-    } on PlatformException catch (e) {
-      print('同步自动回聊天设置失败: ${e.message}');
-      return false;
     }
   }
 

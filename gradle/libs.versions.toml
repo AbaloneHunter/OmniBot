@@ -18,7 +18,8 @@ lottie = "6.6.10"
 material = "1.12.0"
 animationCore = "1.9.0"
 kotlinStdlib = "2.3.0"
-kotlinxCoroutines = "1.7.3"
+kotlinxCoroutines = "1.9.0"
+agentClientProtocol = "0.26.0"
 lifecycleService = "2.9.3"
 mmkv = "2.2.3"
 nanohttpd = "2.3.1"
@@ -33,7 +34,7 @@ pagingCommon = "3.2.1"
 roomKtx = "2.8.4"
 roomRuntime = "2.8.4"
 ktor = "3.1.3"
-kotlinxSerializationJson = "1.6.3"
+kotlinxSerializationJson = "1.7.3"
 valiktor = "0.12.0"
 composeMaterialCore = "1.5.2"
 mustache = "0.9.10"
@@ -49,6 +50,7 @@ navigationUi = "2.8.9"
 palette = "1.0.0"
 shizuku = "13.1.5"
 [libraries]
+agent-client-protocol = { module = "com.agentclientprotocol:acp", version.ref = "agentClientProtocol" }
 accompanist-systemuicontroller = { module = "com.google.accompanist:accompanist-systemuicontroller", version.ref = "accompanistSystemuicontroller" }
 anrwatchdog = { module = "com.github.anrwatchdog:anrwatchdog", version.ref = "anrwatchdog" }
 appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }

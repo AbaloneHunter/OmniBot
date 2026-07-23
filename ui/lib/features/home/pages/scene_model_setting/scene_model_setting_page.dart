@@ -47,7 +47,6 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
     'scene.dispatch.model',
     'scene.voice',
     'scene.compactor.context.chat',
-    'scene.loading.sprite',
     'scene.memory.embedding',
     'scene.memory.rollup',
   ];
@@ -56,7 +55,6 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
     'scene.dispatch.model': 'Agent',
     'scene.voice': 'Voice',
     'scene.compactor.context.chat': 'Chat Compactor',
-    'scene.loading.sprite': 'Loading',
     'scene.memory.embedding': 'Memory Embed',
     'scene.memory.rollup': 'Memory Rollup',
   };
@@ -65,7 +63,6 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
     'scene.dispatch.model': '负责任务理解与分流决策',
     'scene.voice': '负责 AI 回复文本的语音合成与播放',
     'scene.compactor.context.chat': '负责聊天历史压缩总结',
-    'scene.loading.sprite': '负责生成加载状态文案',
     'scene.memory.embedding': '负责 workspace 记忆向量检索的嵌入模型',
     'scene.memory.rollup': '负责夜间记忆整理策略模型',
   };

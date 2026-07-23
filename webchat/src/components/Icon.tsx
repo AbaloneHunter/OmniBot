@@ -5,7 +5,6 @@ export type IconName =
   | "archive"
   | "arrow-left"
   | "arrow-right"
-  | "arrow-up"
   | "browser"
   | "chat"
   | "chevron-down"
@@ -17,12 +16,10 @@ export type IconName =
   | "menu"
   | "panel-left"
   | "panel-right"
-  | "paperclip"
   | "plus"
   | "refresh"
   | "save"
   | "search"
-  | "square"
   | "terminal"
   | "trash"
   | "workspace"
@@ -50,7 +47,6 @@ export function Icon({ name, size = 20, ...props }: IconProps) {
     ),
     "arrow-left": <path d="m12 19-7-7 7-7M19 12H5" />,
     "arrow-right": <path d="m12 5 7 7-7 7M5 12h14" />,
-    "arrow-up": <path d="m18 15-6-6-6 6M12 9v10" />,
     browser: (
       <>
         <circle cx="12" cy="12" r="9" />
@@ -82,7 +78,6 @@ export function Icon({ name, size = 20, ...props }: IconProps) {
         <path d="M15 3v18" />
       </>
     ),
-    paperclip: <path d="m21.4 11.6-8.9 8.9a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5" />,
     plus: <path d="M12 5v14M5 12h14" />,
     refresh: (
       <>
@@ -97,7 +92,6 @@ export function Icon({ name, size = 20, ...props }: IconProps) {
       </>
     ),
     search: <path d="m21 21-4.3-4.3m2.3-5.2a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" />,
-    square: <rect width="9" height="9" x="7.5" y="7.5" rx="2" fill="currentColor" stroke="none" />,
     terminal: (
       <>
         <path d="m4 17 6-6-6-6M12 19h8" />

@@ -58,6 +58,7 @@ import cn.com.omnimind.bot.agent.AgentTextSanitizer
 import cn.com.omnimind.bot.agent.AgentModelOverride
 import cn.com.omnimind.bot.agent.AgentResult
 import cn.com.omnimind.bot.agent.AgentConversationHistoryRepository
+import cn.com.omnimind.bot.agent.AgentConversationHistorySupport
 import cn.com.omnimind.bot.agent.AgentRuntimeContextRepository
 import cn.com.omnimind.bot.agent.AgentScheduleToolBridge
 import cn.com.omnimind.bot.agent.AgentRunControl
@@ -1093,6 +1094,38 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
         }
     }
 
+    fun hasActiveAgentRun(
+        conversationId: Long,
+        conversationMode: String
+    ): Boolean {
+        val normalizedMode = conversationMode.trim().lowercase().ifEmpty { "normal" }
+        return synchronized(activeAgentLock) {
+            activeAgentRuns.values.any { run ->
+                run.conversationId == conversationId &&
+                    run.conversationMode.trim().lowercase() == normalizedMode
+            }
+        }
+    }
+
+    fun hasActiveChatTasks(): Boolean {
+        return synchronized(activeAgentLock) {
+            chatTaskPersistenceStates.isNotEmpty()
+        }
+    }
+
+    fun hasActiveChatRun(
+        conversationId: Long,
+        conversationMode: String
+    ): Boolean {
+        val normalizedMode = normalizeConversationMode(conversationMode)
+        return synchronized(activeAgentLock) {
+            chatTaskPersistenceStates.values.any { state ->
+                state.conversationId == conversationId &&
+                    state.conversationMode == normalizedMode
+            }
+        }
+    }
+
     suspend fun invokeFlutterMethodForAgent(method: String, arguments: Map<String, Any?>): Any? {
         val targetChannel = mainEngineChannel ?: if (this::channel.isInitialized) channel else null
         if (targetChannel == null) {
@@ -1436,6 +1469,46 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
 
     private fun extractChatTaskText(content: String): String = extractChatTaskTextPayload(content)
 
+    private suspend fun publishChatTaskMessagesSync(
+        state: ChatTaskPersistenceState,
+        finalizeInterruptedEntries: Boolean
+    ) {
+        val messages = conversationHistoryRepository().listConversationMessages(
+            conversationId = state.conversationId,
+            conversationMode = state.conversationMode,
+            finalizeInterruptedEntries = finalizeInterruptedEntries
+        )
+        RealtimeHub.publish(
+            "messages_replaced",
+            mapOf(
+                "conversationId" to state.conversationId,
+                "mode" to state.conversationMode,
+                "messages" to messages
+            )
+        )
+        FlutterChatSyncBridge.dispatchConversationMessagesChanged(
+            conversationId = state.conversationId,
+            mode = state.conversationMode,
+            reason = "chat_task_stream_snapshot"
+        )
+    }
+
+    private fun publishChatTaskTerminalEvent(
+        taskId: String,
+        state: ChatTaskPersistenceState,
+        kind: String
+    ) {
+        RealtimeHub.publish(
+            "agent_stream_event",
+            mapOf(
+                "taskId" to taskId,
+                "conversationId" to state.conversationId,
+                "conversationMode" to state.conversationMode,
+                "kind" to kind
+            )
+        )
+    }
+
 
     /**
      * 取消正在运行的聊天或 Agent 任务。
@@ -1699,6 +1772,9 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
         val conversationId = call.argument<Number>("conversationId")?.toLong()
         val conversationMode = normalizeConversationMode(call.argument<String>("conversationMode"))
         val userMessage = call.argument<String>("userMessage")?.trim().orEmpty()
+        val requestedUserMessageCreatedAt =
+            call.argument<Number>("userMessageCreatedAt")?.toLong()?.takeIf { it > 0L }
+        val externalUserMessage = call.argument<Boolean>("externalUserMessage") == true
         val rawUserAttachments = (call.argument<List<Map<String, Any?>>>("userAttachments") ?: emptyList())
             .map(::sanitizeInteropMap)
         val userAttachments = AgentImageAttachmentSupport.prepareAttachments(
@@ -1743,30 +1819,50 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
                 if (normalizedConversationId != null) {
                     val repository = conversationHistoryRepository()
                     if (userMessage.isNotBlank() || userAttachments.isNotEmpty()) {
+                        val userMessageCreatedAt =
+                            requestedUserMessageCreatedAt ?: System.currentTimeMillis()
                         repository.upsertUserMessage(
                             conversationId = normalizedConversationId,
                             conversationMode = conversationMode,
                             entryId = "$taskID-user",
                             text = userMessage,
-                            attachments = userAttachments
+                            attachments = userAttachments,
+                            streamMeta = if (externalUserMessage) {
+                                AgentConversationHistorySupport.externalUserMessageStreamMeta()
+                            } else {
+                                null
+                            },
+                            createdAt = userMessageCreatedAt
                         )
-                    }
-                    registerChatTaskPersistenceState(
-                        taskID,
-                        ChatTaskPersistenceState(
-                            conversationId = normalizedConversationId,
-                            conversationMode = conversationMode,
-                            userEntryId = "$taskID-user",
-                            assistantEntryId = "$taskID-assistant",
-                            modelOverride = modelOverride,
-                            reasoningEffort = reasoningEffort,
-                            promptTokenThreshold = resolvePromptTokenThresholdFallback(
-                                storedThreshold = repository
-                                    .getConversation(normalizedConversationId)
-                                    ?.promptTokenThreshold,
-                                modelOverride = modelOverride
+                        if (externalUserMessage) {
+                            FlutterChatSyncBridge.dispatchExternalUserMessageAppended(
+                                conversationId = normalizedConversationId,
+                                mode = conversationMode,
+                                entryId = "$taskID-user",
+                                text = userMessage,
+                                attachments = userAttachments,
+                                createdAt = userMessageCreatedAt
                             )
+                        }
+                    }
+                    val persistenceState = ChatTaskPersistenceState(
+                        conversationId = normalizedConversationId,
+                        conversationMode = conversationMode,
+                        userEntryId = "$taskID-user",
+                        assistantEntryId = "$taskID-assistant",
+                        modelOverride = modelOverride,
+                        reasoningEffort = reasoningEffort,
+                        promptTokenThreshold = resolvePromptTokenThresholdFallback(
+                            storedThreshold = repository
+                                .getConversation(normalizedConversationId)
+                                ?.promptTokenThreshold,
+                            modelOverride = modelOverride
                         )
+                    )
+                    registerChatTaskPersistenceState(taskID, persistenceState)
+                    publishChatTaskMessagesSync(
+                        persistenceState,
+                        finalizeInterruptedEntries = false
                     )
                 }
                 AssistsUtil.Core.createChatTask(
@@ -1871,6 +1967,10 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
                     isError = state.isError
                 )
             }
+            publishChatTaskMessagesSync(
+                state,
+                finalizeInterruptedEntries = false
+            )
         }
         withContext(Dispatchers.Main) {
             try {
@@ -1912,6 +2012,15 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
                     isError = state.isError
                 )
             }
+            publishChatTaskMessagesSync(
+                state,
+                finalizeInterruptedEntries = true
+            )
+            publishChatTaskTerminalEvent(
+                taskId = taskID,
+                state = state,
+                kind = if (state.isError) "error" else "completed"
+            )
         }
         val compactedConversationPayload = maybeAutoCompactChatOnlyConversation(
             taskID,
@@ -3800,9 +3909,13 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
         val runtimeAttachments = preparedAttachments.runtimeAttachments
         val historyAttachments = preparedAttachments.historyAttachments
         val userMessageCreatedAt = call.argument<Number>("userMessageCreatedAt")?.toLong()
-        val userEntryId = userMessageCreatedAt
-            ?.takeIf { it > 0L }
-            ?.let { "$it-user" }
+        val externalUserMessage = call.argument<Boolean>("externalUserMessage") == true
+        val userEntryId = call.argument<String>("userEntryId")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: userMessageCreatedAt
+                ?.takeIf { it > 0L }
+                ?.let { "$it-user" }
             ?: "$taskId-user"
         val conversationId = call.argument<Number>("conversationId")?.toLong()?.takeIf { it > 0L }
         val requestedConversationMode =
@@ -4073,9 +4186,11 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
                     val normalizedConversationId = conversationId ?: return
                     val repository = historyRepository ?: return
                     try {
+                        // 流式快照仍属于活跃任务，不能在读取时按“中断恢复”收尾思考/工具条目。
                         val messages = repository.listConversationMessages(
                             conversationId = normalizedConversationId,
-                            conversationMode = resolvedConversationMode
+                            conversationMode = resolvedConversationMode,
+                            finalizeInterruptedEntries = false
                         )
                         RealtimeHub.publish(
                             "messages_replaced",
@@ -4088,7 +4203,7 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
                         FlutterChatSyncBridge.dispatchConversationMessagesChanged(
                             conversationId = normalizedConversationId,
                             mode = resolvedConversationMode,
-                            reason = "messages_replaced"
+                            reason = "agent_stream_snapshot"
                         )
                     } catch (error: CancellationException) {
                         throw error
@@ -4105,7 +4220,7 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
                     description: String,
                     publish: Boolean = true,
                     block: suspend () -> Unit
-                ) {
+                ): Boolean {
                     val persisted = try {
                         block()
                         true
@@ -4118,6 +4233,7 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
                     if (persisted && publish) {
                         publishConversationMessagesSync()
                     }
+                    return persisted
                 }
 
                 // 续跑代数后缀,用于隔离 thinking / tool entry id,避免新 run 的卡片
@@ -4596,14 +4712,31 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
 
                 conversationId?.let { normalizedConversationId ->
                     if (!continueMode && (userMessage.isNotBlank() || historyAttachments.isNotEmpty())) {
-                        persistConversationMutation("upsert user message") {
+                        val createdAt = userMessageCreatedAt ?: System.currentTimeMillis()
+                        val persisted = persistConversationMutation("upsert user message") {
                             repository.upsertUserMessage(
                                 conversationId = normalizedConversationId,
                                 conversationMode = resolvedConversationMode,
                                 entryId = userEntryId,
                                 text = userMessage,
                                 attachments = historyAttachments,
-                                createdAt = userMessageCreatedAt ?: System.currentTimeMillis()
+                                streamMeta = if (externalUserMessage) {
+                                    AgentConversationHistorySupport
+                                        .externalUserMessageStreamMeta()
+                                } else {
+                                    null
+                                },
+                                createdAt = createdAt
+                            )
+                        }
+                        if (persisted && externalUserMessage) {
+                            FlutterChatSyncBridge.dispatchExternalUserMessageAppended(
+                                conversationId = normalizedConversationId,
+                                mode = resolvedConversationMode,
+                                entryId = userEntryId,
+                                text = userMessage,
+                                attachments = historyAttachments,
+                                createdAt = createdAt
                             )
                         }
                     }
@@ -6268,44 +6401,6 @@ class AssistsCoreManager(private val context: Context) : OnMessagePushListener {
 
     private fun Map<String, Any>.readInt(key: String): Int? {
         return (this[key] as? Number)?.toInt()
-    }
-
-    /**
-     * 跳转回聊天页面
-     */
-    private fun navigateBackToChatIfNeeded() {
-        if (TaskCompletionNavigator.isAutoBackToChatAfterTaskEnabled(context)) {
-            TaskCompletionNavigator.navigateBackToChat(
-                context,
-                currentConversationId,
-                currentConversationMode
-            )
-        } else {
-            OmniLog.d(TAG, "任务完成后停留当前页面（已关闭自动返回聊天）")
-        }
-    }
-
-    fun setAutoBackToChatAfterTaskEnabled(
-        call: MethodCall,
-        result: MethodChannel.Result
-    ) {
-        val enabled = call.argument<Boolean>("enabled") ?: true
-        try {
-            val success = TaskCompletionNavigator.setAutoBackToChatAfterTaskEnabled(
-                context,
-                enabled
-            )
-
-            if (success) {
-                OmniLog.d(TAG, "自动返回聊天设置已同步到原生: $enabled")
-                result.success("SUCCESS")
-            } else {
-                result.error("SAVE_AUTO_BACK_SETTING_FAILED", "保存自动返回聊天设置失败", null)
-            }
-        } catch (e: Exception) {
-            OmniLog.e(TAG, "保存自动返回聊天设置失败: ${e.message}")
-            result.error("SAVE_AUTO_BACK_SETTING_FAILED", e.message, null)
-        }
     }
 
     fun setPreventScreenSleepDuringTasksEnabled(

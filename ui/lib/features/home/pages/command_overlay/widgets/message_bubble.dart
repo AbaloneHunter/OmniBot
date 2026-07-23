@@ -53,6 +53,9 @@ class MessageBubble extends StatelessWidget {
   /// 思考卡片完成后是否自动折叠
   final bool thinkingAutoCollapseOnComplete;
 
+  /// 是否允许使用 ACP Agent 的行内工具调用样式。
+  final bool useAgentToolPresentation;
+
   /// 强制覆盖深度思考卡片的头像显示
   final bool? showThinkingAvatarOverride;
 
@@ -76,6 +79,7 @@ class MessageBubble extends StatelessWidget {
     this.onCancelTask,
     this.enableThinkingCollapse = false,
     this.thinkingAutoCollapseOnComplete = true,
+    this.useAgentToolPresentation = true,
     this.showThinkingAvatarOverride,
     this.parentScrollController,
     this.onParentScrollHandoff,
@@ -1543,6 +1547,7 @@ class MessageBubble extends StatelessWidget {
         onCancelTask: onCancelTask,
         enableThinkingCollapse: enableThinkingCollapse,
         thinkingAutoCollapseOnComplete: thinkingAutoCollapseOnComplete,
+        useAgentToolPresentation: useAgentToolPresentation,
         showThinkingAvatarOverride: showThinkingAvatarOverride,
         parentScrollController: parentScrollController,
         onParentScrollHandoff: onParentScrollHandoff,

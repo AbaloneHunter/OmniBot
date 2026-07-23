@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ui/features/home/pages/settings/settings_page.dart';
 import 'package:ui/l10n/generated/app_localizations.dart';
+import 'package:ui/services/storage_service.dart';
 import 'package:ui/theme/app_theme.dart';
 
 class _SvgTestAssetBundle extends CachingAssetBundle {
@@ -33,7 +35,9 @@ void main() {
   const mcpChannel = MethodChannel('cn.com.omnimind.bot/McpServer');
   const assistChannel = MethodChannel('cn.com.omnimind.bot/AssistCoreEvent');
 
-  setUp(() {
+  setUp(() async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    await StorageService.init();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(mcpChannel, (call) async {
           if (call.method == 'state') {

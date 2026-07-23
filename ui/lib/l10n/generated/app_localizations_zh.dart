@@ -145,12 +145,6 @@ class AppLocalizationsZh extends AppLocalizations {
       '开启后，聊天页键盘回车为换行；关闭后，回车直接发送';
 
   @override
-  String get settingsAutoBackTitle => '任务完成后自动回聊天';
-
-  @override
-  String get settingsAutoBackSubtitle => '关闭后，任务结束将停留在当前完成页面';
-
-  @override
   String get settingsHabitualHandTitle => '惯用手';
 
   @override
@@ -170,12 +164,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsSaveFailed => '设置失败';
-
-  @override
-  String get settingsAutoBackEnabledToast => '任务完成后将自动返回聊天';
-
-  @override
-  String get settingsAutoBackDisabledToast => '任务完成后将停留在当前页面';
 
   @override
   String settingsMcpEnabledToast(Object endpoint) {
@@ -1299,7 +1287,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get alpinePipInstall => 'Python 包安装器';
 
   @override
-  String get alpineCodex => 'OpenAI Codex CLI 与 app-server 桥接';
+  String get alpineCodex => 'OpenAI Codex CLI（供 ACP Agent 使用）';
+
+  @override
+  String get alpineClaudeCode => 'Anthropic Claude Code CLI（供 ACP Agent 使用）';
+
+  @override
+  String get alpineOpenCode => 'OpenCode CLI（内置 ACP 支持）';
 
   @override
   String get alpineSshClient => 'SSH 客户端';
@@ -1489,16 +1483,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get homeDrawerPinnedConversations => '置顶会话';
 
   @override
-  String get homeDrawerCodexSection => 'Codex';
+  String get homeDrawerAgentSection => 'Agent';
 
   @override
-  String get homeDrawerAgentSection => 'Agent';
+  String get homeDrawerOmniAiSection => '小万';
 
   @override
   String get homeDrawerChatOnlySection => '纯聊天';
 
   @override
-  String get homeDrawerCodexNoProject => '其他';
+  String get homeDrawerAgentNoProject => '其他';
 
   @override
   String get homeDrawerGreeting => '你好！';

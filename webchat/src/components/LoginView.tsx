@@ -18,11 +18,7 @@ export function LoginView({ initialToken, busy, error, onLogin }: LoginViewProps
 
   return (
     <main className="login-view">
-      <section className="login-panel" aria-labelledby="login-title">
-        <div className="brand-mark" aria-hidden="true">O</div>
-        <p className="eyebrow">LOCAL CONTROL</p>
-        <h1 id="login-title">Omnibot Web Chat</h1>
-        <p className="login-copy">输入本机 MCP Server Token，连接同一局域网中的 Omnibot。</p>
+      <section className="login-panel" aria-label="登录">
         <form className="login-form" onSubmit={submit}>
           <label htmlFor="token-input">Server Token</label>
           <input

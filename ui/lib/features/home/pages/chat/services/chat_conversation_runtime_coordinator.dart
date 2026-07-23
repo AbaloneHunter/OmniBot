@@ -15,18 +15,20 @@ import 'package:ui/models/chat_message_model.dart';
 import 'package:ui/models/conversation_model.dart';
 import 'package:ui/services/agent_stream_reducer.dart';
 import 'package:ui/services/assists_core_service.dart';
-import 'package:ui/services/codex_event_reducer.dart';
+import 'package:ui/services/agent_event_reducer.dart';
+import 'package:ui/services/agent_message_kinds.dart';
+import 'package:ui/services/agent_tool_call_parser.dart';
 import 'package:ui/services/conversation_history_service.dart';
 import 'package:ui/services/conversation_service.dart';
 import 'package:ui/services/link_preview_service.dart';
 import 'package:ui/services/voice_playback_coordinator.dart';
 import 'package:ui/services/agent_stream_meta.dart';
 import 'package:ui/utils/data_parser.dart';
-import 'package:ui/services/codex_diff_parser.dart';
+import 'package:ui/services/agent_diff_parser.dart';
 
 const String kChatRuntimeModeNormal = 'normal';
 const String kChatRuntimeModeOpenClaw = 'openclaw';
-const String kChatRuntimeModeCodex = 'codex';
+const String kChatRuntimeModeAgent = 'agent';
 const int _kStreamingTextChunkFlushThreshold = 5;
 
 enum _StreamingTextStreamKind {
@@ -93,10 +95,10 @@ class ChatConversationRuntimeState {
       <String, AgentStreamTaskState>{};
   final Map<String, _StreamingTextBatchState> _streamingTextBatches =
       <String, _StreamingTextBatchState>{};
-  final Map<String, int> codexEntrySequences = <String, int>{};
-  final Map<String, int> codexEntryStartTimes = <String, int>{};
-  final Map<String, int> codexReplayDeltaOffsets = <String, int>{};
-  int codexNextEntrySequence = 0;
+  final Map<String, int> agentEntrySequences = <String, int>{};
+  final Map<String, int> agentEntryStartTimes = <String, int>{};
+  final Map<String, int> agentReplayDeltaOffsets = <String, int>{};
+  int agentNextEntrySequence = 0;
   bool isAiResponding = false;
   bool isContextCompressing = false;
   bool isCheckingExecutableTask = false;
@@ -151,9 +153,9 @@ class ChatConversationRuntimeState {
   void dispose() {
     agentStreamStates.clear();
     _streamingTextBatches.clear();
-    codexEntrySequences.clear();
-    codexEntryStartTimes.clear();
-    codexReplayDeltaOffsets.clear();
+    agentEntrySequences.clear();
+    agentEntryStartTimes.clear();
+    agentReplayDeltaOffsets.clear();
     messages.dispose();
   }
 }
@@ -206,7 +208,7 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
   String _agentTextBaseId(String taskId) => '$taskId-text';
 
   final AgentStreamReducer _agentStreamReducer = const AgentStreamReducer();
-  final CodexEventReducer _codexEventReducer = const CodexEventReducer();
+  final AgentEventReducer _agentEventReducer = const AgentEventReducer();
   final Map<String, ChatConversationRuntimeState> _runtimes =
       <String, ChatConversationRuntimeState>{};
   final Map<String, _TaskBinding> _taskBindings = <String, _TaskBinding>{};
@@ -355,7 +357,7 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
     if (preserveLiveStreamingState) {
       runtime.messages.replaceAllMessages(normalizedMessages);
       runtime.conversation = conversation ?? runtime.conversation;
-      _pruneCodexReplayDeltaOffsets(runtime, normalizedMessages);
+      _pruneAgentReplayDeltaOffsets(runtime, normalizedMessages);
       notifyListeners();
       return;
     }
@@ -391,18 +393,18 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
     runtime.browserSessionSnapshot = browserSessionSnapshot;
     runtime.agentStreamStates.clear();
     runtime._streamingTextBatches.clear();
-    runtime.codexEntrySequences.clear();
-    runtime.codexEntryStartTimes.clear();
-    _pruneCodexReplayDeltaOffsets(runtime, messages);
-    runtime.codexNextEntrySequence = 0;
+    runtime.agentEntrySequences.clear();
+    runtime.agentEntryStartTimes.clear();
+    _pruneAgentReplayDeltaOffsets(runtime, messages);
+    runtime.agentNextEntrySequence = 0;
     notifyListeners();
   }
 
-  void _pruneCodexReplayDeltaOffsets(
+  void _pruneAgentReplayDeltaOffsets(
     ChatConversationRuntimeState runtime,
     List<ChatMessageModel> messages,
   ) {
-    if (runtime.codexReplayDeltaOffsets.isEmpty) {
+    if (runtime.agentReplayDeltaOffsets.isEmpty) {
       return;
     }
     final liveEntryIds = <String>{};
@@ -417,7 +419,7 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
         liveEntryIds.add(cardId);
       }
     }
-    runtime.codexReplayDeltaOffsets.removeWhere(
+    runtime.agentReplayDeltaOffsets.removeWhere(
       (entryId, _) => !liveEntryIds.contains(entryId),
     );
   }
@@ -524,7 +526,7 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
     _taskBindings.remove(taskId);
   }
 
-  CodexReduceResult applyCodexEvent({
+  AgentReduceResult applyAgentEvent({
     required int conversationId,
     required Map<String, dynamic> event,
     ConversationModel? conversation,
@@ -532,25 +534,104 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
     ensureInitialized();
     final runtime = ensureRuntime(
       conversationId: conversationId,
-      mode: kChatRuntimeModeCodex,
+      mode: kChatRuntimeModeAgent,
       conversation: conversation,
       initialChatIslandDisplayLayer: ChatIslandDisplayLayer.mode,
     );
-    final result = _codexEventReducer.reduce(runtime: runtime, event: event);
+    final result = _agentEventReducer.reduce(runtime: runtime, event: event);
     if (result.handled) {
+      _annotateAgentMessages(runtime, event, result);
       notifyListeners();
       if (!isEphemeralRuntime(
         conversationId: conversationId,
-        mode: kChatRuntimeModeCodex,
+        mode: kChatRuntimeModeAgent,
       )) {
         schedulePersistRuntimeConversation(
           conversationId: conversationId,
-          mode: kChatRuntimeModeCodex,
+          mode: kChatRuntimeModeAgent,
           persistMessages: true,
         );
       }
     }
     return result;
+  }
+
+  void _annotateAgentMessages(
+    ChatConversationRuntimeState runtime,
+    Map<String, dynamic> event,
+    AgentReduceResult result,
+  ) {
+    String? stringValue(dynamic value) {
+      final normalized = value?.toString().trim() ?? '';
+      return normalized.isEmpty ? null : normalized;
+    }
+
+    Map<String, dynamic>? stringMap(dynamic value) {
+      if (value is Map<String, dynamic>) {
+        return value;
+      }
+      if (value is Map) {
+        return value.map((key, entry) => MapEntry(key.toString(), entry));
+      }
+      return null;
+    }
+
+    final envelope = stringMap(event['message']);
+    final params = stringMap(event['params']) ?? stringMap(envelope?['params']);
+    final agentId =
+        stringValue(event['agentId']) ??
+        stringValue(params?['agentId']) ??
+        stringValue(envelope?['agentId']);
+    if (agentId == null) {
+      return;
+    }
+    final agentName =
+        stringValue(event['agentName']) ??
+        stringValue(params?['agentName']) ??
+        stringValue(envelope?['agentName']);
+    final taskId =
+        result.turnId ??
+        stringValue(event['turnId']) ??
+        stringValue(params?['turnId']);
+
+    for (var index = 0; index < runtime.messages.length; index += 1) {
+      final message = runtime.messages[index];
+      if (message.agentId != null) {
+        continue;
+      }
+      final cardData = message.cardData;
+      final isAcpMessage =
+          message.id.contains('-agent-') ||
+          message.id.contains('-codex-') ||
+          isAgentToolUiStyle(cardData?['uiStyle']) ||
+          isAgentRequestCardType(cardData?['type']);
+      if (!isAcpMessage) {
+        continue;
+      }
+      final parentTaskId = stringValue(
+        message.streamMeta?['parentTaskId'] ??
+            cardData?['taskId'] ??
+            cardData?['taskID'],
+      );
+      if (taskId != null && parentTaskId != null && parentTaskId != taskId) {
+        continue;
+      }
+      final content = Map<String, dynamic>.from(
+        message.content ?? const <String, dynamic>{},
+      );
+      content['agentId'] = agentId;
+      if (agentName != null) {
+        content['agentName'] = agentName;
+      }
+      if (cardData != null) {
+        content['cardData'] = <String, dynamic>{
+          ...cardData,
+          'agentId': agentId,
+          if (agentName != null) 'agentName': agentName,
+        };
+      }
+      runtime.messages[index] = message.copyWith(content: content);
+    }
   }
 
   void clearPureChatThinking({
@@ -625,9 +706,9 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
     runtime.toolCardSequence = 0;
     runtime.thinkingRound = 0;
     runtime._streamingTextBatches.clear();
-    runtime.codexEntrySequences.clear();
-    runtime.codexEntryStartTimes.clear();
-    runtime.codexNextEntrySequence = 0;
+    runtime.agentEntrySequences.clear();
+    runtime.agentEntryStartTimes.clear();
+    runtime.agentNextEntrySequence = 0;
     notifyListeners();
   }
 
@@ -1811,7 +1892,7 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
     }
     final conversationMode = switch (mode) {
       kChatRuntimeModeOpenClaw => ConversationMode.openclaw,
-      kChatRuntimeModeCodex => ConversationMode.codex,
+      kChatRuntimeModeAgent => ConversationMode.agent,
       _ => ConversationMode.normal,
     };
     try {
@@ -1988,7 +2069,7 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
   String _runtimeModeFromConversationMode(String rawMode) {
     return switch (ConversationMode.fromStorageValue(rawMode)) {
       ConversationMode.openclaw => kChatRuntimeModeOpenClaw,
-      ConversationMode.codex => kChatRuntimeModeCodex,
+      ConversationMode.agent => kChatRuntimeModeAgent,
       _ => kChatRuntimeModeNormal,
     };
   }
@@ -3679,7 +3760,7 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
           );
     final existingTerminalOutput = (existingCardData['terminalOutput'] ?? '')
         .toString();
-    final isFileChangeTool = _isCodexFileChangeTool(event, existingCardData);
+    final isFileChangeTool = _isAgentFileChangeTool(event, existingCardData);
     final effectiveToolType = isFileChangeTool ? 'file' : event.toolType;
     final terminalOutput = effectiveToolType == 'terminal'
         ? _resolveTerminalOutput(existing: existingTerminalOutput, event: event)
@@ -3700,10 +3781,10 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
             summary: summary,
           )
         : '';
-    final diffSummary = diffText.isEmpty ? null : parseCodexDiffText(diffText);
+    final diffSummary = diffText.isEmpty ? null : parseAgentDiffText(diffText);
     final diffPreview = diffSummary == null
         ? ''
-        : summarizeCodexDiff(diffSummary);
+        : summarizeAgentDiff(diffSummary);
     final effectiveSummary = isFileChangeTool && diffPreview.isNotEmpty
         ? diffPreview
         : summary.isNotEmpty
@@ -3715,7 +3796,7 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
         ? progress
         : (existingCardData['progress'] ?? '').toString();
     final filePath = isFileChangeTool
-        ? extractCodexDiffPath(diffSource) ??
+        ? extractAgentDiffPath(diffSource) ??
               (diffSummary?.primaryPath.trim().isNotEmpty == true
                   ? diffSummary!.primaryPath
                   : null) ??
@@ -3940,7 +4021,7 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
     return existing;
   }
 
-  bool _isCodexFileChangeTool(
+  bool _isAgentFileChangeTool(
     AgentToolEventData event,
     Map<String, dynamic> existingCardData,
   ) {
@@ -3949,8 +4030,7 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
         (existingCardData['toolType'] ?? '').toString().trim() == 'file') {
       return true;
     }
-    final toolName = event.toolName.trim();
-    if (toolName == 'codex.file') {
+    if (canonicalAgentToolName(event.toolName) == 'agent.file') {
       return true;
     }
     if (_valueHasFileChangeType(event.raw)) {
@@ -4015,7 +4095,7 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
     required String progress,
     required String summary,
   }) {
-    final current = extractCodexDiffText(
+    final current = extractAgentDiffText(
       source,
       outputText: outputText,
       progress: progress,
@@ -4150,8 +4230,8 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
   }) {
     return mode == kChatRuntimeModeOpenClaw
         ? ConversationMode.openclaw
-        : mode == kChatRuntimeModeCodex
-        ? ConversationMode.codex
+        : mode == kChatRuntimeModeAgent
+        ? ConversationMode.agent
         : switch (conversation?.mode) {
             ConversationMode.chatOnly => ConversationMode.chatOnly,
             ConversationMode.subagent => ConversationMode.subagent,

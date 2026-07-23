@@ -368,18 +368,6 @@ abstract class AppLocalizations {
   /// **'开启后，聊天页键盘回车为换行；关闭后，回车直接发送'**
   String get settingsIndependentSendButtonSubtitle;
 
-  /// No description provided for @settingsAutoBackTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'任务完成后自动回聊天'**
-  String get settingsAutoBackTitle;
-
-  /// No description provided for @settingsAutoBackSubtitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'关闭后，任务结束将停留在当前完成页面'**
-  String get settingsAutoBackSubtitle;
-
   /// No description provided for @settingsHabitualHandTitle.
   ///
   /// In zh, this message translates to:
@@ -421,18 +409,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'设置失败'**
   String get settingsSaveFailed;
-
-  /// No description provided for @settingsAutoBackEnabledToast.
-  ///
-  /// In zh, this message translates to:
-  /// **'任务完成后将自动返回聊天'**
-  String get settingsAutoBackEnabledToast;
-
-  /// No description provided for @settingsAutoBackDisabledToast.
-  ///
-  /// In zh, this message translates to:
-  /// **'任务完成后将停留在当前页面'**
-  String get settingsAutoBackDisabledToast;
 
   /// No description provided for @settingsMcpEnabledToast.
   ///
@@ -2507,8 +2483,20 @@ abstract class AppLocalizations {
   /// No description provided for @alpineCodex.
   ///
   /// In zh, this message translates to:
-  /// **'OpenAI Codex CLI 与 app-server 桥接'**
+  /// **'OpenAI Codex CLI（供 ACP Agent 使用）'**
   String get alpineCodex;
+
+  /// No description provided for @alpineClaudeCode.
+  ///
+  /// In zh, this message translates to:
+  /// **'Anthropic Claude Code CLI（供 ACP Agent 使用）'**
+  String get alpineClaudeCode;
+
+  /// No description provided for @alpineOpenCode.
+  ///
+  /// In zh, this message translates to:
+  /// **'OpenCode CLI（内置 ACP 支持）'**
+  String get alpineOpenCode;
 
   /// No description provided for @alpineSshClient.
   ///
@@ -2864,17 +2852,17 @@ abstract class AppLocalizations {
   /// **'置顶会话'**
   String get homeDrawerPinnedConversations;
 
-  /// No description provided for @homeDrawerCodexSection.
-  ///
-  /// In zh, this message translates to:
-  /// **'Codex'**
-  String get homeDrawerCodexSection;
-
   /// No description provided for @homeDrawerAgentSection.
   ///
   /// In zh, this message translates to:
   /// **'Agent'**
   String get homeDrawerAgentSection;
+
+  /// No description provided for @homeDrawerOmniAiSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'小万'**
+  String get homeDrawerOmniAiSection;
 
   /// No description provided for @homeDrawerChatOnlySection.
   ///
@@ -2882,11 +2870,11 @@ abstract class AppLocalizations {
   /// **'纯聊天'**
   String get homeDrawerChatOnlySection;
 
-  /// No description provided for @homeDrawerCodexNoProject.
+  /// No description provided for @homeDrawerAgentNoProject.
   ///
   /// In zh, this message translates to:
   /// **'其他'**
-  String get homeDrawerCodexNoProject;
+  String get homeDrawerAgentNoProject;
 
   /// No description provided for @homeDrawerGreeting.
   ///

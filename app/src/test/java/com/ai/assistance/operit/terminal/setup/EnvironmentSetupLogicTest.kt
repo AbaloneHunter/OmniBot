@@ -85,25 +85,72 @@ class EnvironmentSetupLogicTest {
         assertTrue(apkAdd.contains("nodejs"))
         assertTrue(apkAdd.contains("npm"))
         assertTrue(apkAdd.contains("git"))
-        assertTrue(apkAdd.contains("bash"))
-        assertTrue(apkAdd.contains("curl"))
-        assertTrue(apkAdd.contains("ripgrep"))
-        assertTrue(commands.contains("mkdir -p /root/.npm-global/bin"))
         assertTrue(commands.contains("npm config set prefix /root/.npm-global"))
-        assertTrue(commands.contains("export PATH=\"/root/.npm-global/bin:\$PATH\""))
-        assertTrue(commands.contains("npm install -g @openai/codex@latest"))
-        assertTrue(commands.contains("ln -sf /root/.npm-global/bin/codex /usr/local/bin/codex || true"))
+        assertTrue(
+            commands.contains(
+                "npm install -g --no-audit --no-fund @openai/codex@latest"
+            )
+        )
+        assertTrue(
+            commands.contains(
+                "ln -sf /root/.npm-global/bin/codex /usr/local/bin/codex || true"
+            )
+        )
     }
 
     @Test
-    fun buildInventoryProbeCommand_codexChecksVersionAndAppServer() {
+    fun buildInventoryProbeCommand_codexChecksCliFromManagedNpmPath() {
         val command = EnvironmentSetupLogic.buildInventoryProbeCommand(listOf("codex"))
 
-        assertTrue(command.contains("cd /root"))
-        assertTrue(command.contains("/bin/pwd"))
+        assertTrue(command.contains("/root/.npm-global/bin"))
         assertTrue(command.contains("command -v codex"))
-        assertTrue(command.contains("codex app-server --help"))
         assertTrue(command.contains("codex --version"))
+    }
+
+    @Test
+    fun buildInstallCommands_installsClaudeCodeAndOpenCodeInManagedNpmPath() {
+        val commands = EnvironmentSetupLogic.buildInstallCommands(
+            selectedPackageIds = listOf("claude_code", "opencode"),
+            repositorySetupCommand = ""
+        )
+
+        val apkAdd = commands.first { it.startsWith("apk add ") }
+        assertTrue(apkAdd.contains("nodejs"))
+        assertTrue(apkAdd.contains("npm"))
+        assertTrue(commands.count { it == "npm config set prefix /root/.npm-global" } == 1)
+        assertTrue(
+            commands.contains(
+                "npm install -g --no-audit --no-fund @anthropic-ai/claude-code@latest"
+            )
+        )
+        assertTrue(
+            commands.contains(
+                "ln -sf /root/.npm-global/bin/claude /usr/local/bin/claude || true"
+            )
+        )
+        assertTrue(
+            commands.contains(
+                "npm install -g --no-audit --no-fund opencode-ai@latest"
+            )
+        )
+        assertTrue(
+            commands.contains(
+                "ln -sf /root/.npm-global/bin/opencode /usr/local/bin/opencode || true"
+            )
+        )
+    }
+
+    @Test
+    fun buildInventoryProbeCommand_detectsClaudeCodeAndOpenCode() {
+        val command = EnvironmentSetupLogic.buildInventoryProbeCommand(
+            listOf("claude_code", "opencode")
+        )
+
+        assertTrue(command.contains("/root/.npm-global/bin"))
+        assertTrue(command.contains("command -v claude"))
+        assertTrue(command.contains("claude --version"))
+        assertTrue(command.contains("command -v opencode"))
+        assertTrue(command.contains("opencode --version"))
     }
 
     @Test

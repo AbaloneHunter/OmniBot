@@ -158,13 +158,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'When enabled, Enter creates a new line; when disabled, Enter sends the message directly';
 
   @override
-  String get settingsAutoBackTitle => 'Return to Chat After Tasks';
-
-  @override
-  String get settingsAutoBackSubtitle =>
-      'When disabled, the task result page stays open after completion';
-
-  @override
   String get settingsHabitualHandTitle => 'Dominant Hand';
 
   @override
@@ -185,14 +178,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsSaveFailed => 'Failed to save settings';
-
-  @override
-  String get settingsAutoBackEnabledToast =>
-      'The app will return to chat after tasks finish';
-
-  @override
-  String get settingsAutoBackDisabledToast =>
-      'The app will stay on the current page after tasks finish';
 
   @override
   String settingsMcpEnabledToast(Object endpoint) {
@@ -1394,7 +1379,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get alpinePipInstall => 'Python Package Installer';
 
   @override
-  String get alpineCodex => 'OpenAI Codex CLI and app-server bridge';
+  String get alpineCodex => 'OpenAI Codex CLI for ACP Agents';
+
+  @override
+  String get alpineClaudeCode => 'Anthropic Claude Code CLI for ACP Agents';
+
+  @override
+  String get alpineOpenCode => 'OpenCode CLI with built-in ACP support';
 
   @override
   String get alpineSshClient => 'SSH Client';
@@ -1587,16 +1578,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeDrawerPinnedConversations => 'Pinned conversations';
 
   @override
-  String get homeDrawerCodexSection => 'Codex';
+  String get homeDrawerAgentSection => 'Agent';
 
   @override
-  String get homeDrawerAgentSection => 'Agent';
+  String get homeDrawerOmniAiSection => 'OmniAi';
 
   @override
   String get homeDrawerChatOnlySection => 'Pure chat';
 
   @override
-  String get homeDrawerCodexNoProject => 'Other';
+  String get homeDrawerAgentNoProject => 'Other';
 
   @override
   String get homeDrawerGreeting => 'Hello!';

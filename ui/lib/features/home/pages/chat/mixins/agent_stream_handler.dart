@@ -10,7 +10,8 @@ import 'package:ui/models/chat_message_model.dart';
 import 'package:ui/services/agent_stream_reducer.dart';
 import 'package:ui/services/agent_stream_meta.dart';
 import 'package:ui/services/assists_core_service.dart';
-import 'package:ui/services/codex_diff_parser.dart';
+import 'package:ui/services/agent_diff_parser.dart';
+import 'package:ui/services/agent_tool_call_parser.dart';
 import 'package:ui/services/voice_playback_coordinator.dart';
 
 enum ThinkingStage {
@@ -949,7 +950,7 @@ mixin AgentStreamHandler<T extends StatefulWidget> on State<T> {
           : Map<String, dynamic>.from(messages[index].cardData ?? const {});
       final existingTerminalOutput = (existingCardData['terminalOutput'] ?? '')
           .toString();
-      final isFileChangeTool = _isCodexFileChangeTool(event, existingCardData);
+      final isFileChangeTool = _isAgentFileChangeTool(event, existingCardData);
       final effectiveToolType = isFileChangeTool ? 'file' : event.toolType;
       final terminalOutput = effectiveToolType == 'terminal'
           ? _resolveTerminalOutput(
@@ -975,10 +976,10 @@ mixin AgentStreamHandler<T extends StatefulWidget> on State<T> {
           : '';
       final diffSummary = diffText.isEmpty
           ? null
-          : parseCodexDiffText(diffText);
+          : parseAgentDiffText(diffText);
       final diffPreview = diffSummary == null
           ? ''
-          : summarizeCodexDiff(diffSummary);
+          : summarizeAgentDiff(diffSummary);
       final effectiveSummary = isFileChangeTool && diffPreview.isNotEmpty
           ? diffPreview
           : summary.isNotEmpty
@@ -990,7 +991,7 @@ mixin AgentStreamHandler<T extends StatefulWidget> on State<T> {
           ? progress
           : (existingCardData['progress'] ?? '').toString();
       final filePath = isFileChangeTool
-          ? extractCodexDiffPath(diffSource) ??
+          ? extractAgentDiffPath(diffSource) ??
                 (diffSummary?.primaryPath.trim().isNotEmpty == true
                     ? diffSummary!.primaryPath
                     : null) ??
@@ -1212,7 +1213,7 @@ mixin AgentStreamHandler<T extends StatefulWidget> on State<T> {
     return existing;
   }
 
-  bool _isCodexFileChangeTool(
+  bool _isAgentFileChangeTool(
     AgentToolEventData event,
     Map<String, dynamic> existingCardData,
   ) {
@@ -1221,8 +1222,7 @@ mixin AgentStreamHandler<T extends StatefulWidget> on State<T> {
         (existingCardData['toolType'] ?? '').toString().trim() == 'file') {
       return true;
     }
-    final toolName = event.toolName.trim();
-    if (toolName == 'codex.file') {
+    if (canonicalAgentToolName(event.toolName) == 'agent.file') {
       return true;
     }
     if (_valueHasFileChangeType(event.raw)) {
@@ -1287,7 +1287,7 @@ mixin AgentStreamHandler<T extends StatefulWidget> on State<T> {
     required String progress,
     required String summary,
   }) {
-    final current = extractCodexDiffText(
+    final current = extractAgentDiffText(
       source,
       outputText: outputText,
       progress: progress,

@@ -9,8 +9,8 @@ ConversationThreadTarget _newThreadTargetForConversationMode(
   );
 }
 
-ConversationThreadTarget _newCodexThreadTarget() {
-  return _newThreadTargetForConversationMode(ConversationMode.codex);
+ConversationThreadTarget _newAgentThreadTarget() {
+  return _newThreadTargetForConversationMode(ConversationMode.agent);
 }
 
 mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
@@ -48,10 +48,10 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     _browserSessionSnapshotChangedSubscription = AssistsMessageService
         .browserSessionSnapshotChangedStream
         .listen(_handleBrowserSessionSnapshotChanged);
-    _codexEventSubscription = CodexAppServerService.events.listen(
-      _handleCodexAppServerEvent,
+    _agentEventSubscription = AgentRuntimeService.events.listen(
+      _handleAgentRuntimeEvent,
     );
-    unawaited(_refreshCodexStatus());
+    unawaited(_refreshAgentRuntimeStatus());
 
     _inputFocusNode.addListener(_onFocusChange);
     _messageController.addListener(_handleSlashCommandInput);
@@ -242,7 +242,7 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
       _isSurfacePageScrolling = false;
     });
     _resetLocalConversationState(targetMode);
-    _restoreLocalCodexThreadIdFromTarget(effectiveTarget);
+    _restoreLocalAgentThreadIdFromTarget(effectiveTarget);
     _applyDraftForConversationMode(targetMode);
     if (effectiveTarget.isRemoteCodexSessionTarget) {
       await _prepareRemoteCodexSessionTarget(effectiveTarget);
@@ -250,8 +250,8 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
       await initializeConversation(lifecycleToken: lifecycleToken);
     }
     if (isStaleRequest()) return;
-    if (_activeConversationMode == ChatPageMode.codex) {
-      await _refreshCodexCommandPreferences();
+    if (_activeConversationMode == ChatPageMode.agent) {
+      await _refreshAgentCommandPreferences();
       if (isStaleRequest()) return;
     }
     await _applyStagedSharedDraftIfNeeded(effectiveTarget);
@@ -264,16 +264,16 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     }
   }
 
-  void _restoreLocalCodexThreadIdFromTarget(ConversationThreadTarget target) {
-    if (target.mode != ConversationMode.codex ||
+  void _restoreLocalAgentThreadIdFromTarget(ConversationThreadTarget target) {
+    if (target.mode != ConversationMode.agent ||
         target.isRemoteCodexSessionTarget) {
       return;
     }
-    final threadId = target.codexThreadId?.trim();
+    final threadId = target.agentSessionId?.trim();
     if (threadId == null || threadId.isEmpty) {
       return;
     }
-    _activeCodexThreadId = threadId;
+    _activeAgentThreadId = threadId;
   }
 
   @override
@@ -385,8 +385,8 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     }
     _resolvedThreadTarget = visibleTarget;
     if (visibleTarget.isRemoteCodexSessionTarget ||
-        (_activeConversationMode == ChatPageMode.codex &&
-            _isRemoteCodexRuntimeActiveForMode(ChatPageMode.codex))) {
+        (_activeConversationMode == ChatPageMode.agent &&
+            _isRemoteCodexRuntimeActiveForMode(ChatPageMode.agent))) {
       return;
     }
     await ConversationHistoryService.saveLastVisibleThreadTarget(visibleTarget);
@@ -526,14 +526,14 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     _messageController.dispose();
     _normalMessageScrollController.dispose();
     _openClawMessageScrollController.dispose();
-    _codexMessageScrollController.dispose();
+    _agentMessageScrollController.dispose();
     _modePageController.dispose();
     _inputFocusNode.dispose();
     _openClawBaseUrlController.dispose();
     _openClawTokenController.dispose();
     _openClawUserIdController.dispose();
     _stopRemoteCodexSessionSync();
-    _codexEventSubscription?.cancel();
+    _agentEventSubscription?.cancel();
     super.dispose();
   }
 
@@ -618,8 +618,18 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     // IM 等外部入口写入用户消息时，原生侧用 reason=external_user_message 通知前端：
     // 这条消息只在 DB 里、还没进入 runtime.messages，必须强制从 DB 重载，
     // 否则 agent 流事件先到时 hasInFlightTask=true 会让 in-memory 分支吞掉它。
-    final isExternalUserMessage =
-        event['reason']?.toString() == 'external_user_message';
+    final reason = event['reason']?.toString();
+    final isExternalUserMessage = reason == 'external_user_message';
+    // 流事件已经由 runtime reducer 直接维护。原生侧每次把流式快照落库后
+    // 还会发送 messages_replaced；若在这里重新安装同一份 in-memory 列表，
+    // 会重建消息 notifier 并清空 reducer 的排序状态，造成思考卡闪烁和
+    // 文本/思考时序跳动。
+    if (!shouldReloadConversationMessagesChanged(
+      reason: reason,
+      hasInFlightTask: runtime?.hasInFlightTask == true,
+    )) {
+      return;
+    }
     await loadConversation(
       conversationId,
       preferInMemory:
@@ -691,8 +701,8 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
   ScrollController _scrollControllerForMode(ChatPageMode mode) {
     return mode == ChatPageMode.openclaw
         ? _openClawMessageScrollController
-        : mode == ChatPageMode.codex
-        ? _codexMessageScrollController
+        : mode == ChatPageMode.agent
+        ? _agentMessageScrollController
         : _normalMessageScrollController;
   }
 
@@ -759,8 +769,8 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
       return;
     }
 
-    final targetConversationMode = _activeConversationMode == ChatPageMode.codex
-        ? ChatPageMode.codex
+    final targetConversationMode = _activeConversationMode == ChatPageMode.agent
+        ? ChatPageMode.agent
         : ChatPageMode.normal;
     await _ensureConversationModeReady(targetConversationMode);
     if (isStaleRequest()) return;

@@ -27,7 +27,7 @@ class ChannelManager {
     private var overlayChannel: OverlayChannel = OverlayChannel()
     private var browserSessionChannel: BrowserSessionChannel = BrowserSessionChannel()
     private var storageUsageChannel: StorageUsageChannel = StorageUsageChannel()
-    private var codexAppServerChannel: CodexAppServerChannel = CodexAppServerChannel()
+    private var agentRuntimeChannel: AgentRuntimeChannel = AgentRuntimeChannel()
     fun getUIRouterChannel(): UIRouterChannel {
         return uiRouterChannel
     }
@@ -54,7 +54,7 @@ class ChannelManager {
         overlayChannel.setChannel(flutterEngine)
         browserSessionChannel.setChannel(flutterEngine)
         storageUsageChannel.setChannel(flutterEngine)
-        codexAppServerChannel.setChannel(flutterEngine)
+        agentRuntimeChannel.setChannel(flutterEngine)
     }
 
     fun onCreate(context: Context) {
@@ -71,7 +71,7 @@ class ChannelManager {
         remoteMcpConfigChannel.onCreate()
         overlayChannel.onCreate(context)
         storageUsageChannel.onCreate(context)
-        codexAppServerChannel.onCreate(context)
+        agentRuntimeChannel.onCreate(context)
     }
 
     fun clearChannel() {
@@ -92,7 +92,7 @@ class ChannelManager {
         overlayChannel.clear()
         browserSessionChannel.clear()
         storageUsageChannel.clear()
-        codexAppServerChannel.clear()
+        agentRuntimeChannel.clear()
     }
 
 

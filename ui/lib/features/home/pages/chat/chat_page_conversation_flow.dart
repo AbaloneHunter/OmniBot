@@ -28,6 +28,7 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
     ChatPageMode mode, {
     ConversationModel? conversation,
     List<ChatMessageModel>? messages,
+    bool preserveLiveStreamingState = false,
   }) {
     final conversationId = _currentConversationIdByMode[mode];
     if (conversationId == null) return;
@@ -90,6 +91,7 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
       browserSessionSnapshot:
           runtime?.browserSessionSnapshot ??
           _browserSessionSnapshotByMode[mode],
+      preserveLiveStreamingState: preserveLiveStreamingState,
     );
     _rememberRuntimeUiSnapshot(mode);
   }
@@ -512,8 +514,8 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
       return;
     }
 
-    if (_activeConversationMode == ChatPageMode.codex) {
-      await _sendCodexMessage(
+    if (_activeConversationMode == ChatPageMode.agent) {
+      await _sendAgentMessage(
         messageIds.aiMessageId,
         messageText,
         attachments: attachments,
@@ -974,8 +976,8 @@ mixin _ChatPageConversationFlowMixin on _ChatPageStateBase {
   @override
   void _onCancelTask() {
     try {
-      if (_activeConversationMode == ChatPageMode.codex) {
-        unawaited(_interruptCodexTurn());
+      if (_activeConversationMode == ChatPageMode.agent) {
+        unawaited(_interruptAgentTurn());
         final taskId =
             _currentDispatchTaskId ?? _activeRuntime?.lastAgentTaskId;
         if (taskId != null) {

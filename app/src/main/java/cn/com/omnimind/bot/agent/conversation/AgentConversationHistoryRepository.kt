@@ -47,6 +47,7 @@ class AgentConversationHistoryRepository(
         entryId: String,
         text: String,
         attachments: List<Map<String, Any?>> = emptyList(),
+        streamMeta: Map<String, Any?>? = null,
         turnUsage: Map<String, Any?>? = null,
         createdAt: Long = System.currentTimeMillis()
     ) {
@@ -55,8 +56,10 @@ class AgentConversationHistoryRepository(
             user = 1,
             text = text,
             attachments = attachments,
+            agentId = streamMeta?.get("agentId")?.toString(),
+            agentName = streamMeta?.get("agentName")?.toString(),
             isError = false,
-            streamMeta = null,
+            streamMeta = streamMeta,
             turnUsage = turnUsage,
             createdAt = createdAt
         )
@@ -91,6 +94,8 @@ class AgentConversationHistoryRepository(
             text = text,
             attachments = attachments,
             reasoningContent = reasoningContent,
+            agentId = streamMeta?.get("agentId")?.toString(),
+            agentName = streamMeta?.get("agentName")?.toString(),
             isError = isError,
             interruptedTurn = interruptedTurn,
             streamMeta = streamMeta,
@@ -194,9 +199,13 @@ class AgentConversationHistoryRepository(
         val cutoffEntryId = existingConversation?.contextSummaryCutoffEntryDbId?.let { cutoffDbId ->
             existingEntries.firstOrNull { it.id == cutoffDbId }?.entryId
         }
+        val mergedMessages = AgentConversationHistorySupport.mergePendingExternalUserMessages(
+            existingMessages = existingEntries.mapNotNull(::entryToMessagePayload),
+            incomingMessages = messages
+        )
         var remappedCutoffEntryDbId: Long? = null
         DatabaseHelper.deleteAgentConversationThread(conversationId, conversationMode)
-        ConversationSnapshotOrdering.prepareForStorage(messages).forEach { prepared ->
+        ConversationSnapshotOrdering.prepareForStorage(mergedMessages).forEach { prepared ->
             val message = prepared.payload
             val restoredToolPayload =
                 AgentConversationHistorySupport.restoreToolPayloadFromUiMessage(message)
@@ -265,12 +274,16 @@ class AgentConversationHistoryRepository(
 
     suspend fun listConversationMessages(
         conversationId: Long,
-        conversationMode: String
+        conversationMode: String,
+        finalizeInterruptedEntries: Boolean = true
     ): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
-        val normalized = normalizeEntriesForDisplay(
-            loadThreadEntriesDescSafe(conversationId, conversationMode)
-        )
-        val messagePayloads = normalized.mapNotNull { entry -> entryToMessagePayload(entry) }
+        val entries = loadThreadEntriesDescSafe(conversationId, conversationMode)
+        val displayEntries = if (finalizeInterruptedEntries) {
+            normalizeEntriesForDisplay(entries)
+        } else {
+            entries
+        }
+        val messagePayloads = displayEntries.mapNotNull { entry -> entryToMessagePayload(entry) }
         ConversationSnapshotOrdering.sortForDisplay(messagePayloads)
     }
 

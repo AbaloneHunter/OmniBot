@@ -127,10 +127,15 @@ object WebChatRoutes {
                     return@get
                 }
                 val mode = call.request.queryParameters["mode"] ?: "normal"
+                val finalizeInterruptedEntries = !agentRunService.hasActiveConversationRun(
+                    conversationId = conversationId,
+                    conversationMode = mode
+                )
                 call.respond(
                     conversationService.listConversationMessages(
                         conversationId = conversationId,
-                        conversationMode = mode
+                        conversationMode = mode,
+                        finalizeInterruptedEntries = finalizeInterruptedEntries
                     )
                 )
             }

@@ -9,7 +9,8 @@ class LegacyTextLocalizer {
 
   static final Map<String, String> _exactEn = <String, String>{
     '宠物': 'Pet',
-    '小万': 'Xiaowan',
+    '小万': 'OmniAi',
+    '小万（OmniAi）': 'OmniAi',
     '默认的桌面悬浮窗宠物': 'Default desktop floating pet',
     '自定义宠物': 'Custom Pet',
     '已选': 'Selected',
@@ -36,11 +37,11 @@ class LegacyTextLocalizer {
     '地址': 'Address',
     'Token': 'Token',
     '防止任务运行时屏幕休眠': 'Prevent Screen Sleep During Tasks',
-    '任务运行期间保持屏幕常亮，适用于 Agent、Codex 和纯聊天':
-        'Keep the screen awake while Agent, Codex, or chat tasks run',
+    '任务运行期间保持屏幕常亮，适用于小万（OmniAi）、Agent 和纯聊天':
+        'Keep the screen awake while OmniAi, Agent, or chat tasks run',
     '任务完成通知': 'Task Completion Notifications',
-    'Agent、Codex 和纯聊天完成后推送提醒':
-        'Notify when Agent, Codex, or chat responses finish',
+    '小万（OmniAi）、Agent 和纯聊天完成后推送提醒':
+        'Notify when OmniAi, Agent, or chat responses finish',
     '需要开启通知权限': 'Notification permission is required',
     '未生成': 'Not generated',
     '复制地址': 'Copy Address',
@@ -57,8 +58,14 @@ class LegacyTextLocalizer {
     'MCP 工具': 'MCP Tools',
     'Alpine 环境': 'Terminal Environment',
     '终端环境': 'Terminal Environment',
-    '本地 Alpine 与远程 PC Bridge': 'Local terminal environment and remote PC Bridge',
+    '本地 Alpine 与远程 PC Bridge':
+        'Local terminal environment and remote PC Bridge',
     '本地终端环境与远程 PC Bridge': 'Local terminal environment and remote PC Bridge',
+    '管理 ACP Agent、可用状态与统一模型绑定':
+        'Manage ACP Agents, availability, and unified model bindings',
+    '远程 PC Bridge': 'Remote PC Bridge',
+    '仅配置远程 Codex app-server 连接':
+        'Configure only the remote Codex app-server connection',
     '清除失败': 'Failed to clear',
     '隐藏': 'Hide',
     '显示': 'Show',
@@ -73,7 +80,6 @@ class LegacyTextLocalizer {
     '后台隐藏': 'Hide from Recents',
     '闹钟设置': 'Alarm Settings',
     '振动反馈': 'Vibration Feedback',
-    '任务完成后自动回聊天': 'Return to Chat After Tasks',
     '杂项': 'Misc',
     '首页设置': 'Home Settings',
     '启动时': 'On Startup',
@@ -101,7 +107,6 @@ class LegacyTextLocalizer {
     '最多固定两个快捷指令': 'Pin up to two quick prompts',
     '首页、后台隐藏、闹钟、振动与打开方式':
         'Home, Hide from Recents, alarms, vibration, and open behavior',
-    '闹钟、振动、自动回聊天与打开方式': 'Alarms, vibration, return-to-chat, and open behavior',
     '后台隐藏、闹钟、振动与打开方式':
         'Hide from Recents, alarms, vibration, and open behavior',
     '使用小万打开': 'Open with Omnibot',
@@ -177,8 +182,10 @@ class LegacyTextLocalizer {
     '尚未选择本地图片': 'No local image selected yet',
     '正在自动保存…': 'Saving changes…',
     '更改会自动保存': 'Changes are saved automatically',
-    '正在调用内嵌 Alpine 终端执行命令': 'Running a command in the embedded terminal environment',
-    '正在执行内嵌 Alpine 终端命令': 'Executing a command in the embedded terminal environment',
+    '正在调用内嵌 Alpine 终端执行命令':
+        'Running a command in the embedded terminal environment',
+    '正在执行内嵌 Alpine 终端命令':
+        'Executing a command in the embedded terminal environment',
     '终端输出更新中': 'Updating terminal output',
     '🎉Hi，我是小万，我会做很多事，让我展示给你下！':
         '🎉Hi, I\'m Omnibot. I can do many things, let me show you!',
@@ -472,14 +479,6 @@ class LegacyTextLocalizer {
   static final List<(RegExp, _TextRewriter)>
   _regexEn = <(RegExp, _TextRewriter)>[
     (RegExp(r'^MCP 已开启：(.+)$'), (match) => 'MCP enabled: ${match.group(1)!}'),
-    (
-      RegExp(r'^任务完成后将自动返回聊天$'),
-      (_) => 'The app will return to chat after tasks finish',
-    ),
-    (
-      RegExp(r'^任务完成后将停留在当前页面$'),
-      (_) => 'The app will stay on the current page after tasks finish',
-    ),
     (
       RegExp(r'^会话 (\d+) · 任务 (\d+)$'),
       (match) => 'Sessions ${match.group(1)!} · Tasks ${match.group(2)!}',

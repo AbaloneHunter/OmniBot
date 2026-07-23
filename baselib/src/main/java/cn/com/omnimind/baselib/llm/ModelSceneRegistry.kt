@@ -388,7 +388,6 @@ object ModelSceneRegistry {
             "scene.voice",
             "scene.dispatch.model",
             "scene.compactor.context.chat",
-            "scene.loading.sprite",
             "scene.memory.embedding",
             "scene.memory.rollup" -> SceneTransport.OPENAI_COMPATIBLE
             else -> SceneTransport.OPENAI_COMPATIBLE
@@ -398,7 +397,6 @@ object ModelSceneRegistry {
     private fun defaultParserForScene(sceneId: String): ResponseParser {
         return when (sceneId) {
             "scene.compactor.context.chat",
-            "scene.loading.sprite",
             "scene.memory.embedding",
             "scene.memory.rollup",
             "scene.voice",

@@ -12,6 +12,7 @@ export interface Conversation {
   messageCount?: number;
   updatedAt?: number;
   isArchived?: boolean;
+  isPinned?: boolean;
 }
 
 export interface Attachment {
@@ -91,6 +92,9 @@ export type RealtimeEventName =
 
 export interface RunResult {
   taskId?: string | number;
+  turnId?: string;
+  conversationMode?: ConversationMode;
+  conversation?: Conversation;
 }
 
 export interface BrowserActionResult {

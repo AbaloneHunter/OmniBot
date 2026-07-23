@@ -5,8 +5,10 @@ import 'package:ui/models/conversation_model.dart';
 import 'package:ui/models/conversation_thread_target.dart';
 import 'package:ui/features/home/pages/alarm_setting/alarm_setting_page.dart';
 import 'package:ui/features/home/pages/authorize_setting/authorize_setting_page.dart';
-import 'package:ui/features/home/pages/codex/codex_setting_page.dart';
-import 'package:ui/features/home/pages/codex/codex_sessions_page.dart';
+import 'package:ui/features/home/pages/agent/remote_codex_setting_page.dart';
+import 'package:ui/features/home/pages/agent/agent_sessions_page.dart';
+import 'package:ui/features/home/pages/agent/agent_mode_setting_page.dart';
+import 'package:ui/features/home/pages/agent/agent_config_page.dart';
 import 'package:ui/features/home/pages/chat_history/chat_history_page.dart';
 import 'package:ui/features/home/pages/permission_guide/permission_guide_detail_page.dart';
 import 'package:ui/features/home/pages/permission_guide/permission_guide_page.dart';
@@ -154,21 +156,41 @@ List<GoRoute> homeRoutes = [
   ),
 
   GoRoute(
-    path: '/home/codex_sessions',
-    name: 'home/codex_sessions',
+    path: '/home/agent_sessions',
+    name: 'home/agent_sessions',
     pageBuilder: (context, state) => GoRouterManager.buildActivitySlidePage(
       key: state.pageKey,
-      name: 'home/codex_sessions',
-      child: const CodexSessionsPage(),
+      name: 'home/agent_sessions',
+      child: const AgentSessionsPage(),
     ),
   ),
   GoRoute(
-    path: '/home/codex_setting',
-    name: 'home/codex_setting',
+    path: '/home/agent_mode_setting',
+    name: 'home/agent_mode_setting',
     pageBuilder: (context, state) => GoRouterManager.buildActivitySlidePage(
       key: state.pageKey,
-      name: 'home/codex_setting',
-      child: const CodexSettingPage(),
+      name: 'home/agent_mode_setting',
+      child: const AgentModeSettingPage(),
+    ),
+  ),
+  GoRoute(
+    path: '/home/agent_config/:agentId',
+    name: 'home/agent_config',
+    pageBuilder: (context, state) => GoRouterManager.buildActivitySlidePage(
+      key: state.pageKey,
+      name: 'home/agent_config',
+      child: AgentConfigPage(
+        agentId: state.pathParameters['agentId']?.trim() ?? '',
+      ),
+    ),
+  ),
+  GoRoute(
+    path: '/home/remote_codex_setting',
+    name: 'home/remote_codex_setting',
+    pageBuilder: (context, state) => GoRouterManager.buildActivitySlidePage(
+      key: state.pageKey,
+      name: 'home/remote_codex_setting',
+      child: const RemoteCodexSettingPage(),
     ),
   ),
   GoRoute(

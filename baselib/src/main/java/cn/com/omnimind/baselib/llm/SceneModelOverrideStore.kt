@@ -12,7 +12,6 @@ object SceneModelOverrideStore {
         "scene.dispatch.model",
         "scene.voice",
         "scene.compactor.context.chat",
-        "scene.loading.sprite",
         "scene.memory.embedding",
         "scene.memory.rollup"
     )
