@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/svg.dart';
@@ -5,6 +7,7 @@ import 'package:flutter_switch/flutter_switch.dart';
 import 'package:ui/core/router/go_router_manager.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/services/mcp_server_service.dart';
+import 'package:ui/services/storage_service.dart';
 import 'package:ui/services/workspace_memory_service.dart';
 import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/theme_context.dart';
@@ -20,15 +23,20 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   bool _mcpEnabled = false;
-  bool _mcpLoaded = false;
   bool _mcpBusy = false;
   McpServerInfo? _mcpInfo;
-  bool _workspaceMemoryLoaded = false;
-  WorkspaceMemoryEmbeddingConfig? _embeddingConfig;
+  bool _workspaceMemoryConfigured = false;
 
   @override
   void initState() {
     super.initState();
+    // 同步读取缓存初始值，首帧即渲染真实状态，避免一帧加载占位符闪烁。
+    _mcpEnabled =
+        StorageService.getBool(StorageService.kMcpLocalServiceEnabledKey) ??
+        false;
+    _workspaceMemoryConfigured =
+        StorageService.getBool(StorageService.kWorkspaceMemoryConfiguredKey) ??
+        false;
     _loadMcpServerState();
     _loadWorkspaceMemoryState();
   }
@@ -37,17 +45,18 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       final info = await McpServerService.getState();
       if (!mounted) return;
+      final enabled = info?.enabled == true;
       setState(() {
         _mcpInfo = info;
-        _mcpEnabled = info?.enabled == true;
-        _mcpLoaded = true;
+        _mcpEnabled = enabled;
       });
+      // 回写缓存，供下次首帧同步渲染。
+      await StorageService.setBool(
+        StorageService.kMcpLocalServiceEnabledKey,
+        enabled,
+      );
     } catch (e) {
       debugPrint('Load MCP state failed: $e');
-      if (!mounted) return;
-      setState(() {
-        _mcpLoaded = true;
-      });
     }
   }
 
@@ -58,16 +67,19 @@ class _SettingsPageState extends State<SettingsPage> {
         WorkspaceMemoryService.getRollupStatus(),
       ]);
       if (!mounted) return;
+      final config = results[0] as WorkspaceMemoryEmbeddingConfig;
       setState(() {
-        _embeddingConfig = results[0] as WorkspaceMemoryEmbeddingConfig;
-        _workspaceMemoryLoaded = true;
+        _workspaceMemoryConfigured = config.configured;
       });
+      // 回写缓存，供下次首帧同步渲染。
+      unawaited(
+        StorageService.setBool(
+          StorageService.kWorkspaceMemoryConfiguredKey,
+          config.configured,
+        ),
+      );
     } catch (e) {
       debugPrint('Load workspace memory state failed: $e');
-      if (!mounted) return;
-      setState(() {
-        _workspaceMemoryLoaded = true;
-      });
     }
   }
 
@@ -80,10 +92,18 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       final info = await McpServerService.setEnabled(enable);
       if (!mounted) return;
+      final enabled = info?.enabled == true;
       setState(() {
         _mcpInfo = info;
-        _mcpEnabled = info?.enabled == true;
+        _mcpEnabled = enabled;
       });
+      // 同步更新缓存，保证下次进入设置页首帧即正确。
+      unawaited(
+        StorageService.setBool(
+          StorageService.kMcpLocalServiceEnabledKey,
+          enabled,
+        ),
+      );
       if (enable) {
         final endpoint = info?.endpoint ?? '';
         if (endpoint.isNotEmpty) {
@@ -240,10 +260,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
-    final workspaceMemoryConfigured = _embeddingConfig?.configured == true;
-    final workspaceMemorySubtitle = !_workspaceMemoryLoaded
-        ? context.l10n.settingsWorkspaceMemoryLoading
-        : workspaceMemoryConfigured
+    final workspaceMemorySubtitle = _workspaceMemoryConfigured
         ? context.l10n.settingsWorkspaceMemoryEnabled
         : context.l10n.settingsWorkspaceMemoryLexical;
     final sections = _buildSections(workspaceMemorySubtitle);
@@ -305,28 +322,12 @@ class _SettingsPageState extends State<SettingsPage> {
         label: context.l10n.settingsSectionServiceEnvironment,
         items: [
           _SettingItem(
-            icon: Icons.extension_outlined,
-            iconSvg: 'assets/home/mcp_tools_setting_icon.svg',
-            title: context.l10n.settingsMcpToolsTitle,
-            subtitle: context.l10n.settingsMcpToolsSubtitle,
+            icon: Icons.hub_outlined,
+            title: context.trLegacy('Agent 模式'),
+            subtitle: context.trLegacy('管理 ACP Agent、可用状态与统一模型绑定'),
             onTap: () {
-              GoRouterManager.push('/home/mcp_tools');
+              GoRouterManager.push('/home/agent_mode_setting');
             },
-          ),
-          _SettingItem(
-            icon: Icons.cloud_outlined,
-            iconSvg: 'assets/home/local_mcp_service_setting_icon.svg',
-            title: context.l10n.settingsLocalServiceTitle,
-            subtitle: context.l10n.settingsLocalServiceSubtitle,
-            trailing: _buildSwitchTrailing(
-              value: _mcpEnabled,
-              enabled: _mcpLoaded && !_mcpBusy,
-              loading: !_mcpLoaded,
-              onToggle: (val) async {
-                await _toggleMcpServer(val);
-              },
-            ),
-            onTap: _mcpEnabled && !_mcpBusy ? _showMcpInfo : null,
           ),
           _SettingItem(
             icon: Icons.code,
@@ -339,20 +340,26 @@ class _SettingsPageState extends State<SettingsPage> {
             },
           ),
           _SettingItem(
-            icon: Icons.hub_outlined,
-            title: context.trLegacy('Agent 模式'),
-            subtitle: context.trLegacy('管理 ACP Agent、可用状态与统一模型绑定'),
-            onTap: () {
-              GoRouterManager.push('/home/agent_mode_setting');
-            },
+            icon: Icons.cloud_outlined,
+            iconSvg: 'assets/home/local_mcp_service_setting_icon.svg',
+            title: context.l10n.settingsLocalServiceTitle,
+            subtitle: context.l10n.settingsLocalServiceSubtitle,
+            trailing: _buildSwitchTrailing(
+              value: _mcpEnabled,
+              enabled: !_mcpBusy,
+              onToggle: (val) async {
+                await _toggleMcpServer(val);
+              },
+            ),
+            onTap: _mcpEnabled && !_mcpBusy ? _showMcpInfo : null,
           ),
           _SettingItem(
-            icon: Icons.terminal_rounded,
-            iconSvg: 'assets/home/chat/codex.svg',
-            title: context.trLegacy('远程 PC Bridge'),
-            subtitle: context.trLegacy('仅配置远程 Codex app-server 连接'),
+            icon: Icons.extension_outlined,
+            iconSvg: 'assets/home/mcp_tools_setting_icon.svg',
+            title: context.l10n.settingsMcpToolsTitle,
+            subtitle: context.l10n.settingsMcpToolsSubtitle,
             onTap: () {
-              GoRouterManager.push('/home/remote_codex_setting');
+              GoRouterManager.push('/home/mcp_tools');
             },
           ),
         ],
@@ -542,39 +549,29 @@ class _SettingsPageState extends State<SettingsPage> {
     required bool value,
     required ValueChanged<bool> onToggle,
     bool enabled = true,
-    bool loading = false,
   }) {
     final palette = context.omniPalette;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: enabled && !loading ? () => onToggle(!value) : null,
+      onTap: enabled ? () => onToggle(!value) : null,
       child: Padding(
         padding: const EdgeInsets.only(left: 12),
-        child: loading
-            ? Container(
-                width: 32,
-                height: 18.67,
-                decoration: BoxDecoration(
-                  color: palette.borderStrong,
-                  borderRadius: BorderRadius.circular(28.75),
-                ),
-              )
-            : AbsorbPointer(
-                child: Opacity(
-                  opacity: enabled ? 1 : 0.5,
-                  child: FlutterSwitch(
-                    width: 32,
-                    height: 18.67,
-                    toggleSize: 11.3,
-                    padding: 3,
-                    activeColor: palette.accentPrimary,
-                    inactiveColor: palette.borderStrong,
-                    borderRadius: 28.75,
-                    value: value,
-                    onToggle: onToggle,
-                  ),
-                ),
-              ),
+        child: AbsorbPointer(
+          child: Opacity(
+            opacity: enabled ? 1 : 0.5,
+            child: FlutterSwitch(
+              width: 32,
+              height: 18.67,
+              toggleSize: 11.3,
+              padding: 3,
+              activeColor: palette.accentPrimary,
+              inactiveColor: palette.borderStrong,
+              borderRadius: 28.75,
+              value: value,
+              onToggle: onToggle,
+            ),
+          ),
+        ),
       ),
     );
   }

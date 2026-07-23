@@ -166,6 +166,11 @@ class StorageService {
   static const String kHabitualHandKey = 'habitual_hand';
   static const String kThemeOptionKey = 'theme_option';
   static const String kLanguageOptionKey = 'language_option';
+  static const String kMcpLocalServiceEnabledKey =
+      'mcp_local_service_enabled';
+  static const String kWorkspaceMemoryConfiguredKey =
+      'workspace_memory_configured';
+  static const String kRemoteBridgeEnabledKey = 'remote_bridge_enabled';
 
   static const String _kManualModelContextThresholdsKey =
       'manual_model_context_thresholds';

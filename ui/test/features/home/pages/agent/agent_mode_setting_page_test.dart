@@ -77,7 +77,10 @@ void main() {
     expect(find.text('官方'), findsNothing);
     expect(find.textContaining('统一 API'), findsNothing);
     expect(find.byType(PopupMenuButton<String>), findsNothing);
-    expect(find.byIcon(Icons.chevron_right_rounded), findsNWidgets(3));
+    // 3 Agent 卡片 + 1 远程 PC Bridge 入口卡片。
+    expect(find.byIcon(Icons.chevron_right_rounded), findsNWidgets(4));
+    expect(find.text('远程 PC Bridge'), findsOneWidget);
+    expect(find.text('远程运行'), findsOneWidget);
     expect(find.text('使用'), findsNothing);
     expect(find.text('当前使用'), findsNothing);
     expect(find.text('Use Agent'), findsNothing);

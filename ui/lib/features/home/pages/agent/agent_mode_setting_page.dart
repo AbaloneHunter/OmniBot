@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:ui/core/router/go_router_manager.dart';
 import 'package:ui/services/agent_runtime_service.dart';
+import 'package:ui/services/storage_service.dart';
 import 'package:ui/theme/app_colors.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/ui.dart';
@@ -27,6 +28,9 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
   bool _refreshing = false;
   String? _error;
   String? _busyAgentId;
+  // 远程 PC Bridge 状态：先用缓存同步渲染，后台再刷新，避免一帧加载闪烁。
+  bool _remoteBridgeEnabled =
+      StorageService.getBool(StorageService.kRemoteBridgeEnabledKey) ?? false;
 
   bool get _english =>
       Localizations.localeOf(context).languageCode.toLowerCase() == 'en';
@@ -37,6 +41,7 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
   void initState() {
     super.initState();
     unawaited(_load());
+    unawaited(_loadRemoteBridge());
   }
 
   Future<void> _load({bool refresh = false}) async {
@@ -61,6 +66,21 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
         _refreshing = false;
         _error = error.toString();
       });
+    }
+  }
+
+  Future<void> _loadRemoteBridge() async {
+    try {
+      final config = await AgentRuntimeService.readRemoteBridgeConfig();
+      if (!mounted) return;
+      final enabled = config.remoteEnabled;
+      setState(() => _remoteBridgeEnabled = enabled);
+      await StorageService.setBool(
+        StorageService.kRemoteBridgeEnabledKey,
+        enabled,
+      );
+    } catch (error) {
+      debugPrint('Load remote bridge failed: $error');
     }
   }
 
@@ -437,6 +457,18 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
                       ),
                     ),
                   ],
+                  // 远程 PC Bridge：全局共享配置入口（仅配置远程 Codex app-server 连接）。
+                  const SizedBox(height: 24),
+                  _sectionLabel(_text('远程运行', 'Remote runtime')),
+                  const SizedBox(height: 8),
+                  _RemoteBridgeCard(
+                    enabled: _remoteBridgeEnabled,
+                    cardColor: card,
+                    onTap: () {
+                      GoRouterManager.push('/home/remote_codex_setting');
+                    },
+                    english: _english,
+                  ),
                 ],
               ),
       ),
@@ -650,4 +682,90 @@ Map<String, String> _parseEnvironment(String source) {
     ),
     _ => (label: english ? 'Unchecked' : '未检测', color: const Color(0xFFE3A52B)),
   };
+}
+
+/// 远程 PC Bridge 卡片入口：点击跳转到独立的 Bridge 配置页（扫码/测试/自动保存全部保留）。
+class _RemoteBridgeCard extends StatelessWidget {
+  const _RemoteBridgeCard({
+    required this.enabled,
+    required this.cardColor,
+    required this.onTap,
+    required this.english,
+  });
+
+  final bool enabled;
+  final Color cardColor;
+  final VoidCallback onTap;
+  final bool english;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.omniPalette;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: palette.borderSubtle),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: palette.surfaceSecondary,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.terminal_rounded,
+                  size: 20,
+                  color: palette.accentPrimary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      english ? 'Remote PC Bridge' : '远程 PC Bridge',
+                      style: TextStyle(
+                        color: palette.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      enabled
+                          ? (english
+                                ? 'Enabled — Agent chat uses remote Codex app-server'
+                                : '已启用 — Agent 聊天使用远程 Codex app-server')
+                          : (english
+                                ? 'Configure remote Codex app-server connection'
+                                : '配置远程 Codex app-server 连接'),
+                      style: TextStyle(
+                        color: palette.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: palette.textTertiary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
