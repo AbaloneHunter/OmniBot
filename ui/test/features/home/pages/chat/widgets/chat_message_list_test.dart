@@ -270,6 +270,42 @@ void main() {
     expect(find.byType(TextField), findsNothing);
   });
 
+  testWidgets('ACP user message forwards long press for copy actions', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    ChatMessageModel? pressedMessage;
+    final messages = <ChatMessageModel>[
+      ChatMessageModel.userMessage('Agent 用户消息', id: 'agent-user'),
+    ];
+
+    await tester.pumpWidget(
+      _buildLocalizedApp(
+        child: SizedBox(
+          width: 400,
+          height: 520,
+          child: ChatMessageList(
+            messages: messages,
+            scrollController: controller,
+            useAcpPresentation: true,
+            onUserMessageLongPressStart: (message, _) {
+              pressedMessage = message;
+            },
+            onBeforeTaskExecute: () async {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.longPress(
+      find.byKey(const ValueKey('user-message-bubble-agent-user')),
+    );
+    await tester.pump();
+
+    expect(pressedMessage?.id, 'agent-user');
+  });
+
   testWidgets(
     'shared message scroll controller does not crash during long-message rebuilds',
     (tester) async {

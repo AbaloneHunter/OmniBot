@@ -936,9 +936,16 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
       onRequestAuthorize: mode == ChatPageMode.normal
           ? _requestAuthorizeForExecution
           : null,
-      onUserMessageLongPressStart: mode == ChatPageMode.normal
-          ? _handleUserMessageLongPressStart
-          : null,
+      onUserMessageLongPressStart: switch (mode) {
+        ChatPageMode.normal => _handleUserMessageLongPressStart,
+        ChatPageMode.agent =>
+          (message, details) => _handleUserMessageLongPressStart(
+            message,
+            details,
+            allowConversationActions: false,
+          ),
+        ChatPageMode.openclaw => null,
+      },
       onLatestUserMessageEditTap: mode == ChatPageMode.normal
           ? _startEditingLatestUserMessage
           : null,
@@ -2165,8 +2172,9 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
 
   Future<void> _handleUserMessageLongPressStart(
     ChatMessageModel message,
-    LongPressStartDetails details,
-  ) async {
+    LongPressStartDetails details, {
+    bool allowConversationActions = true,
+  }) async {
     final text = (message.text ?? '').trim();
     final hasAttachments = _extractRetryAttachments(message).isNotEmpty;
     if (text.isEmpty && !hasAttachments) {
@@ -2181,8 +2189,9 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
 
     final action = await _showUserMessageQuickMenu(
       details.globalPosition,
-      showEditAction: _canEditUserMessage(message),
-      showRetryAction: _canRetryUserMessage(message),
+      showEditAction: allowConversationActions && _canEditUserMessage(message),
+      showRetryAction:
+          allowConversationActions && _canRetryUserMessage(message),
     );
     if (!mounted || action == null) return;
 

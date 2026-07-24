@@ -365,6 +365,21 @@ void main() {
       find.byKey(const ValueKey('chat-input-agent-run-settings-group-model')),
     );
     await tester.pump(const Duration(milliseconds: 200));
+    final backRow = find.byKey(
+      const ValueKey('chat-input-agent-run-settings-back'),
+    );
+    final backRowRect = tester.getRect(backRow);
+    await tester.tapAt(Offset(backRowRect.right - 8, backRowRect.center.dy));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(
+      find.byKey(const ValueKey('agent-run-settings-overview')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('chat-input-agent-run-settings-group-model')),
+    );
+    await tester.pump(const Duration(milliseconds: 200));
     await tester.tap(
       find.byKey(
         const ValueKey(

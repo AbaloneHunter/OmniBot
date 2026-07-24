@@ -86,6 +86,57 @@ void main() {
     expect(find.text('Use Agent'), findsNothing);
     expect(find.text('Selected'), findsNothing);
   });
+
+  testWidgets(
+    'focused custom Agent fields can be cancelled or dismissed without errors',
+    (tester) async {
+      tester.view.physicalSize = const Size(1080, 2200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.lightTheme,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          home: const AgentModeSettingPage(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final addButton = find.byTooltip('添加自定义 ACP Agent');
+      await tester.tap(addButton);
+      await tester.pumpAndSettle();
+      final dialog = find.byType(AlertDialog);
+      final dialogFields = find.descendant(
+        of: dialog,
+        matching: find.byType(TextField),
+      );
+      await tester.tap(dialogFields.first);
+      await tester.enterText(dialogFields.first, 'Custom Agent');
+      await tester.tap(find.widgetWithText(TextButton, '取消'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('添加自定义 ACP Agent'), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(addButton);
+      await tester.pumpAndSettle();
+      final reopenedDialogFields = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      );
+      await tester.tap(reopenedDialogFields.at(1));
+      await tester.enterText(reopenedDialogFields.at(1), '/bin/agent');
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(find.text('添加自定义 ACP Agent'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 Map<String, dynamic> _agent(

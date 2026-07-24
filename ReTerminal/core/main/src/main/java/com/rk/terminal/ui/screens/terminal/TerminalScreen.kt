@@ -292,7 +292,9 @@ fun TerminalScreen(
 
         ModalNavigationDrawer(
             drawerState = drawerState,
-            gesturesEnabled = false,
+            // Keep edge-swipe opening disabled while still allowing the open
+            // drawer's scrim (and close swipe) to dismiss the session panel.
+            gesturesEnabled = drawerState.isOpen,
             drawerContent = {
                 ModalDrawerSheet(modifier = Modifier.width(drawerWidth)) {
                     Column(
@@ -417,7 +419,7 @@ fun TerminalScreen(
                                     ),
                                     title = {
                                         Column {
-                                            Text(text = "ReTerminal", color = color)
+                                            Text(text = "Terminal", color = color)
                                             Text(style = MaterialTheme.typography.bodySmall,text = mainActivityActivity.sessionBinder?.getService()?.currentSession?.value?.first + " (${getNameOfWorkingMode(mainActivityActivity.sessionBinder?.getService()?.currentSession?.value?.second)})",color = color)
                                         }
                                     },

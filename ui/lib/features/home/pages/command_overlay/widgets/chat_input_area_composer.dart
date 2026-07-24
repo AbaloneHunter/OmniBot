@@ -1738,32 +1738,35 @@ class _AgentRunSettingsMenuContentState
   Widget _buildSubmenuHeader(String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 7, 10, 3),
-      child: Row(
-        children: [
-          InkWell(
-            key: const ValueKey('chat-input-agent-run-settings-back'),
-            onTap: () => _showPage(_AgentRunSettingsMenuPage.overview),
-            borderRadius: BorderRadius.circular(10),
-            child: const SizedBox(
-              width: 34,
-              height: 34,
-              child: Icon(Icons.chevron_left_rounded, size: 20),
-            ),
-          ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 13,
-                color: widget.textColor,
-                fontWeight: FontWeight.w700,
+      child: InkWell(
+        key: const ValueKey('chat-input-agent-run-settings-back'),
+        onTap: () => _showPage(_AgentRunSettingsMenuPage.overview),
+        borderRadius: BorderRadius.circular(10),
+        child: SizedBox(
+          height: 34,
+          child: Row(
+            children: [
+              const SizedBox(
+                width: 34,
+                height: 34,
+                child: Icon(Icons.chevron_left_rounded, size: 20),
               ),
-            ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: widget.textColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

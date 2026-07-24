@@ -191,104 +191,10 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
   }
 
   Future<void> _addCustomAgent() async {
-    final nameController = TextEditingController();
-    final commandController = TextEditingController();
-    final argumentsController = TextEditingController();
-    final environmentController = TextEditingController();
-    var enabled = true;
     final result = await showDialog<AcpAgentProfile>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          title: Text(_text('添加自定义 ACP Agent', 'Add custom ACP Agent')),
-          content: SizedBox(
-            width: 460,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameController,
-                    decoration: InputDecoration(
-                      labelText: _text('名称', 'Name'),
-                      hintText: 'My ACP Agent',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: commandController,
-                    decoration: InputDecoration(
-                      labelText: _text('启动命令或路径', 'Command or path'),
-                      hintText: '/usr/local/bin/agent',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: argumentsController,
-                    minLines: 2,
-                    maxLines: 4,
-                    decoration: InputDecoration(
-                      labelText: _text(
-                        '启动参数（每行一个）',
-                        'Arguments (one per line)',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: environmentController,
-                    minLines: 3,
-                    maxLines: 6,
-                    decoration: InputDecoration(
-                      labelText: _text('启动环境变量', 'Launch environment'),
-                      hintText: 'KEY=VALUE',
-                      helperText: _text(
-                        '变量直接传给 Agent，由 Agent 自身决定如何使用。',
-                        'Variables are passed directly to the Agent.',
-                      ),
-                    ),
-                  ),
-                  SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(_text('启用 Agent', 'Enable Agent')),
-                    value: enabled,
-                    onChanged: (value) => setDialogState(() => enabled = value),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(_text('取消', 'Cancel')),
-            ),
-            FilledButton(
-              onPressed: () {
-                final name = nameController.text.trim();
-                final command = commandController.text.trim();
-                if (name.isEmpty || command.isEmpty) return;
-                Navigator.of(dialogContext).pop(
-                  AcpAgentProfile(
-                    id: '',
-                    name: name,
-                    command: command,
-                    arguments: _nonEmptyLines(argumentsController.text),
-                    environment: _parseEnvironment(environmentController.text),
-                    enabled: enabled,
-                  ),
-                );
-              },
-              child: Text(_text('保存', 'Save')),
-            ),
-          ],
-        ),
-      ),
+      builder: (dialogContext) => _AddCustomAgentDialog(english: _english),
     );
-    nameController.dispose();
-    commandController.dispose();
-    argumentsController.dispose();
-    environmentController.dispose();
     if (result == null) return;
     try {
       final catalog = await AgentRuntimeService.saveAgent(result);
@@ -483,6 +389,109 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
         fontSize: 12,
         fontWeight: FontWeight.w600,
       ),
+    );
+  }
+}
+
+class _AddCustomAgentDialog extends StatefulWidget {
+  const _AddCustomAgentDialog({required this.english});
+
+  final bool english;
+
+  @override
+  State<_AddCustomAgentDialog> createState() => _AddCustomAgentDialogState();
+}
+
+class _AddCustomAgentDialogState extends State<_AddCustomAgentDialog> {
+  String _name = '';
+  String _command = '';
+  String _arguments = '';
+  String _environment = '';
+  bool _enabled = true;
+
+  String _text(String zh, String en) => widget.english ? en : zh;
+
+  void _save() {
+    final name = _name.trim();
+    final command = _command.trim();
+    if (name.isEmpty || command.isEmpty) return;
+    Navigator.of(context).pop(
+      AcpAgentProfile(
+        id: '',
+        name: name,
+        command: command,
+        arguments: _nonEmptyLines(_arguments),
+        environment: _parseEnvironment(_environment),
+        enabled: _enabled,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(_text('添加自定义 ACP Agent', 'Add custom ACP Agent')),
+      content: SizedBox(
+        width: 460,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                onChanged: (value) => _name = value,
+                decoration: InputDecoration(
+                  labelText: _text('名称', 'Name'),
+                  hintText: 'My ACP Agent',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                onChanged: (value) => _command = value,
+                decoration: InputDecoration(
+                  labelText: _text('启动命令或路径', 'Command or path'),
+                  hintText: '/usr/local/bin/agent',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                onChanged: (value) => _arguments = value,
+                minLines: 2,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  labelText: _text('启动参数（每行一个）', 'Arguments (one per line)'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                onChanged: (value) => _environment = value,
+                minLines: 3,
+                maxLines: 6,
+                decoration: InputDecoration(
+                  labelText: _text('启动环境变量', 'Launch environment'),
+                  hintText: 'KEY=VALUE',
+                  helperText: _text(
+                    '变量直接传给 Agent，由 Agent 自身决定如何使用。',
+                    'Variables are passed directly to the Agent.',
+                  ),
+                ),
+              ),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                title: Text(_text('启用 Agent', 'Enable Agent')),
+                value: _enabled,
+                onChanged: (value) => setState(() => _enabled = value),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(_text('取消', 'Cancel')),
+        ),
+        FilledButton(onPressed: _save, child: Text(_text('保存', 'Save'))),
+      ],
     );
   }
 }
