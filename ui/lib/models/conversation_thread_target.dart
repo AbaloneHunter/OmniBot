@@ -6,6 +6,7 @@ class ConversationThreadTarget {
   const ConversationThreadTarget({
     required this.mode,
     this.conversationId,
+    this.agentId,
     this.agentSessionId,
     this.agentRuntime,
     this.agentSessionActive,
@@ -15,6 +16,7 @@ class ConversationThreadTarget {
   });
 
   final int? conversationId;
+  final String? agentId;
   final String? agentSessionId;
   final String? agentRuntime;
   final bool? agentSessionActive;
@@ -28,6 +30,7 @@ class ConversationThreadTarget {
     this.fromNativeRoute = false,
     this.requestKey,
     this.agentRuntime,
+    this.agentId,
   }) : conversationId = null,
        agentSessionId = null,
        agentSessionActive = null,
@@ -38,6 +41,7 @@ class ConversationThreadTarget {
     this.mode = ConversationMode.normal,
     this.fromNativeRoute = false,
     this.requestKey,
+    this.agentId,
     this.agentSessionId,
     this.agentRuntime,
     this.agentSessionActive,
@@ -46,13 +50,13 @@ class ConversationThreadTarget {
   const ConversationThreadTarget.agentSession({
     required String sessionId,
     String runtime = 'remote',
-    bool? agentSessionActive,
+    this.agentId,
+    this.agentSessionActive,
     this.fromNativeRoute = false,
     this.requestKey,
   }) : conversationId = null,
        agentSessionId = sessionId,
        agentRuntime = runtime,
-       agentSessionActive = agentSessionActive,
        mode = ConversationMode.agent,
        isNewConversation = false;
 
@@ -74,6 +78,7 @@ class ConversationThreadTarget {
 
   ConversationThreadTarget copyWith({
     int? conversationId,
+    String? agentId,
     String? agentSessionId,
     String? agentRuntime,
     bool? agentSessionActive,
@@ -85,6 +90,7 @@ class ConversationThreadTarget {
   }) {
     return ConversationThreadTarget(
       conversationId: conversationId ?? this.conversationId,
+      agentId: agentId ?? this.agentId,
       agentSessionId: agentSessionId ?? this.agentSessionId,
       agentRuntime: agentRuntime ?? this.agentRuntime,
       agentSessionActive: agentSessionActive ?? this.agentSessionActive,
@@ -98,6 +104,7 @@ class ConversationThreadTarget {
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'conversationId': conversationId,
+      if (agentId != null && agentId!.isNotEmpty) 'agentId': agentId,
       if (agentSessionId != null && agentSessionId!.isNotEmpty)
         'agentSessionId': agentSessionId,
       if (agentRuntime != null && agentRuntime!.isNotEmpty)
@@ -119,6 +126,7 @@ class ConversationThreadTarget {
     final isNewConversation = json['isNewConversation'] == true;
     return ConversationThreadTarget(
       conversationId: conversationId,
+      agentId: json['agentId']?.toString(),
       mode: ConversationMode.fromStorageValue(json['mode'] as String?),
       isNewConversation: isNewConversation,
       fromNativeRoute: json['fromNativeRoute'] == true,
@@ -149,6 +157,7 @@ class ConversationThreadTarget {
     if (identical(this, other)) return true;
     return other is ConversationThreadTarget &&
         other.conversationId == conversationId &&
+        other.agentId == agentId &&
         other.agentSessionId == agentSessionId &&
         other.agentRuntime == agentRuntime &&
         other.agentSessionActive == agentSessionActive &&
@@ -161,6 +170,7 @@ class ConversationThreadTarget {
   @override
   int get hashCode => Object.hash(
     conversationId,
+    agentId,
     agentSessionId,
     agentRuntime,
     agentSessionActive,
@@ -174,6 +184,7 @@ class ConversationThreadTarget {
   String toString() {
     return 'ConversationThreadTarget('
         'conversationId: $conversationId, '
+        'agentId: $agentId, '
         'agentSessionId: $agentSessionId, '
         'agentRuntime: $agentRuntime, '
         'agentSessionActive: $agentSessionActive, '

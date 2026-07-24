@@ -38,6 +38,10 @@ class ConversationModel {
   /// Agent 模式会话绑定的工作目录。
   /// 其余模式恒为 null。
   final String? agentCwd;
+
+  /// Agent 模式会话绑定的 ACP Agent。
+  /// 用于在切换会话时立即恢复正确的品牌和运行时。
+  final String? agentId;
   final bool isArchived;
   final bool isPinned;
   final int? parentConversationId;
@@ -61,6 +65,7 @@ class ConversationModel {
     required this.id,
     this.mode = ConversationMode.normal,
     this.agentCwd,
+    this.agentId,
     this.isArchived = false,
     this.isPinned = false,
     this.parentConversationId,
@@ -91,6 +96,9 @@ class ConversationModel {
                   .isNotEmpty ==
               true
           ? ((json['agentCwd'] ?? json['codexCwd']) as String).trim()
+          : null,
+      agentId: json['agentId']?.toString().trim().isNotEmpty == true
+          ? json['agentId'].toString().trim()
           : null,
       isArchived: json['isArchived'] as bool? ?? false,
       isPinned: json['isPinned'] as bool? ?? false,
@@ -126,6 +134,7 @@ class ConversationModel {
       'id': id,
       'mode': mode.storageValue,
       'agentCwd': agentCwd,
+      'agentId': agentId,
       'isArchived': isArchived,
       'isPinned': isPinned,
       'parentConversationId': parentConversationId,
@@ -151,6 +160,7 @@ class ConversationModel {
     int? id,
     ConversationMode? mode,
     String? agentCwd,
+    String? agentId,
     bool? isArchived,
     bool? isPinned,
     int? parentConversationId,
@@ -174,6 +184,7 @@ class ConversationModel {
       id: id ?? this.id,
       mode: mode ?? this.mode,
       agentCwd: agentCwd ?? this.agentCwd,
+      agentId: agentId ?? this.agentId,
       isArchived: isArchived ?? this.isArchived,
       isPinned: isPinned ?? this.isPinned,
       parentConversationId: parentConversationId ?? this.parentConversationId,

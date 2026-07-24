@@ -195,6 +195,57 @@ void main() {
     expect(selectedTarget!.mode, ConversationMode.openclaw);
   });
 
+  testWidgets('embedded Agent conversation keeps its bound ACP agent', (
+    tester,
+  ) async {
+    ConversationThreadTarget? selectedTarget;
+    nativeConversations = <Map<String, Object?>>[
+      <String, Object?>{
+        'id': 50,
+        'title': 'Claude 会话',
+        'mode': ConversationMode.agent.storageValue,
+        'agentId': 'claude-code-acp',
+        'summary': null,
+        'status': 0,
+        'lastMessage': 'hello',
+        'messageCount': 1,
+        'createdAt': 1,
+        'updatedAt': 2,
+      },
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DefaultAssetBundle(
+          bundle: _SvgTestAssetBundle(),
+          child: _buildProviderScope(
+            child: Scaffold(
+              body: SizedBox(
+                width: 360,
+                height: 720,
+                child: HomeDrawer(
+                  embedded: true,
+                  closeOnNavigate: false,
+                  onThreadTargetSelected: (target) {
+                    selectedTarget = target;
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Claude 会话'));
+    await tester.pumpAndSettle();
+
+    expect(selectedTarget?.conversationId, 50);
+    expect(selectedTarget?.mode, ConversationMode.agent);
+    expect(selectedTarget?.agentId, 'claude-code-acp');
+  });
+
   testWidgets('shows scheduled and pinned sections before regular history', (
     tester,
   ) async {

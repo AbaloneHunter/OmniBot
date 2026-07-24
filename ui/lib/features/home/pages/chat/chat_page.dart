@@ -398,6 +398,9 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   AcpAgentCatalog? _agentCatalog;
   bool _isAgentCatalogLoading = false;
   bool _isAgentRuntimeStatusLoading = false;
+  bool _isAcpAgentSwitching = false;
+  String? _optimisticAcpAgentId;
+  final Map<int, String> _agentIdByConversationId = <int, String>{};
   int? _activeRemoteCodexRuntimeId;
   String? _activeAgentThreadId;
   String? _activeAgentTurnId;
@@ -446,7 +449,50 @@ abstract class _ChatPageStateBase extends State<ChatPage>
 
   ChatPageMode get _activeMode => _activeConversationMode;
 
+  String? get _conversationBoundAcpAgentId {
+    if (_activeMode != ChatPageMode.agent) {
+      return null;
+    }
+    final target = _resolvedThreadTarget;
+    if (target?.mode == ConversationMode.agent) {
+      final targetAgentId = target?.agentId?.trim() ?? '';
+      if (targetAgentId.isNotEmpty) {
+        return targetAgentId;
+      }
+    }
+    final conversation = _currentConversationByMode[ChatPageMode.agent];
+    final conversationAgentId = conversation?.agentId?.trim() ?? '';
+    if (conversationAgentId.isNotEmpty) {
+      return conversationAgentId;
+    }
+    final conversationId = _currentConversationIdByMode[ChatPageMode.agent];
+    final rememberedAgentId = conversationId == null
+        ? ''
+        : (_agentIdByConversationId[conversationId]?.trim() ?? '');
+    if (rememberedAgentId.isNotEmpty) {
+      return rememberedAgentId;
+    }
+    final runtimeMessages =
+        _runtimeForMode(ChatPageMode.agent)?.messages ??
+        _messagesByMode[ChatPageMode.agent]!;
+    for (final message in runtimeMessages.reversed) {
+      final messageAgentId = message.agentId?.trim() ?? '';
+      if (messageAgentId.isNotEmpty) {
+        return messageAgentId;
+      }
+    }
+    return null;
+  }
+
   String? get _activeAcpAgentId {
+    final optimisticAgentId = _optimisticAcpAgentId?.trim() ?? '';
+    if (optimisticAgentId.isNotEmpty) {
+      return optimisticAgentId;
+    }
+    final boundAgentId = _conversationBoundAcpAgentId;
+    if (boundAgentId != null) {
+      return boundAgentId;
+    }
     if (_agentRuntimeStatus.runtime == 'remote' ||
         _agentRuntimeStatus.remoteEnabled) {
       return _kRemoteCodexModeAgentId;
@@ -457,14 +503,27 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   }
 
   String get _activeAcpAgentDisplayName {
-    if (_agentRuntimeStatus.runtime == 'remote' ||
-        _agentRuntimeStatus.remoteEnabled) {
-      return 'Agent';
+    final activeAgentId = _activeAcpAgentId?.trim() ?? '';
+    if (activeAgentId == _kRemoteCodexModeAgentId) {
+      return 'Agent Remote';
     }
-    final name =
-        _agentRuntimeStatus.activeAgentName ??
-        _agentCatalog?.selectedAgent?.name;
-    return name?.trim().isNotEmpty == true ? name!.trim() : 'Agent';
+    for (final profile in _agentCatalog?.agents ?? const <AcpAgentProfile>[]) {
+      if (profile.id == activeAgentId) {
+        return profile.name.trim().isEmpty ? 'Agent' : profile.name.trim();
+      }
+    }
+    if (activeAgentId == (_agentRuntimeStatus.activeAgentId?.trim() ?? '')) {
+      final statusName = _agentRuntimeStatus.activeAgentName?.trim() ?? '';
+      if (statusName.isNotEmpty) {
+        return statusName;
+      }
+    }
+    return switch (activeAgentId) {
+      'codex-acp' => 'Codex',
+      'claude-code-acp' => 'Claude Code',
+      'opencode-acp' => 'OpenCode',
+      _ => 'Agent',
+    };
   }
 
   List<ChatAcpAgentModeOption> get _chatAcpAgentModeOptions {
@@ -482,12 +541,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
     final activeId = _activeAcpAgentId;
     if (options.isEmpty && activeId != null) {
       options.add(
-        ChatAcpAgentModeOption(
-          id: activeId,
-          name: _agentRuntimeStatus.activeAgentName?.trim().isNotEmpty == true
-              ? _agentRuntimeStatus.activeAgentName!.trim()
-              : 'ACP Agent',
-        ),
+        ChatAcpAgentModeOption(id: activeId, name: _activeAcpAgentDisplayName),
       );
     }
     return options;
@@ -698,11 +752,13 @@ abstract class _ChatPageStateBase extends State<ChatPage>
         return ConversationThreadTarget.agentSession(
           sessionId: threadId,
           runtime: 'remote',
+          agentId: _kRemoteCodexModeAgentId,
         );
       }
       return ConversationThreadTarget.newConversation(
         mode: ConversationMode.agent,
         agentRuntime: 'remote',
+        agentId: _kRemoteCodexModeAgentId,
       );
     }
     if (conversationId == null) {
@@ -720,6 +776,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
     return ConversationThreadTarget.existing(
       conversationId: conversationId,
       mode: conversationMode,
+      agentId: _activeMode == ChatPageMode.agent ? _activeAcpAgentId : null,
       agentSessionId: localAgentThreadId == null || localAgentThreadId.isEmpty
           ? null
           : localAgentThreadId,
@@ -1685,6 +1742,8 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   Future<void> _handleAppUpdateBannerTap();
 
   Future<void> _refreshAgentRuntimeStatus();
+
+  Future<void> _loadAgentCatalog({bool force = false});
 
   Future<void> _refreshAgentCommandPreferences();
 

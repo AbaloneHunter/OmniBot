@@ -8,6 +8,7 @@ import cn.com.omnimind.bot.agent.AgentConversationHistoryRepository
 import cn.com.omnimind.bot.agent.AgentConversationHistorySupport
 import cn.com.omnimind.bot.agent.AgentModelOverride
 import cn.com.omnimind.bot.agent.AgentTextSanitizer
+import cn.com.omnimind.bot.agent.runtime.AcpAgentProfileStore
 
 private const val WEB_CONVERSATION_TITLE_LIMIT = 20
 
@@ -31,6 +32,9 @@ class ConversationDomainService(
     private val historyRepository by lazy {
         AgentConversationHistoryRepository(context)
     }
+    private val acpAgentProfileStore by lazy {
+        AcpAgentProfileStore(context)
+    }
 
     private companion object {
         const val AGENT_MODE_STORAGE_VALUE = "codex"
@@ -48,29 +52,46 @@ class ConversationDomainService(
                     else -> !conversation.isArchived
                 }
             }
-        val agentCwdByConversationId =
+        val agentBindings =
             if (conversations.any { it.mode == AGENT_MODE_STORAGE_VALUE }) {
-            DatabaseHelper.getAllAgentSessionBindings()
-                .associate { binding -> binding.conversationId to binding.cwd }
-        } else {
-            emptyMap()
-        }
+                DatabaseHelper.getAllAgentSessionBindings()
+            } else {
+                emptyList()
+            }
+        val agentCwdByConversationId =
+            agentBindings.associate { binding -> binding.conversationId to binding.cwd }
+        val agentIdByConversationId =
+            agentBindings.associate { binding ->
+                binding.conversationId to
+                    acpAgentProfileStore.agentIdForSession(binding.threadId)
+                        .orEmpty()
+                        .ifEmpty { AcpAgentProfileStore.DEFAULT_CODEX_AGENT_ID }
+            }
         return conversations.map { conversation ->
             conversationToPayload(
                 conversation,
-                agentCwd = agentCwdByConversationId[conversation.id]
+                agentCwd = agentCwdByConversationId[conversation.id],
+                agentId = agentIdByConversationId[conversation.id]
             )
         }
     }
 
     suspend fun getConversationPayload(conversationId: Long): Map<String, Any?>? {
         val conversation = DatabaseHelper.getConversationById(conversationId) ?: return null
-        val agentCwd = if (conversation.mode == AGENT_MODE_STORAGE_VALUE) {
-            DatabaseHelper.getAgentSessionBindingByConversationId(conversation.id)?.cwd
+        val agentBinding = if (conversation.mode == AGENT_MODE_STORAGE_VALUE) {
+            DatabaseHelper.getAgentSessionBindingByConversationId(conversation.id)
         } else {
             null
         }
-        return conversationToPayload(conversation, agentCwd = agentCwd)
+        val agentId = agentBinding?.let { binding ->
+            acpAgentProfileStore.agentIdForSession(binding.threadId)
+                ?: AcpAgentProfileStore.DEFAULT_CODEX_AGENT_ID
+        }
+        return conversationToPayload(
+            conversation,
+            agentCwd = agentBinding?.cwd,
+            agentId = agentId
+        )
     }
 
     suspend fun createConversation(
@@ -410,13 +431,15 @@ class ConversationDomainService(
 
     fun conversationToPayload(
         conversation: Conversation,
-        agentCwd: String? = null
+        agentCwd: String? = null,
+        agentId: String? = null
     ): Map<String, Any?> {
         return linkedMapOf(
             "id" to conversation.id,
             "title" to conversation.title,
             "mode" to conversation.mode,
             "agentCwd" to agentCwd?.trim()?.takeIf { it.isNotEmpty() },
+            "agentId" to agentId?.trim()?.takeIf { it.isNotEmpty() },
             "isArchived" to conversation.isArchived,
             "isPinned" to conversation.isPinned,
             "parentConversationId" to conversation.parentConversationId,

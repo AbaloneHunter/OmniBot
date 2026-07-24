@@ -83,28 +83,30 @@ void main() {
     );
   });
 
-  test(
-    'does not fold persisted partial snapshot with explicit non-final flag',
-    () {
-      final messages = <ChatMessageModel>[
-        _assistantMessage(
-          id: 'task-4-text',
-          text: '未完成回答',
-          taskId: 'task-4',
-          kind: 'text_snapshot',
-          seq: 22,
-          isFinal: false,
-        ),
-        _thinkingCard(id: 'task-4-thinking', taskId: 'task-4', seq: 12),
-        ChatMessageModel.userMessage('用户问题', id: 'user-4'),
-      ];
+  test('does not fold an explicitly unfinished persisted snapshot', () {
+    final messages = <ChatMessageModel>[
+      _assistantMessage(
+        id: 'task-4-text',
+        text: '未完成回答',
+        taskId: 'task-4',
+        kind: 'text_snapshot',
+        seq: 22,
+        isFinal: false,
+      ),
+      _thinkingCard(id: 'task-4-thinking', taskId: 'task-4', seq: 12),
+      ChatMessageModel.userMessage('用户问题', id: 'user-4'),
+    ];
 
-      final entries = buildAgentRunTimelineEntries(messages);
+    final entries = buildAgentRunTimelineEntries(messages);
 
-      expect(entries, hasLength(3));
-      expect(entries.where((entry) => entry.group != null), isEmpty);
-    },
-  );
+    expect(entries, hasLength(3));
+    expect(entries.where((entry) => entry.group != null), isEmpty);
+    expect(entries.map((entry) => entry.message?.id), <String?>[
+      'task-4-text',
+      'task-4-thinking',
+      'user-4',
+    ]);
+  });
 
   test('keeps permission card visible alongside final permission text', () {
     final messages = <ChatMessageModel>[

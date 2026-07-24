@@ -271,11 +271,12 @@ bool _isLegacyTextSnapshotFallbackCandidate(ChatMessageModel message) {
   if (agentRunKind(message) != 'text_snapshot') {
     return false;
   }
+  // Only legacy snapshots that predate the explicit completion bit may use
+  // this fallback. An explicit `isFinal: false` can be a persisted partial
+  // answer from an interrupted turn and must not be presented as processed.
   final streamMeta = message.streamMeta;
-  if (streamMeta == null || !streamMeta.containsKey('isFinal')) {
-    return true;
-  }
-  return streamMeta['isFinal'] == true;
+  return (message.text ?? '').trim().isNotEmpty &&
+      (streamMeta == null || !streamMeta.containsKey('isFinal'));
 }
 
 bool _isCancelledTextMessage(ChatMessageModel message) {

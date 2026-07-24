@@ -149,6 +149,8 @@ class ConversationService {
     return ConversationModel(
       id: conversation.id,
       mode: conversation.mode,
+      agentCwd: latest.agentCwd ?? conversation.agentCwd,
+      agentId: latest.agentId ?? conversation.agentId,
       isArchived: latest.isArchived,
       isPinned: latest.isPinned,
       parentConversationId: latest.parentConversationId,
@@ -511,6 +513,7 @@ class ConversationService {
     return ConversationThreadTarget.existing(
       conversationId: conversation.id,
       mode: conversation.mode,
+      agentId: conversation.agentId,
     );
   }
 }

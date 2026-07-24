@@ -105,7 +105,12 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
 
     await _showAgentAccountStatus();
 
-    final target = _newAgentThreadTarget();
+    final target = _newAgentThreadTarget(
+      agentId: _activeAcpAgentId,
+      agentRuntime: status.runtime == 'remote' || status.remoteEnabled
+          ? 'remote'
+          : 'local',
+    );
     if (!mounted) return;
     await _applyConversationThreadTarget(target);
   }
@@ -113,37 +118,45 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
   @override
   Future<void> _handleAcpAgentModeShortcutTap(String agentId) async {
     final normalized = agentId.trim();
-    if (normalized.isEmpty || _isAgentRuntimeStatusLoading) {
+    if (normalized.isEmpty || _isAcpAgentSwitching) {
       return;
     }
-    final isRemoteActive =
-        _agentRuntimeStatus.runtime == 'remote' ||
-        _agentRuntimeStatus.remoteEnabled;
     final selectsRemote = normalized == _kRemoteCodexModeAgentId;
-    final isCurrentAgent =
-        (isRemoteActive && selectsRemote) ||
-        (!isRemoteActive &&
-            !selectsRemote &&
-            normalized ==
-                (_agentRuntimeStatus.activeAgentId ??
-                    _agentCatalog?.selectedAgentId));
-    if (_activeMode == ChatPageMode.agent && isCurrentAgent) {
+    if (_activeMode == ChatPageMode.agent && normalized == _activeAcpAgentId) {
       return;
     }
-    final selected = selectsRemote
-        ? await _selectRemoteCodexRuntime()
-        : await _selectAgent(normalized);
+    final previousTarget = _threadTargetForMode;
+    final target = _newAgentThreadTarget(
+      agentId: normalized,
+      agentRuntime: selectsRemote ? 'remote' : 'local',
+    );
+    setState(() {
+      _optimisticAcpAgentId = normalized;
+      _isAcpAgentSwitching = true;
+    });
+    // Enter the selected Agent's blank conversation immediately. Adapter
+    // installation, process launch, and connection continue in parallel.
+    final navigationFuture = _applyConversationThreadTarget(target);
+    var selected = false;
+    try {
+      selected = selectsRemote
+          ? await _selectRemoteCodexRuntime()
+          : await _selectAgent(normalized);
+      await navigationFuture;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _optimisticAcpAgentId = null;
+          _isAcpAgentSwitching = false;
+        });
+      }
+    }
     if (!selected) {
+      if (mounted) {
+        await _applyConversationThreadTarget(previousTarget);
+      }
       return;
     }
-    if (!mounted) {
-      return;
-    }
-    if (_activeMode == ChatPageMode.agent) {
-      await _applyConversationThreadTarget(_newAgentThreadTarget());
-      return;
-    }
-    await _handleAgentTap();
   }
 
   Future<void> _leaveAgentMode() async {
@@ -368,6 +381,7 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
     await _loadAgentModelOptions(force: true);
   }
 
+  @override
   Future<void> _loadAgentCatalog({bool force = false}) async {
     if (_isAgentCatalogLoading ||
         (!force && _agentCatalog?.agents.isNotEmpty == true)) {
@@ -634,7 +648,7 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
         _agentModelListError = null;
         _agentModelListRequestId++;
       });
-      await _loadAgentModelOptions(force: true);
+      unawaited(_loadAgentModelOptions(force: true));
       return true;
     } catch (error) {
       if (!mounted) return false;
@@ -695,7 +709,7 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
         _loadingAgentModelSourceKey = null;
         _agentModelListRequestId++;
       });
-      await _loadAgentModelOptions(force: true);
+      unawaited(_loadAgentModelOptions(force: true));
       return true;
     } catch (error) {
       if (!mounted) return false;
@@ -1226,6 +1240,19 @@ mixin _ChatPageAgentMixin on _ChatPageStateBase {
     String? modelOverride,
     String? collaborationModeOverride,
   }) async {
+    // Prime the active turn before status probing, ACP connection, adapter
+    // preparation, or conversation persistence. The chat list can therefore
+    // show the selected Agent and an elapsed processing state immediately,
+    // without waiting for the first ACP API event.
+    if (mounted) {
+      setState(() {
+        _currentDispatchTaskId = aiMessageId;
+        final runtime = _activeRuntime;
+        if (runtime != null) {
+          runtime.lastAgentTaskId = aiMessageId;
+        }
+      });
+    }
     late AgentRuntimeStatus status;
     try {
       status = await _refreshConnectedAgentRuntimeStatus();

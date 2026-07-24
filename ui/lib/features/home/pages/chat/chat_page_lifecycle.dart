@@ -9,8 +9,16 @@ ConversationThreadTarget _newThreadTargetForConversationMode(
   );
 }
 
-ConversationThreadTarget _newAgentThreadTarget() {
-  return _newThreadTargetForConversationMode(ConversationMode.agent);
+ConversationThreadTarget _newAgentThreadTarget({
+  String? agentId,
+  String? agentRuntime,
+}) {
+  return ConversationThreadTarget.newConversation(
+    mode: ConversationMode.agent,
+    requestKey: DateTime.now().microsecondsSinceEpoch.toString(),
+    agentId: agentId,
+    agentRuntime: agentRuntime,
+  );
 }
 
 mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
@@ -243,6 +251,11 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
     });
     _resetLocalConversationState(targetMode);
     _restoreLocalAgentThreadIdFromTarget(effectiveTarget);
+    if (_shouldSyncExistingLocalAgentTarget(effectiveTarget)) {
+      unawaited(
+        _syncExistingLocalAgentTarget(effectiveTarget, activeRequestId),
+      );
+    }
     _applyDraftForConversationMode(targetMode);
     if (effectiveTarget.isRemoteCodexSessionTarget) {
       await _prepareRemoteCodexSessionTarget(effectiveTarget);
@@ -274,6 +287,88 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
       return;
     }
     _activeAgentThreadId = threadId;
+  }
+
+  bool _shouldSyncExistingLocalAgentTarget(ConversationThreadTarget target) {
+    return target.mode == ConversationMode.agent &&
+        !target.isNewConversation &&
+        !target.isRemoteCodexSessionTarget &&
+        target.conversationId != null;
+  }
+
+  Future<void> _syncExistingLocalAgentTarget(
+    ConversationThreadTarget target,
+    int requestId,
+  ) async {
+    final conversationId = target.conversationId;
+    if (conversationId == null) {
+      return;
+    }
+    try {
+      final response = await AgentRuntimeService.readThread(
+        conversationId: conversationId,
+        includeTurns: false,
+      );
+      AgentRuntimeStatus? status;
+      try {
+        status = await AgentRuntimeService.status();
+      } catch (_) {
+        status = null;
+      }
+      if (!mounted || !_isConversationTargetRequestCurrent(requestId)) {
+        return;
+      }
+      final currentTarget = _resolvedThreadTarget;
+      if (currentTarget?.mode != ConversationMode.agent ||
+          currentTarget?.conversationId != conversationId) {
+        return;
+      }
+      final thread = response['thread'];
+      final threadMap = thread is Map
+          ? Map<String, dynamic>.from(thread.cast<dynamic, dynamic>())
+          : const <String, dynamic>{};
+      final threadId =
+          (response['threadId'] ?? threadMap['id'])?.toString().trim() ?? '';
+      final resolvedAgentId =
+          (response['agentId'] ?? threadMap['agentId'])?.toString().trim() ??
+          '';
+      setState(() {
+        if (threadId.isNotEmpty) {
+          _activeAgentThreadId = threadId;
+        }
+        if (resolvedAgentId.isNotEmpty) {
+          _agentIdByConversationId[conversationId] = resolvedAgentId;
+          _resolvedThreadTarget = currentTarget?.copyWith(
+            agentId: resolvedAgentId,
+            agentSessionId: threadId.isEmpty ? null : threadId,
+            agentRuntime: 'local',
+          );
+          final conversation = _currentConversationByMode[ChatPageMode.agent];
+          if (conversation?.id == conversationId) {
+            final updatedConversation = conversation!.copyWith(
+              agentId: resolvedAgentId,
+            );
+            _currentConversationByMode[ChatPageMode.agent] =
+                updatedConversation;
+            final runtime = _runtimeForMode(ChatPageMode.agent);
+            if (runtime?.conversation?.id == conversationId) {
+              runtime!.conversation = updatedConversation;
+            }
+          }
+        }
+        if (status != null) {
+          _agentRuntimeStatus = status;
+        }
+      });
+      unawaited(_loadAgentCatalog());
+      unawaited(_loadAgentModelOptionsWhenReady(force: true));
+      unawaited(_persistVisibleThreadTargetIfNeeded());
+    } catch (error) {
+      debugPrint(
+        '[ChatPage] Failed to restore ACP agent for conversation '
+        '$conversationId: $error',
+      );
+    }
   }
 
   @override
@@ -812,6 +907,9 @@ mixin _ChatPageLifecycleMixin on _ChatPageStateBase {
   Future<ConversationThreadTarget> _overrideTargetWithSharedDraftIfNeeded(
     ConversationThreadTarget target,
   ) async {
+    if (target.mode != ConversationMode.normal) {
+      return target;
+    }
     final staged = _activeStagedSharedOpenDraft();
     if (staged != null && staged.hasContent) {
       return ConversationThreadTarget.newConversation(

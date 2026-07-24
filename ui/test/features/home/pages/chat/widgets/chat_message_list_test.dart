@@ -651,6 +651,64 @@ void main() {
   });
 
   testWidgets(
+    'ACP run shows its avatar and processing timer before the first response',
+    (tester) async {
+      final controller = ScrollController();
+      final startedAt = DateTime.now().subtract(const Duration(seconds: 3));
+      final userMessageId = '${startedAt.millisecondsSinceEpoch}-user';
+      final taskId = '${startedAt.millisecondsSinceEpoch}-ai';
+
+      await tester.pumpWidget(
+        _buildLocalizedApp(
+          child: SizedBox(
+            width: 400,
+            height: 520,
+            child: ChatMessageList(
+              messages: <ChatMessageModel>[
+                ChatMessageModel.userMessage(
+                  '请检查项目',
+                  id: userMessageId,
+                ).copyWith(createAt: startedAt),
+              ],
+              activeAgentTaskIds: <String>{taskId},
+              useAcpPresentation: true,
+              activeAcpAgentId: 'codex-acp',
+              scrollController: controller,
+              onBeforeTaskExecute: () async {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final processingHeader = find.byKey(ValueKey('acp-processing-$taskId'));
+      expect(processingHeader, findsOneWidget);
+      expect(find.textContaining('正在处理 3s'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text('请检查项目')).dy,
+        lessThan(tester.getTopLeft(processingHeader).dy),
+      );
+      expect(
+        find.descendant(
+          of: processingHeader,
+          matching: find.byType(ShaderMask),
+        ),
+        findsOneWidget,
+      );
+      final brandIcon = tester.widget<AgentBrandIcon>(
+        find.descendant(
+          of: processingHeader,
+          matching: find.byType(AgentBrandIcon),
+        ),
+      );
+      expect(brandIcon.agentId, 'codex-acp');
+
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.textContaining('正在处理 4s'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'active Claude response shows its brand icon before text and keeps it after folding',
     (tester) async {
       final controller = ScrollController();
@@ -698,12 +756,17 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 320));
 
       final activeAvatar = find.byKey(
-        const ValueKey('acp-message-avatar-task-1-text'),
+        const ValueKey('acp-message-avatar-task-1-thinking'),
       );
       expect(activeAvatar, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('acp-message-avatar-task-1-text')),
+        findsNothing,
+      );
       expect(
         find.byKey(const ValueKey('acp-message-avatar-task-1-text-2')),
         findsNothing,

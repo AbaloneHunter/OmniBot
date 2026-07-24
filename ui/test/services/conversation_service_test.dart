@@ -136,6 +136,37 @@ void main() {
     expect(conversations.single.title, 'openclaw hello');
   });
 
+  test(
+    'keeps the bound ACP agent in conversation and thread targets',
+    () async {
+      nativeConversations = <Map<String, dynamic>>[
+        {
+          'id': 50,
+          'title': 'Claude conversation',
+          'mode': ConversationMode.agent.storageValue,
+          'agentCwd': '/workspace',
+          'agentId': 'claude-code-acp',
+          'summary': null,
+          'status': 0,
+          'lastMessage': 'hello',
+          'messageCount': 1,
+          'createdAt': 1,
+          'updatedAt': 2,
+        },
+      ];
+
+      final conversation =
+          (await ConversationService.getAllConversations()).single;
+      final target = await ConversationService.getLatestConversationTarget(
+        mode: ConversationMode.agent,
+      );
+
+      expect(conversation.agentCwd, '/workspace');
+      expect(conversation.agentId, 'claude-code-acp');
+      expect(target?.agentId, 'claude-code-acp');
+    },
+  );
+
   test('loads chat_only conversations without collapsing mode', () async {
     nativeConversations = <Map<String, dynamic>>[
       {

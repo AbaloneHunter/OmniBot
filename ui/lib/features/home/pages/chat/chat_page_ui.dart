@@ -867,7 +867,16 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
   }) {
     final runtime = _runtimeForMode(mode);
     final resolvedMessages = runtime?.messages ?? _messagesByMode[mode]!;
-    final activeAgentTaskIds = runtime?.activeAgentTaskIds ?? const <String>{};
+    final activeAgentTaskIds = <String>{...?runtime?.activeAgentTaskIds};
+    final pendingDispatchTaskId =
+        runtime?.currentDispatchTaskId ?? _currentDispatchTaskIdByMode[mode];
+    final isAwaitingAgent =
+        runtime?.isAiResponding ?? (_isAiRespondingByMode[mode] ?? false);
+    if (mode == ChatPageMode.agent &&
+        isAwaitingAgent &&
+        pendingDispatchTaskId?.trim().isNotEmpty == true) {
+      activeAgentTaskIds.add(pendingDispatchTaskId!.trim());
+    }
     final toolActivitySnapshot = resolveAgentToolActivitySnapshot(
       List<ChatMessageModel>.from(resolvedMessages),
       activeTaskIds: activeAgentTaskIds,
@@ -894,6 +903,7 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
       messages: resolvedMessages,
       activeAgentTaskIds: activeAgentTaskIds,
       useAcpPresentation: mode == ChatPageMode.agent,
+      activeAcpAgentId: mode == ChatPageMode.agent ? _activeAcpAgentId : null,
       onRetryAgentMessage: _retryFailedAgentTurn,
       onContinueAgentMessage: _continueFailedAgentTurn,
       expandedAgentRunTaskIds: _expandedAgentRunTaskIdsForMode(mode),
@@ -1252,7 +1262,8 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
               activeToolType: _lastAgentToolType,
               isAgentReady: _agentRuntimeStatus.ready,
               isAgentConnected: _agentRuntimeStatus.connected,
-              isAgentLoading: _isAgentRuntimeStatusLoading,
+              isAgentLoading:
+                  _isAgentRuntimeStatusLoading || _isAcpAgentSwitching,
               isAgentSelected: _activeMode == ChatPageMode.agent,
               isOmniAiSelected:
                   _activeMode == ChatPageMode.normal && !_isPureChatSelected,

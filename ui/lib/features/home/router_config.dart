@@ -45,10 +45,12 @@ ConversationThreadTarget? _parseChatThreadTarget(GoRouterState state) {
       state.uri.queryParameters['conversationId']?.trim() ?? '';
   final queryMode = _parseConversationMode(state.uri.queryParameters['mode']);
   final queryRequestKey = state.uri.queryParameters['requestKey']?.trim();
+  final queryAgentId = state.uri.queryParameters['agentId']?.trim();
   if (queryConversationId.isNotEmpty) {
     if (queryConversationId == 'new' || queryConversationId == '__new__') {
       return ConversationThreadTarget.newConversation(
         mode: queryMode,
+        agentId: queryAgentId?.isEmpty == true ? null : queryAgentId,
         fromNativeRoute: true,
         requestKey: queryRequestKey?.isEmpty == true ? null : queryRequestKey,
       );
@@ -58,6 +60,7 @@ ConversationThreadTarget? _parseChatThreadTarget(GoRouterState state) {
       return ConversationThreadTarget.existing(
         conversationId: conversationId,
         mode: queryMode,
+        agentId: queryAgentId?.isEmpty == true ? null : queryAgentId,
         fromNativeRoute: true,
         requestKey: queryRequestKey?.isEmpty == true ? null : queryRequestKey,
       );

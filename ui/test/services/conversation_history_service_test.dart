@@ -188,6 +188,7 @@ void main() {
     const target = ConversationThreadTarget.existing(
       conversationId: 42,
       mode: ConversationMode.agent,
+      agentId: 'claude-code-acp',
       agentSessionId: '019f12d6-16a0-7f01-9537-275ff25b9f79',
       agentRuntime: 'local',
     );
