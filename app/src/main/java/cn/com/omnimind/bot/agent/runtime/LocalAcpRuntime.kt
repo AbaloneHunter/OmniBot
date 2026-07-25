@@ -776,7 +776,7 @@ internal class LocalAcpRuntime(
                 ),
             "reasoningEfforts" to effortOption?.flatOptions()?.map { it.value.value }.orEmpty(),
             "currentReasoningEffort" to effortOption?.currentValue?.value,
-            "configOptions" to sessionConfigOptions(session).map(::configOptionPayload)
+            "configOptions" to sessionConfigOptions(session).map(::acpConfigOptionPayload)
         )
     }
 
@@ -795,7 +795,7 @@ internal class LocalAcpRuntime(
             ),
             "collaborationMode" to current("collaboration_mode"),
             "mode" to current("mode", SessionConfigOptionCategory.MODE),
-            "configOptions" to options.map(::configOptionPayload)
+            "configOptions" to options.map(::acpConfigOptionPayload)
         )
     }
 
@@ -1317,6 +1317,7 @@ internal class LocalAcpRuntime(
         // live stream — otherwise every replayed message becomes its own
         // pseudo turn in the UI and gets persisted back over the real history.
         if (threadId in replayingThreads) return
+
         // Never let a timeline update through without a turn id. Updates that
         // arrive outside an active prompt come via the notify callback with
         // none, and downstream they would fall back to a per-item id — which
@@ -1324,152 +1325,29 @@ internal class LocalAcpRuntime(
         // The SDK closes the prompt's update channel before it emits the
         // prompt response, so late stragglers legitimately belong to the turn
         // that just ended; lastTurnIds keeps them attached to it.
-        @Suppress("NAME_SHADOWING")
-        val turnId = turnId?.takeIf { it.isNotBlank() }
+        val resolvedTurnId = turnId?.takeIf { it.isNotBlank() }
             ?: activeTurnIds[threadId]
             ?: lastTurnIds[threadId]
-        if (turnId == null && update.isTurnScoped()) {
+        if (resolvedTurnId == null && update.isTurnScoped()) {
             Log.w(TAG, "Dropping turn-scoped ACP update with no resolvable turn: $update")
             return
         }
-        when (update) {
-            is SessionUpdate.AgentMessageChunk -> emit(
-                method = "item/agentMessage/delta",
-                threadId = threadId,
-                turnId = turnId,
-                params = mapOf(
-                    "itemId" to (update.messageId?.value ?: "$threadId-agent"),
-                    "delta" to update.content.textPayload()
-                )
-            )
-            is SessionUpdate.AgentThoughtChunk -> emit(
-                method = "item/reasoning/delta",
-                threadId = threadId,
-                turnId = turnId,
-                params = mapOf(
-                    "itemId" to (update.messageId?.value ?: "$threadId-reasoning"),
-                    "delta" to update.content.textPayload()
-                )
-            )
-            is SessionUpdate.ToolCall -> emit(
-                method = "item/started",
-                threadId = threadId,
-                turnId = turnId,
-                params = mapOf("item" to toolPayload(update))
-            )
-            is SessionUpdate.ToolCallUpdate -> emit(
-                method = if (
-                    update.status == ToolCallStatus.COMPLETED ||
-                    update.status == ToolCallStatus.FAILED
-                ) {
-                    "item/completed"
-                } else {
-                    "item/updated"
-                },
-                threadId = threadId,
-                turnId = turnId,
-                params = mapOf("item" to toolPayload(update))
-            )
-            is SessionUpdate.PlanUpdate -> emit(
-                method = "turn/plan/updated",
-                threadId = threadId,
-                turnId = turnId,
-                params = mapOf(
-                    "plan" to update.entries.joinToString("\n") {
-                        "- [${it.status.name.lowercase()}] ${it.content}"
-                    },
-                    "entries" to update.entries.map {
-                        mapOf(
-                            "content" to it.content,
-                            "priority" to it.priority.name.lowercase(),
-                            "status" to it.status.name.lowercase()
-                        )
-                    }
-                )
-            )
-            is SessionUpdate.PlanUpdateV2 -> emit(
-                method = "turn/plan/updated",
-                threadId = threadId,
-                turnId = turnId,
-                params = when (val plan = update.plan) {
-                    is PlanVariant.Items -> mapOf(
-                        "id" to plan.id,
-                        "plan" to plan.entries.joinToString("\n") { it.content }
-                    )
-                    is PlanVariant.Markdown -> mapOf("id" to plan.id, "plan" to plan.content)
-                    is PlanVariant.File -> mapOf("id" to plan.id, "plan" to plan.uri)
-                }
-            )
-            is SessionUpdate.PlanRemoved -> emit(
-                method = "turn/plan/updated",
-                threadId = threadId,
-                turnId = turnId,
-                params = mapOf("id" to update.id, "plan" to "")
-            )
-            is SessionUpdate.CurrentModeUpdate -> emit(
-                method = "thread/settings/updated",
-                threadId = threadId,
-                turnId = turnId,
-                params = mapOf(
-                    "threadId" to threadId,
-                    "collaborationMode" to update.currentModeId.value
-                )
-            )
-            is SessionUpdate.ConfigOptionUpdate -> emit(
-                method = "acp/configOptions/updated",
-                threadId = threadId,
-                turnId = turnId,
-                params = mapOf(
-                    "threadId" to threadId,
-                    "configOptions" to update.configOptions.map(::configOptionPayload)
-                )
-            )
-            is SessionUpdate.SessionInfoUpdate -> {
-                if (!update.title.isNullOrBlank()) {
-                    bindingRepository.updateTitle(threadId, update.title)
-                    emit(
-                        method = "thread/name/updated",
-                        threadId = threadId,
-                        turnId = turnId,
-                        params = mapOf(
-                            "threadId" to threadId,
-                            "name" to update.title
-                        )
-                    )
-                }
-            }
-            is SessionUpdate.UsageUpdate -> emit(
-                method = "acp/usage/updated",
-                threadId = threadId,
-                turnId = turnId,
-                params = mapOf(
-                    "used" to update.used,
-                    "size" to update.size,
-                    "cost" to update.cost?.amount,
-                    "currency" to update.cost?.currency
-                )
-            )
-            is SessionUpdate.AvailableCommandsUpdate -> emit(
-                method = "acp/commands/updated",
-                threadId = threadId,
-                turnId = turnId,
-                params = mapOf(
-                    "commands" to update.availableCommands.map {
-                        mapOf("name" to it.name, "description" to it.description)
-                    }
-                )
-            )
-            is SessionUpdate.UnknownSessionUpdate -> emit(
-                method = "acp/sessionUpdate/unknown",
-                threadId = threadId,
-                turnId = turnId,
-                params = mapOf(
-                    "sessionUpdate" to update.sessionUpdateType,
-                    "raw" to update.rawJson.toString()
-                )
-            )
-            is SessionUpdate.UserMessageChunk -> Unit
+
+        // A session title is the one update with a side effect of its own.
+        if (update is SessionUpdate.SessionInfoUpdate && !update.title.isNullOrBlank()) {
+            bindingRepository.updateTitle(threadId, update.title)
         }
+
+        // The translation itself lives in AcpSessionUpdateMapper so the remote
+        // PC Bridge can reuse it once it forwards ACP rather than the legacy
+        // codex app-server protocol.
+        val event = update.toAcpUiEvent(threadId) ?: return
+        emit(
+            method = event.method,
+            threadId = threadId,
+            turnId = resolvedTurnId,
+            params = event.params
+        )
     }
 
     private suspend fun emit(
@@ -1506,7 +1384,7 @@ internal class LocalAcpRuntime(
         "agentName" to activeAgentName(),
         "active" to activeTurnIds.containsKey(session.sessionId.value),
         "activeTurnId" to activeTurnIds[session.sessionId.value],
-        "configOptions" to sessionConfigOptions(session).map(::configOptionPayload)
+        "configOptions" to sessionConfigOptions(session).map(::acpConfigOptionPayload)
     )
 
     private fun sessionConfigOptions(session: ClientSession): List<SessionConfigOption> {
@@ -1515,32 +1393,6 @@ internal class LocalAcpRuntime(
         } else {
             emptyList()
         }
-    }
-
-    private fun configOptionPayload(option: SessionConfigOption): Map<String, Any?> {
-        val base = linkedMapOf<String, Any?>(
-            "id" to option.id.value,
-            "name" to option.name,
-            "description" to option.description,
-            "category" to option.category?.value,
-            "currentValue" to option.currentValuePayload()
-        )
-        when (option) {
-            is SessionConfigOption.Select -> {
-                base["type"] = "select"
-                base["options"] = option.flatOptions().map {
-                    mapOf(
-                        "value" to it.value.value,
-                        "name" to it.name,
-                        "description" to it.description
-                    )
-                }
-            }
-            is SessionConfigOption.BooleanOption -> {
-                base["type"] = "boolean"
-            }
-        }
-        return base
     }
 
     private fun resolveWorkspaceFile(path: String): File {
@@ -1886,25 +1738,6 @@ internal fun shouldSuppressAcpStreamReadFailure(
 ): Boolean = closing || !currentProcess || !processAlive
 
 /**
- * Whether an ACP session update belongs to a specific prompt turn.
- *
- * Timeline updates (messages, reasoning, tool calls, plans) render inside a
- * turn and are meaningless without one. Session-scoped updates (title, mode,
- * config, usage, available commands) apply to the thread and are still worth
- * forwarding between turns.
- */
-private fun SessionUpdate.isTurnScoped(): Boolean = when (this) {
-    is SessionUpdate.AgentMessageChunk,
-    is SessionUpdate.AgentThoughtChunk,
-    is SessionUpdate.ToolCall,
-    is SessionUpdate.ToolCallUpdate,
-    is SessionUpdate.PlanUpdate,
-    is SessionUpdate.PlanUpdateV2,
-    is SessionUpdate.PlanRemoved -> true
-    else -> false
-}
-
-/**
  * Collapses however a prompt ended into the single status string the UI reads.
  *
  * `stopReason` is the ACP-reported reason and wins when present. Cancellation
@@ -1913,6 +1746,16 @@ private fun SessionUpdate.isTurnScoped(): Boolean = when (this) {
  * treated as a normal end-of-turn: the alternative is leaving the turn running
  * forever, which is strictly worse than mislabelling a rare silent failure.
  */
+private fun SessionConfigOption.Select.flatOptions() = when (val value = options) {
+    is SessionConfigSelectOptions.Flat -> value.options
+    is SessionConfigSelectOptions.Grouped -> value.groups.flatMap { it.options }
+}
+
+private fun SessionConfigOption.currentValuePayload(): Any? = when (this) {
+    is SessionConfigOption.Select -> currentValue.value
+    is SessionConfigOption.BooleanOption -> currentValue
+}
+
 internal fun resolveTurnTerminalStatus(
     stopReason: String?,
     cancelled: Boolean,
@@ -1924,78 +1767,6 @@ internal fun resolveTurnTerminalStatus(
     return "end_turn"
 }
 
-private fun SessionConfigOption.Select.flatOptions() = when (val value = options) {
-    is SessionConfigSelectOptions.Flat -> value.options
-    is SessionConfigSelectOptions.Grouped -> value.groups.flatMap { it.options }
-}
-
-private fun SessionConfigOption.currentValuePayload(): Any? = when (this) {
-    is SessionConfigOption.Select -> currentValue.value
-    is SessionConfigOption.BooleanOption -> currentValue
-}
-
-private fun ContentBlock.textPayload(): String = when (this) {
-    is ContentBlock.Text -> text
-    is ContentBlock.ResourceLink -> title ?: name
-    is ContentBlock.Image -> uri ?: ""
-    is ContentBlock.Audio -> ""
-    is ContentBlock.Resource -> resource.toString()
-}
-
-private fun toolPayload(update: SessionUpdate.ToolCall): Map<String, Any?> =
-    linkedMapOf(
-        "id" to update.toolCallId.value,
-        "type" to acpToolItemType(update.kind?.name),
-        "title" to update.title,
-        "status" to update.status?.name?.lowercase(),
-        "content" to update.content.toolContentPayload(),
-        "locations" to update.locations.map {
-            mapOf("path" to it.path, "line" to it.line?.toLong())
-        },
-        "rawInput" to update.rawInput?.toString(),
-        "rawOutput" to update.rawOutput?.toString()
-    )
-
-private fun toolPayload(update: SessionUpdate.ToolCallUpdate): Map<String, Any?> =
-    linkedMapOf(
-        "id" to update.toolCallId.value,
-        "type" to acpToolItemType(update.kind?.name),
-        "title" to update.title,
-        "status" to update.status?.name?.lowercase(),
-        "content" to update.content?.toolContentPayload(),
-        "locations" to update.locations?.map {
-            mapOf("path" to it.path, "line" to it.line?.toLong())
-        },
-        "rawInput" to update.rawInput?.toString(),
-        "rawOutput" to update.rawOutput?.toString()
-    )
-
-private fun acpToolItemType(kind: String?): String = when (kind) {
-    "EXECUTE" -> "commandExecution"
-    "EDIT", "DELETE", "MOVE" -> "fileChange"
-    "SEARCH", "FETCH" -> "webSearch"
-    "THINK" -> "plan"
-    else -> "tool"
-}
-
-private fun List<ToolCallContent>.toolContentPayload(): List<Map<String, Any?>> = map {
-    when (it) {
-        is ToolCallContent.Content -> mapOf(
-            "type" to "content",
-            "text" to it.content.textPayload()
-        )
-        is ToolCallContent.Diff -> mapOf(
-            "type" to "diff",
-            "path" to it.path,
-            "oldText" to it.oldText,
-            "newText" to it.newText
-        )
-        is ToolCallContent.Terminal -> mapOf(
-            "type" to "terminal",
-            "terminalId" to it.terminalId
-        )
-    }
-}
 
 private fun Map<String, Any?>.mapValue(key: String): Map<String, Any?> {
     val raw = this[key] as? Map<*, *> ?: return emptyMap()
