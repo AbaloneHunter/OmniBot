@@ -89,7 +89,7 @@ android {
         minSdk = 29
         targetSdk = 34
         versionCode = 1
-        versionName = "0.5.6.10"
+        versionName = "0.5.6.11"
         buildConfigField("String", "IMAGE_BASE_URL", buildConfigString(omnibotImageBaseUrl))
         buildConfigField("String", "IMAGE_MODEL", buildConfigString(omnibotImageModel))
         buildConfigField("String", "IMAGE_API_KEY", buildConfigString(omnibotImageApiKey))
