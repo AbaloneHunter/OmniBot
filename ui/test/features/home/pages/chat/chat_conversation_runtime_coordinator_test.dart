@@ -640,14 +640,18 @@ void main() {
       final group = buildAgentRunTimelineEntries(
         runtime.messages,
       ).singleWhere((entry) => entry.group?.taskId == taskId).group!;
-      expect(group.visibleMessagesNewestFirst.single.id, '$taskId-text-2');
+      // Both prose messages stay in the conversation, in the order the agent
+      // wrote them; only the thinking and tool cards fold.
       expect(
-        group.processMessagesNewestFirst.map((message) => message.id),
+        group.visibleMessagesOldestFirst.map((message) => message.id),
+        <String>['$taskId-text', '$taskId-text-2'],
+      );
+      expect(
+        group.processMessagesOldestFirst.map((message) => message.id),
         containsAll(<String>[
           '$taskId-thinking',
           '$taskId-thinking-2',
           '$taskId-tool-1',
-          '$taskId-text',
         ]),
       );
     },

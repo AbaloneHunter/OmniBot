@@ -150,8 +150,12 @@ class _AgentRunGroupMessageState extends State<AgentRunGroupMessage>
 
   @override
   Widget build(BuildContext context) {
-    final processMessages = widget.group.processMessagesOldestFirst;
-    final visibleMessages = widget.group.visibleMessagesOldestFirst;
+    final hasProcess = widget.group.hasProcessMessages;
+    // Resolved across the whole turn, not per fold, so only the very first
+    // thinking card of the run drops its duplicate avatar.
+    final firstThinkingMessageId = _firstThinkingMessageId(
+      widget.group.processMessagesOldestFirst,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -168,14 +172,14 @@ class _AgentRunGroupMessageState extends State<AgentRunGroupMessage>
             startedAt: widget.group.startedAt,
             finishedAt: widget.group.finishedAt,
             expanded: _effectiveExpanded,
-            onToggleExpanded: widget.group.isRunning || processMessages.isEmpty
+            onToggleExpanded: widget.group.isRunning || !hasProcess
                 ? null
                 : widget.onToggleExpanded,
           )
         // The built-in assistant's header has no in-flight state, so while its
         // run is streaming there is simply no header — the process section is
         // force-expanded and reads exactly as it did before grouping.
-        else if (processMessages.isNotEmpty && !widget.group.isRunning)
+        else if (hasProcess && !widget.group.isRunning)
           _LegacyAgentRunSummaryHeader(
             key: ValueKey('agent-run-summary-${widget.group.taskId}'),
             group: widget.group,
@@ -183,34 +187,44 @@ class _AgentRunGroupMessageState extends State<AgentRunGroupMessage>
             expanded: _effectiveExpanded,
             onTap: widget.onToggleExpanded,
           ),
-        if (processMessages.isNotEmpty) ...[
-          _buildAnimatedProcessSection(processMessages),
-        ],
-        ...visibleMessages.map(
-          (message) => MessageBubble(
-            key: ValueKey('agent-run-${widget.group.taskId}-${message.id}'),
-            message: message,
-            onBeforeTaskExecute: widget.onBeforeTaskExecute,
-            onCancelTask: widget.onCancelTask,
-            onRetryAgentMessage: () =>
-                widget.onRetryAgentMessage?.call(message),
-            onContinueAgentMessage: () =>
-                widget.onContinueAgentMessage?.call(message),
-            enableThinkingCollapse: false,
-            useAgentToolPresentation: widget.useAcpPresentation,
-            parentScrollController: widget.parentScrollController,
-            onParentScrollHandoff: widget.onParentScrollHandoff,
-            onRequestAuthorize: widget.onRequestAuthorize,
-            onStreamingTextLayoutChanged: widget.onStreamingTextLayoutChanged,
-            visualProfile: widget.visualProfile,
-            appearanceConfig: widget.appearanceConfig,
-          ),
-        ),
+        // Arrival order. Each run of process cards folds where it happened, so
+        // prose the agent wrote between two tool batches keeps them apart
+        // instead of letting them merge into one card.
+        for (final segment in widget.group.segmentsOldestFirst)
+          if (segment.isProcess)
+            _buildAnimatedProcessSection(
+              segment.messages,
+              firstThinkingMessageId,
+            )
+          else
+            MessageBubble(
+              key: ValueKey(
+                'agent-run-${widget.group.taskId}-${segment.message.id}',
+              ),
+              message: segment.message,
+              onBeforeTaskExecute: widget.onBeforeTaskExecute,
+              onCancelTask: widget.onCancelTask,
+              onRetryAgentMessage: () =>
+                  widget.onRetryAgentMessage?.call(segment.message),
+              onContinueAgentMessage: () =>
+                  widget.onContinueAgentMessage?.call(segment.message),
+              enableThinkingCollapse: false,
+              useAgentToolPresentation: widget.useAcpPresentation,
+              parentScrollController: widget.parentScrollController,
+              onParentScrollHandoff: widget.onParentScrollHandoff,
+              onRequestAuthorize: widget.onRequestAuthorize,
+              onStreamingTextLayoutChanged: widget.onStreamingTextLayoutChanged,
+              visualProfile: widget.visualProfile,
+              appearanceConfig: widget.appearanceConfig,
+            ),
       ],
     );
   }
 
-  Widget _buildAnimatedProcessSection(List<ChatMessageModel> processMessages) {
+  Widget _buildAnimatedProcessSection(
+    List<ChatMessageModel> processMessages,
+    String? firstThinkingMessageId,
+  ) {
     if (processMessages.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -223,12 +237,13 @@ class _AgentRunGroupMessageState extends State<AgentRunGroupMessage>
       return const SizedBox.shrink();
     }
 
-    final firstThinkingMessageId = _firstThinkingMessageId(processMessages);
-
     return AnimatedBuilder(
       animation: _expandController,
       child: Column(
-        key: ValueKey('agent-run-process-${widget.group.taskId}'),
+        key: ValueKey(
+          'agent-run-process-${widget.group.taskId}-'
+          '${processMessages.first.id}',
+        ),
         crossAxisAlignment: CrossAxisAlignment.start,
         children: _buildProcessWidgets(processMessages, firstThinkingMessageId),
       ),
@@ -655,8 +670,7 @@ String _agentRunElapsedLabel(AgentRunTimelineGroup group) {
     }
   }
 
-  visit(group.processMessagesNewestFirst);
-  visit(group.visibleMessagesNewestFirst);
+  visit(group.allMessagesOldestFirst);
   if (earliestMs == null || latestMs == null || latestMs! <= earliestMs!) {
     return '';
   }

@@ -607,8 +607,10 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('agent-run-summary-task-1')));
     await tester.pump();
+    // The process fold's key carries the first process message id, so two
+    // folds in one turn (prose between two tool batches) stay distinct.
     expect(
-      find.byKey(const ValueKey('agent-run-process-task-1')),
+      find.byKey(const ValueKey('agent-run-process-task-1-task-1-thinking')),
       findsOneWidget,
     );
     expect(find.byType(DeepThinkingCard), findsOneWidget);

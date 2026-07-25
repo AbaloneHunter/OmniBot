@@ -13,7 +13,7 @@ void main() {
     expect(entries.first.group?.visibleMessagesNewestFirst.single.text, '最终回答');
   });
 
-  test('falls back to latest text snapshot when history lacks isFinal', () {
+  test('keeps every prose message visible when history lacks isFinal', () {
     final messages = <ChatMessageModel>[
       _assistantMessage(
         id: 'task-2-text-2',
@@ -38,8 +38,10 @@ void main() {
 
     expect(entries, hasLength(1));
     expect(
-      entries.single.group?.visibleMessagesNewestFirst.single.id,
-      'task-2-text-2',
+      entries.single.group?.visibleMessagesOldestFirst.map(
+        (message) => message.id,
+      ),
+      <String>['task-2-text-1', 'task-2-text-2'],
     );
   });
 
@@ -134,16 +136,16 @@ void main() {
     final group = entries.first.group;
     expect(group?.taskId, 'dc8c5328');
     expect(group?.status, AgentRunStatus.finished);
-    // The newest text is the answer; the interim narration folds away.
-    expect(group?.visibleMessagesNewestFirst.single.id, 'msg-e-agent-message');
-    expect(
-      group?.processMessagesNewestFirst.map((m) => m.id),
-      containsAll(<String>[
-        'msg-d-agent-message',
-        'msg-c-agent-message',
-        'exec-1-agent-command',
-      ]),
-    );
+    // The answer is every prose message the agent wrote, not just the last
+    // one. Only the tool card folds.
+    expect(group?.visibleMessagesOldestFirst.map((m) => m.id), <String>[
+      'msg-c-agent-message',
+      'msg-d-agent-message',
+      'msg-e-agent-message',
+    ]);
+    expect(group?.processMessagesOldestFirst.map((m) => m.id), <String>[
+      'exec-1-agent-command',
+    ]);
   });
 
   test('groups a text-only turn so it still gets a header', () {
@@ -356,7 +358,7 @@ void main() {
     },
   );
 
-  test('keeps interleaved DeepSeek content inside fold by entry sequence', () {
+  test('orders a turn by arrival, not by stream sequence', () {
     final messages = <ChatMessageModel>[
       _assistantMessage(
         id: 'task-6-text-2',
@@ -407,17 +409,85 @@ void main() {
     expect(entries, hasLength(2));
     final group = entries.first.group;
     expect(group?.taskId, 'task-6');
-    expect(group?.visibleMessagesNewestFirst.single.id, 'task-6-text-2');
+    // `task-6-text` carries no streamMeta at all, so it can only be placed by
+    // where it sits in the list.
+    expect(
+      group?.visibleMessagesOldestFirst.map((message) => message.id),
+      <String>['task-6-text', 'task-6-text-2'],
+    );
     expect(
       group?.processMessagesOldestFirst.map((message) => message.id),
-      <String>[
-        'task-6-thinking',
-        'task-6-text',
-        'task-6-tool-1',
-        'task-6-thinking-2',
-      ],
+      <String>['task-6-thinking', 'task-6-tool-1', 'task-6-thinking-2'],
     );
     expect(entries.last.message?.id, 'user-6');
+  });
+
+  test('interleaved tool batches stay separate around agent prose', () {
+    // Regression for on-device conversation 60. codex-acp narrates, runs a
+    // batch of tools, narrates again, runs more. Hoisting the newest prose
+    // message to the bottom of the group did three things at once: it showed
+    // the first paragraph *below* the tools it preceded, it left the two tool
+    // batches adjacent so they merged into one card, and it buried every
+    // earlier paragraph in the fold so the answer read as a fragment.
+    final messages = <ChatMessageModel>[
+      _cardMessage(
+        id: 'exec-4-agent-command',
+        taskId: 'turn-60',
+        kind: 'tool_completed',
+        seq: 5,
+        cardData: _toolCard('sed'),
+      ),
+      _cardMessage(
+        id: 'exec-3-agent-command',
+        taskId: 'turn-60',
+        kind: 'tool_completed',
+        seq: 4,
+        cardData: _toolCard('grep'),
+      ),
+      _assistantMessage(
+        id: 'msg-2-agent-message',
+        text: '第二段正文',
+        taskId: 'turn-60',
+        kind: 'text_snapshot',
+        seq: 3,
+        isFinal: false,
+      ),
+      _cardMessage(
+        id: 'exec-2-agent-command',
+        taskId: 'turn-60',
+        kind: 'tool_completed',
+        seq: 2,
+        cardData: _toolCard('ls'),
+      ),
+      _assistantMessage(
+        id: 'msg-1-agent-message',
+        text: '第一段正文',
+        taskId: 'turn-60',
+        kind: 'text_snapshot',
+        seq: 1,
+        isFinal: false,
+      ),
+      ChatMessageModel.userMessage('问题', id: 'user-60'),
+    ];
+
+    final group = buildAgentRunTimelineEntries(messages).first.group;
+
+    expect(
+      group?.segmentsOldestFirst.map(
+        (segment) => segment.messages.map((message) => message.id).toList(),
+      ),
+      <List<String>>[
+        <String>['msg-1-agent-message'],
+        <String>['exec-2-agent-command'],
+        <String>['msg-2-agent-message'],
+        <String>['exec-3-agent-command', 'exec-4-agent-command'],
+      ],
+    );
+    // Two folds, not one: prose between the batches keeps them apart.
+    expect(
+      group?.segmentsOldestFirst.where((segment) => segment.isProcess),
+      hasLength(2),
+    );
   });
 }
 
@@ -477,6 +547,15 @@ ChatMessageModel _assistantMessage({
       if (isFinal != null) 'isFinal': isFinal,
     },
   );
+}
+
+Map<String, dynamic> _toolCard(String title) {
+  return <String, dynamic>{
+    'type': 'agent_tool_summary',
+    'status': 'success',
+    'toolType': 'terminal',
+    'toolTitle': title,
+  };
 }
 
 ChatMessageModel _thinkingCard({

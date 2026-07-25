@@ -2226,10 +2226,7 @@ class _ChatMessageListState extends State<ChatMessageList> {
   ) {
     final seenIds = <String>{};
     final listenables = <Listenable>[];
-    for (final message in [
-      ...group.visibleMessagesNewestFirst,
-      ...group.processMessagesNewestFirst,
-    ]) {
+    for (final message in group.allMessagesOldestFirst) {
       if (!seenIds.add(message.id)) {
         continue;
       }
@@ -2280,24 +2277,9 @@ class _ChatMessageListState extends State<ChatMessageList> {
     ObservableChatMessageList messages,
     AgentRunTimelineGroup group,
   ) {
-    final latestById = <String, ChatMessageModel>{
+    return group.withRefreshedMessages(<String, ChatMessageModel>{
       for (final message in messages) message.id: message,
-    };
-    List<ChatMessageModel> refresh(List<ChatMessageModel> source) {
-      return source
-          .map((message) => latestById[message.id] ?? message)
-          .toList(growable: false);
-    }
-
-    return AgentRunTimelineGroup(
-      taskId: group.taskId,
-      status: group.status,
-      agentId: group.agentId,
-      startedAt: group.startedAt,
-      finishedAt: group.finishedAt,
-      visibleMessagesNewestFirst: refresh(group.visibleMessagesNewestFirst),
-      processMessagesNewestFirst: refresh(group.processMessagesNewestFirst),
-    );
+    });
   }
 
   Widget _buildTimelineListRow({
