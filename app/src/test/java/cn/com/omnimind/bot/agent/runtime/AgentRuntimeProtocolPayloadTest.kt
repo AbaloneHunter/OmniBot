@@ -391,6 +391,53 @@ class AgentRuntimeProtocolPayloadTest {
     }
 
     @Test
+    fun turnTerminalStatusPrefersTheAcpStopReason() {
+        assertEquals(
+            "end_turn",
+            resolveTurnTerminalStatus("END_TURN", cancelled = false, error = null)
+        )
+        assertEquals(
+            "max_tokens",
+            resolveTurnTerminalStatus("max_tokens", cancelled = false, error = null)
+        )
+        assertEquals(
+            "refusal",
+            resolveTurnTerminalStatus("REFUSAL", cancelled = false, error = null)
+        )
+        // A stop reason still wins once the agent has reported one, even if the
+        // surrounding coroutine was torn down afterwards.
+        assertEquals(
+            "end_turn",
+            resolveTurnTerminalStatus("end_turn", cancelled = true, error = RuntimeException())
+        )
+    }
+
+    @Test
+    fun turnTerminalStatusCoversEveryWayAPromptCanEnd() {
+        // Cancelled: a cancelled coroutine usually also surfaces an exception,
+        // so cancellation has to outrank failure.
+        assertEquals(
+            "cancelled",
+            resolveTurnTerminalStatus(null, cancelled = true, error = RuntimeException("boom"))
+        )
+        assertEquals(
+            "error",
+            resolveTurnTerminalStatus(null, cancelled = false, error = IllegalStateException())
+        )
+        // The regression that stranded every codex-acp conversation: a prompt
+        // flow that completes without ever emitting a prompt response must
+        // still terminate the turn rather than leave it running forever.
+        assertEquals(
+            "end_turn",
+            resolveTurnTerminalStatus(null, cancelled = false, error = null)
+        )
+        assertEquals(
+            "end_turn",
+            resolveTurnTerminalStatus("   ", cancelled = false, error = null)
+        )
+    }
+
+    @Test
     fun buildCodexAgentFilesUseAuthJsonAndResponsesProviderConfig() {
         val config = buildCodexConfigToml(
             baseUrl = "https://example.com/v1",

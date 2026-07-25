@@ -5,8 +5,11 @@ import 'package:ui/features/home/pages/command_overlay/widgets/cards/terminal_ou
 import 'package:ui/l10n/legacy_text_localizer.dart';
 import 'package:ui/models/chat_message_model.dart';
 import 'package:ui/services/agent_diff_parser.dart';
+import 'package:ui/services/agent_message_kinds.dart';
 
-const String kAgentToolSummaryCardType = 'agent_tool_summary';
+export 'package:ui/services/agent_message_kinds.dart'
+    show kAgentToolSummaryCardType;
+
 const String kAgentToolTitleField = 'toolTitle';
 
 class AgentToolActivitySnapshot {
@@ -163,7 +166,7 @@ List<ChatMessageModel> resolveAgentToolMessagesForTask(
       continue;
     }
     return group.processMessagesNewestFirst
-        .where(_isAgentToolSummaryMessage)
+        .where(isAgentToolSummaryMessage)
         .toList(growable: false);
   }
   return const <ChatMessageModel>[];
@@ -194,11 +197,6 @@ Map<String, dynamic>? resolveActiveAgentToolCard(
   return cards.first;
 }
 
-bool _isAgentToolSummaryMessage(ChatMessageModel message) {
-  return (message.cardData?['type'] ?? '').toString() ==
-      kAgentToolSummaryCardType;
-}
-
 String? _resolveSnapshotTaskId(List<ChatMessageModel> messages) {
   for (final message in messages) {
     final taskId = resolveAgentToolTaskId(message);
@@ -227,7 +225,7 @@ _CompletedAgentToolRun? _resolveLatestCompletedAgentToolRun(
   return _CompletedAgentToolRun(
     taskId: group.taskId,
     messages: group.processMessagesNewestFirst
-        .where(_isAgentToolSummaryMessage)
+        .where(isAgentToolSummaryMessage)
         .toList(growable: false),
   );
 }

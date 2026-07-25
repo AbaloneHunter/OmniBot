@@ -43,23 +43,22 @@ void main() {
     );
   });
 
-  test('keeps in-flight text snapshots ungrouped', () {
+  test('groups an in-flight run and marks it running', () {
     final entries = buildAgentRunTimelineEntries(
       _buildCompletedRunMessages(isFinal: false),
       activeTaskIds: const <String>{'task-1'},
     );
 
-    expect(entries, hasLength(4));
-    expect(entries.where((entry) => entry.group != null), isEmpty);
-    expect(entries.map((entry) => entry.message?.id), <String?>[
-      'task-1-text',
-      'task-1-tool',
-      'task-1-thinking',
-      'user-1',
-    ]);
+    // An active run is one group, not a pile of loose bubbles. That is what
+    // guarantees a single agent avatar + single "processing" header per turn
+    // however many message entries the agent streams.
+    expect(entries, hasLength(2));
+    expect(entries.first.group?.taskId, 'task-1');
+    expect(entries.first.group?.status, AgentRunStatus.running);
+    expect(entries.last.message?.id, 'user-1');
   });
 
-  test('waits for active task cleanup before folding final text', () {
+  test('run status follows the active task set, not a persisted flag', () {
     final messages = _buildCompletedRunMessages(isFinal: true);
     final activeEntries = buildAgentRunTimelineEntries(
       messages,
@@ -67,10 +66,10 @@ void main() {
     );
     final completedEntries = buildAgentRunTimelineEntries(messages);
 
-    expect(activeEntries, hasLength(4));
-    expect(activeEntries.where((entry) => entry.group != null), isEmpty);
+    expect(activeEntries.first.group?.status, AgentRunStatus.running);
     expect(completedEntries, hasLength(2));
     expect(completedEntries.first.group?.taskId, 'task-1');
+    expect(completedEntries.first.group?.status, AgentRunStatus.finished);
     expect(
       completedEntries.first.group?.visibleMessagesNewestFirst.single.id,
       'task-1-text',
@@ -83,29 +82,175 @@ void main() {
     );
   });
 
-  test('does not fold an explicitly unfinished persisted snapshot', () {
+  test('groups a finished run whose snapshots all say isFinal:false', () {
+    // Regression for on-device conversation 58: codex-acp turns persisted with
+    // isFinal:false on every assistant message because no terminal event was
+    // ever emitted. Gating the group on that bit removed the agent avatar, the
+    // "已处理" label, and the fold all at once. Grouping must depend only on the
+    // run no longer being active.
     final messages = <ChatMessageModel>[
       _assistantMessage(
-        id: 'task-4-text',
-        text: '未完成回答',
-        taskId: 'task-4',
+        id: 'msg-e-agent-message',
+        text: '最终答案',
+        taskId: 'dc8c5328',
         kind: 'text_snapshot',
-        seq: 22,
+        seq: 11,
         isFinal: false,
       ),
-      _thinkingCard(id: 'task-4-thinking', taskId: 'task-4', seq: 12),
-      ChatMessageModel.userMessage('用户问题', id: 'user-4'),
+      _assistantMessage(
+        id: 'msg-d-agent-message',
+        text: '中间叙述 2',
+        taskId: 'dc8c5328',
+        kind: 'text_snapshot',
+        seq: 7,
+        isFinal: false,
+      ),
+      _assistantMessage(
+        id: 'msg-c-agent-message',
+        text: '中间叙述 1',
+        taskId: 'dc8c5328',
+        kind: 'text_snapshot',
+        seq: 6,
+        isFinal: false,
+      ),
+      _cardMessage(
+        id: 'exec-1-agent-command',
+        taskId: 'dc8c5328',
+        kind: 'tool_completed',
+        seq: 5,
+        cardData: <String, dynamic>{
+          'type': 'agent_tool_summary',
+          'status': 'success',
+          'toolType': 'terminal',
+          'toolTitle': 'ls',
+        },
+      ),
+      ChatMessageModel.userMessage('mimo code 有 acp 协议吗？', id: 'user-58'),
     ];
 
     final entries = buildAgentRunTimelineEntries(messages);
 
-    expect(entries, hasLength(3));
-    expect(entries.where((entry) => entry.group != null), isEmpty);
-    expect(entries.map((entry) => entry.message?.id), <String?>[
-      'task-4-text',
-      'task-4-thinking',
-      'user-4',
+    expect(entries, hasLength(2));
+    final group = entries.first.group;
+    expect(group?.taskId, 'dc8c5328');
+    expect(group?.status, AgentRunStatus.finished);
+    // The newest text is the answer; the interim narration folds away.
+    expect(group?.visibleMessagesNewestFirst.single.id, 'msg-e-agent-message');
+    expect(
+      group?.processMessagesNewestFirst.map((m) => m.id),
+      containsAll(<String>[
+        'msg-d-agent-message',
+        'msg-c-agent-message',
+        'exec-1-agent-command',
+      ]),
+    );
+  });
+
+  test('groups a text-only turn so it still gets a header', () {
+    // No tool cards, no thinking cards, a single assistant message. The old
+    // "needs at least two messages" gate dropped this to a loose bubble, which
+    // meant a plain question and answer never showed an agent avatar.
+    final messages = <ChatMessageModel>[
+      _assistantMessage(
+        id: 'task-9-text',
+        text: '简短回答',
+        taskId: 'task-9',
+        kind: 'text_snapshot',
+        seq: 2,
+        isFinal: false,
+      ),
+      ChatMessageModel.userMessage('简短问题', id: 'user-9'),
+    ];
+
+    final entries = buildAgentRunTimelineEntries(messages);
+
+    expect(entries, hasLength(2));
+    expect(entries.first.group?.taskId, 'task-9');
+    expect(entries.first.group?.processMessagesNewestFirst, isEmpty);
+    expect(
+      entries.first.group?.visibleMessagesNewestFirst.single.id,
+      'task-9-text',
+    );
+  });
+
+  test('many message-less active ids collapse to a single running header', () {
+    // Regression for the duplicated avatars: every streamed assistant message
+    // used to leak its entry id into the active-task set, and each leaked id
+    // rendered its own avatar + "正在处理" row. "An agent is working and has
+    // produced nothing yet" is one condition, so it gets at most one header
+    // however many ids are in flight.
+    final entries = buildAgentRunTimelineEntries(
+      _buildCompletedRunMessages(),
+      activeTaskIds: const <String>{
+        'msg-a-agent-message',
+        'msg-b-agent-message',
+        'msg-c-agent-message',
+        'task-1-ai',
+      },
+    );
+
+    final runningGroups = entries
+        .where((entry) => entry.group?.isRunning ?? false)
+        .toList(growable: false);
+    expect(runningGroups, hasLength(1));
+    expect(entries.where((entry) => entry.group != null), hasLength(2));
+  });
+
+  test('no pending header once a real run is already streaming', () {
+    final entries = buildAgentRunTimelineEntries(
+      _buildCompletedRunMessages(isFinal: false),
+      activeTaskIds: const <String>{
+        'task-1',
+        'task-1-ai',
+        'msg-a-agent-message',
+      },
+    );
+
+    expect(
+      entries.where((entry) => entry.group?.isRunning ?? false),
+      hasLength(1),
+    );
+    expect(entries.first.group?.taskId, 'task-1');
+  });
+
+  test('resolves the run agent id per message, then per conversation', () {
+    final withMessageIdentity = buildAgentRunTimelineEntries(<ChatMessageModel>[
+      _assistantMessage(
+        id: 'task-a-text',
+        text: '答案',
+        taskId: 'task-a',
+        kind: 'text_snapshot',
+        seq: 2,
+        agentId: 'claude-code-acp',
+      ),
+      ChatMessageModel.userMessage('问题', id: 'user-a'),
+    ], conversationAgentId: 'codex-acp');
+    expect(withMessageIdentity.first.group?.agentId, 'claude-code-acp');
+
+    final withoutMessageIdentity =
+        buildAgentRunTimelineEntries(<ChatMessageModel>[
+          _assistantMessage(
+            id: 'task-b-text',
+            text: '答案',
+            taskId: 'task-b',
+            kind: 'text_snapshot',
+            seq: 2,
+          ),
+          ChatMessageModel.userMessage('问题', id: 'user-b'),
+        ], conversationAgentId: 'opencode-acp');
+    expect(withoutMessageIdentity.first.group?.agentId, 'opencode-acp');
+
+    final withNeither = buildAgentRunTimelineEntries(<ChatMessageModel>[
+      _assistantMessage(
+        id: 'task-c-text',
+        text: '答案',
+        taskId: 'task-c',
+        kind: 'text_snapshot',
+        seq: 2,
+      ),
+      ChatMessageModel.userMessage('问题', id: 'user-c'),
     ]);
+    expect(withNeither.first.group?.agentId, kGenericAgentId);
   });
 
   test('keeps permission card visible alongside final permission text', () {
@@ -312,12 +457,17 @@ ChatMessageModel _assistantMessage({
   required int seq,
   int? entrySeq,
   bool? isFinal = false,
+  String? agentId,
 }) {
   return ChatMessageModel(
     id: id,
     type: 1,
     user: 2,
-    content: <String, dynamic>{'text': text, 'id': id},
+    content: <String, dynamic>{
+      'text': text,
+      'id': id,
+      if (agentId != null) 'agentId': agentId,
+    },
     streamMeta: <String, dynamic>{
       'parentTaskId': taskId,
       'kind': kind,

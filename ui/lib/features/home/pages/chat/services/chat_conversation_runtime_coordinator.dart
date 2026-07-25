@@ -89,7 +89,18 @@ class ChatConversationRuntimeState {
 
   ConversationModel? conversation;
   final ObservableChatMessageList messages = ObservableChatMessageList();
+
+  /// Accumulated assistant text, used to continue a stream across events.
+  ///
+  /// This is a TEXT CACHE, not a record of what is running. Its key shape
+  /// differs by producer — the built-in agent keys it by task id, the ACP
+  /// reducer by message entry id (`<acpMessageId>-agent-message`) — so it must
+  /// never feed [activeAgentTaskIds]. It used to, and because ACP mints a new
+  /// message id per `agent_message_chunk`, every streamed message registered a
+  /// phantom "task" that rendered its own agent avatar and processing row.
   final Map<String, String> currentAiMessages = <String, String>{};
+
+  /// Accumulated reasoning text. Same contract as [currentAiMessages].
   final Map<String, String> currentThinkingMessages = <String, String>{};
   final Map<String, AgentStreamTaskState> agentStreamStates =
       <String, AgentStreamTaskState>{};
@@ -129,12 +140,13 @@ class ChatConversationRuntimeState {
       currentDispatchTaskId != null ||
       currentAiMessages.isNotEmpty;
 
+  /// Turns currently believed to be producing output.
+  ///
+  /// Every member must be a TURN id. The text caches are deliberately excluded:
+  /// their keys are per-message, and mixing the two id spaces is what produced
+  /// one agent avatar and one "processing" row per streamed message.
   Set<String> get activeAgentTaskIds {
-    final ids = <String>{
-      ...agentStreamStates.keys,
-      ...currentAiMessages.keys,
-      ...currentThinkingMessages.keys,
-    };
+    final ids = <String>{...agentStreamStates.keys};
     final currentTaskId = currentDispatchTaskId?.trim() ?? '';
     if (currentTaskId.isNotEmpty) {
       ids.add(currentTaskId);
@@ -1791,8 +1803,7 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
       mode: runtimeMode,
     );
     _taskBindings[event.taskId] = binding;
-    runtime.currentDispatchTaskId ??= event.taskId;
-    runtime.lastAgentTaskId = event.taskId;
+    _adoptRuntimeTurnId(runtime, event.taskId);
     // 外部任务（IM 等）触发：用户消息已经写入 DB，但可能还没进入 runtime.messages
     // —— Flutter 的 messagesChanged 事件走的是异步 stream listener（微任务），
     // 而 agent 流事件是同步回调，常常先到达。这里把缺失的用户消息从 DB 补回来，
@@ -2074,13 +2085,29 @@ class ChatConversationRuntimeCoordinator extends ChangeNotifier {
     };
   }
 
+  /// Adopts the runtime's notion of the turn in flight.
+  ///
+  /// The real turn id REPLACES the locally minted `<messageId>-ai` dispatch id
+  /// instead of coexisting with it. This used to be `??=`, so the optimistic id
+  /// survived alongside the native one and a single turn was described by two
+  /// ids — both of which were then rendered with their own agent avatar.
+  void _adoptRuntimeTurnId(
+    ChatConversationRuntimeState runtime,
+    String turnId,
+  ) {
+    final dispatchTaskId = runtime.currentDispatchTaskId?.trim() ?? '';
+    if (dispatchTaskId.isEmpty || dispatchTaskId.endsWith('-ai')) {
+      runtime.currentDispatchTaskId = turnId;
+    }
+    runtime.lastAgentTaskId = turnId;
+  }
+
   void _syncRuntimeAgentState(
     ChatConversationRuntimeState runtime,
     AgentStreamEvent event,
     AgentStreamTaskState state,
   ) {
-    runtime.currentDispatchTaskId ??= event.taskId;
-    runtime.lastAgentTaskId = event.taskId;
+    _adoptRuntimeTurnId(runtime, event.taskId);
     runtime.activeThinkingCardId = state.activeThinkingEntryId;
     runtime.currentThinkingStage = state.thinkingStage;
     runtime.isDeepThinking = state.isDeepThinking;

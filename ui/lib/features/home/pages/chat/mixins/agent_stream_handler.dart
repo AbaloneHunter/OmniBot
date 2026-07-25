@@ -1332,7 +1332,12 @@ mixin AgentStreamHandler<T extends StatefulWidget> on State<T> {
       return candidate;
     }
 
-    const notice = '[更早输出已省略]\n';
+    // Kept in step with the coordinator's copy of this helper, which is
+    // localized. This one was not, so an English-locale user saw a Chinese
+    // truncation notice in the command overlay's terminal output.
+    final notice = LegacyTextLocalizer.isEnglish
+        ? '[Only the most recent terminal output is shown]\n'
+        : '[只显示最近的部分终端输出]\n';
     final body = candidate.startsWith(notice)
         ? candidate.substring(notice.length)
         : candidate;

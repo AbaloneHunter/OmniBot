@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/features/home/pages/chat/tool_activity_utils.dart';
 import 'package:ui/features/home/pages/chat/utils/agent_run_timeline.dart';
+import 'package:ui/features/home/pages/chat/widgets/agent_run_header.dart';
 import 'package:ui/features/home/pages/command_overlay/widgets/cards/agent_tool_transcript.dart';
 import 'package:ui/features/home/pages/command_overlay/widgets/cards/card_widget_factory.dart'
     show OnBeforeTaskExecute, OnRequestAuthorize;
 import 'package:ui/features/home/pages/command_overlay/widgets/message_bubble.dart';
 import 'package:ui/models/chat_message_model.dart';
 import 'package:ui/services/agent_avatar_service.dart';
-import 'package:ui/services/app_background_service.dart';
 import 'package:ui/services/agent_message_kinds.dart';
+import 'package:ui/services/app_background_service.dart';
 import 'package:ui/theme/theme_context.dart';
-import 'package:ui/widgets/agent_brand_icon.dart';
 import 'package:ui/widgets/agent_avatar.dart';
 
 class AgentRunGroupMessage extends StatefulWidget {
@@ -63,6 +63,11 @@ class _AgentRunGroupMessageState extends State<AgentRunGroupMessage>
   bool _isNotifyingParentDuringAnimation = false;
   final Set<String> _expandedToolGroupKeys = <String>{};
 
+  /// A running turn is always open; only a finished one honours the user's
+  /// fold state. Auto-collapse-on-completion therefore needs no trigger of its
+  /// own — the run simply stops forcing itself open when it ends.
+  bool get _effectiveExpanded => widget.group.isRunning || widget.expanded;
+
   @override
   void initState() {
     super.initState();
@@ -70,7 +75,7 @@ class _AgentRunGroupMessageState extends State<AgentRunGroupMessage>
       vsync: this,
       duration: _kToggleDuration,
       reverseDuration: _kToggleDuration,
-      value: widget.expanded ? 1.0 : 0.0,
+      value: _effectiveExpanded ? 1.0 : 0.0,
     );
     _sizeFactor = CurvedAnimation(
       parent: _expandController,
@@ -99,11 +104,12 @@ class _AgentRunGroupMessageState extends State<AgentRunGroupMessage>
     if (widget.group.taskId != oldWidget.group.taskId) {
       _expandedToolGroupKeys.clear();
     }
-    if (widget.expanded == oldWidget.expanded) {
+    final wasExpanded = oldWidget.group.isRunning || oldWidget.expanded;
+    if (_effectiveExpanded == wasExpanded) {
       return;
     }
     _isNotifyingParentDuringAnimation = true;
-    if (widget.expanded) {
+    if (_effectiveExpanded) {
       _expandController.forward();
     } else {
       _expandController.reverse();
@@ -146,20 +152,38 @@ class _AgentRunGroupMessageState extends State<AgentRunGroupMessage>
   Widget build(BuildContext context) {
     final processMessages = widget.group.processMessagesOldestFirst;
     final visibleMessages = widget.group.visibleMessagesOldestFirst;
-    final showProcessHeader = processMessages.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (showProcessHeader) ...[
-          _AgentRunSummaryHeader(
+        // Unconditional. A turn with no tool or thinking cards still gets a
+        // header, which is what restores the agent avatar on a plain
+        // question-and-answer turn.
+        if (widget.useAcpPresentation)
+          AgentRunHeader(
+            key: ValueKey('agent-run-summary-${widget.group.taskId}'),
+            taskId: widget.group.taskId,
+            agentId: widget.group.agentId,
+            status: widget.group.status,
+            startedAt: widget.group.startedAt,
+            finishedAt: widget.group.finishedAt,
+            expanded: _effectiveExpanded,
+            onToggleExpanded: widget.group.isRunning || processMessages.isEmpty
+                ? null
+                : widget.onToggleExpanded,
+          )
+        // The built-in assistant's header has no in-flight state, so while its
+        // run is streaming there is simply no header — the process section is
+        // force-expanded and reads exactly as it did before grouping.
+        else if (processMessages.isNotEmpty && !widget.group.isRunning)
+          _LegacyAgentRunSummaryHeader(
             key: ValueKey('agent-run-summary-${widget.group.taskId}'),
             group: widget.group,
             taskId: widget.group.taskId,
-            useAcpPresentation: widget.useAcpPresentation,
-            expanded: widget.expanded,
+            expanded: _effectiveExpanded,
             onTap: widget.onToggleExpanded,
           ),
+        if (processMessages.isNotEmpty) ...[
           _buildAnimatedProcessSection(processMessages),
         ],
         ...visibleMessages.map(
@@ -192,7 +216,7 @@ class _AgentRunGroupMessageState extends State<AgentRunGroupMessage>
     }
 
     final shouldShow =
-        widget.expanded ||
+        _effectiveExpanded ||
         _expandController.isAnimating ||
         _expandController.value > 0.001;
     if (!shouldShow) {
@@ -220,7 +244,8 @@ class _AgentRunGroupMessageState extends State<AgentRunGroupMessage>
               child: Transform.translate(
                 offset: Offset(0, _lift.value),
                 child: IgnorePointer(
-                  ignoring: !widget.expanded && !_expandController.isAnimating,
+                  ignoring:
+                      !_effectiveExpanded && !_expandController.isAnimating,
                   child: Opacity(opacity: opacity, child: child),
                 ),
               ),
@@ -239,11 +264,11 @@ class _AgentRunGroupMessageState extends State<AgentRunGroupMessage>
     var index = 0;
     while (index < processMessages.length) {
       final message = processMessages[index];
-      if (_isAgentToolSummaryMessage(message) && widget.useAcpPresentation) {
+      if (isAgentToolSummaryMessage(message) && widget.useAcpPresentation) {
         final toolMessages = <ChatMessageModel>[message];
         var nextIndex = index + 1;
         while (nextIndex < processMessages.length &&
-            _isAgentToolSummaryMessage(processMessages[nextIndex])) {
+            isAgentToolSummaryMessage(processMessages[nextIndex])) {
           toolMessages.add(processMessages[nextIndex]);
           nextIndex += 1;
         }
@@ -327,51 +352,6 @@ class _AgentRunGroupMessageState extends State<AgentRunGroupMessage>
     }
     return null;
   }
-}
-
-bool _isAgentToolSummaryMessage(ChatMessageModel message) {
-  return (message.cardData?['type'] ?? '').toString() ==
-      kAgentToolSummaryCardType;
-}
-
-/// 头像始终按消息记录的 Agent 身份渲染；无法从旧历史记录恢复身份时使用
-/// 通用 Agent 图标，避免把 Claude Code、OpenCode 等错误标成 Codex。
-String? _agentRunGroupAcpAgentId(AgentRunTimelineGroup group) {
-  for (final message in group.processMessagesNewestFirst) {
-    if (message.agentId != null) return message.agentId;
-  }
-  for (final message in group.visibleMessagesNewestFirst) {
-    if (message.agentId != null) return message.agentId;
-  }
-  for (final message in group.processMessagesNewestFirst) {
-    if (_isAcpRunMessage(message)) return 'generic-agent';
-  }
-  for (final message in group.visibleMessagesNewestFirst) {
-    if (_isAcpRunMessage(message)) return 'generic-agent';
-  }
-  return null;
-}
-
-bool _isAcpRunMessage(ChatMessageModel message) {
-  final cardData = message.cardData;
-  if (isAgentToolUiStyle(cardData?['uiStyle'])) {
-    return true;
-  }
-  if (isAgentRequestCardType(cardData?['type'])) {
-    return true;
-  }
-  for (final rawId in <Object?>[
-    message.id,
-    message.contentId,
-    message.streamMeta?['entryId'],
-    cardData?['cardId'],
-  ]) {
-    final id = rawId?.toString().trim() ?? '';
-    if (id.contains('-agent-') || id.contains('-codex-')) {
-      return true;
-    }
-  }
-  return false;
 }
 
 String _toolGroupKey(String taskId, List<ChatMessageModel> messages) {
@@ -553,19 +533,21 @@ class _AgentToolCallGroup extends StatelessWidget {
   }
 }
 
-class _AgentRunSummaryHeader extends StatelessWidget {
-  const _AgentRunSummaryHeader({
+/// Header for the built-in assistant's run groups (non-ACP presentation).
+///
+/// ACP turns go through [AgentRunHeader] instead, which also covers the
+/// in-flight state.
+class _LegacyAgentRunSummaryHeader extends StatelessWidget {
+  const _LegacyAgentRunSummaryHeader({
     super.key,
     required this.group,
     required this.taskId,
-    required this.useAcpPresentation,
     required this.expanded,
     required this.onTap,
   });
 
   final AgentRunTimelineGroup group;
   final String taskId;
-  final bool useAcpPresentation;
   final bool expanded;
   final VoidCallback onTap;
 
@@ -574,9 +556,6 @@ class _AgentRunSummaryHeader extends StatelessWidget {
     final isEnglish =
         Localizations.maybeLocaleOf(context)?.languageCode == 'en';
     final palette = context.omniPalette;
-    final acpAgentId = useAcpPresentation
-        ? _agentRunGroupAcpAgentId(group)
-        : null;
     // Both collapsed AND expanded show the same "已处理 <elapsed>" label.
     // The per-tool count summary was deliberately retired — the user wants
     // the header noise-free in both states. The elapsed-time suffix is
@@ -604,24 +583,17 @@ class _AgentRunSummaryHeader extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                if (acpAgentId != null)
-                  _AcpAgentRunAvatar(
-                    key: ValueKey('agent-run-acp-avatar-$taskId'),
-                    agentId: acpAgentId,
-                    color: labelColor,
-                  )
-                else
-                  ValueListenableBuilder<AgentAvatarState>(
-                    valueListenable: AgentAvatarService.avatarStateNotifier,
-                    builder: (context, state, _) {
-                      return AgentAvatarCircle(
-                        key: ValueKey('agent-run-avatar-$taskId'),
-                        state: state,
-                        size: 30,
-                        showBorder: false,
-                      );
-                    },
-                  ),
+                ValueListenableBuilder<AgentAvatarState>(
+                  valueListenable: AgentAvatarService.avatarStateNotifier,
+                  builder: (context, state, _) {
+                    return AgentAvatarCircle(
+                      key: ValueKey('agent-run-avatar-$taskId'),
+                      state: state,
+                      size: 30,
+                      showBorder: false,
+                    );
+                  },
+                ),
                 const SizedBox(width: 8),
                 ConstrainedBox(
                   constraints: BoxConstraints(
@@ -663,10 +635,8 @@ class _AgentRunSummaryHeader extends StatelessWidget {
 
 /// Returns a short human-readable duration string ("47s", "1m 23s",
 /// "1h 5m") covering the agent run from its earliest candidate message to
-/// its latest. We use the timestamps already attached to the messages — the
-/// timeline group is only ever built for INACTIVE runs (active runs render
-/// each card individually instead of going through `_buildTimelineGroup`),
-/// so the latest timestamp is the actual run end.
+/// its latest. Used by the non-ACP header only; [AgentRunHeader] derives its
+/// own elapsed time from the run's start and finish timestamps.
 String _agentRunElapsedLabel(AgentRunTimelineGroup group) {
   int? earliestMs;
   int? latestMs;
@@ -711,38 +681,4 @@ String _agentRunElapsedLabel(AgentRunTimelineGroup group) {
     return '${hours}h';
   }
   return '${hours}h ${remainingMinutes}m';
-}
-
-/// ACP Agent 的品牌头像，外层尺寸与小万头像保持一致。
-class _AcpAgentRunAvatar extends StatelessWidget {
-  const _AcpAgentRunAvatar({
-    super.key,
-    required this.agentId,
-    required this.color,
-  });
-
-  final String agentId;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.omniPalette;
-    final backgroundColor = context.isDarkTheme
-        ? palette.surfaceSecondary.withValues(alpha: 0.66)
-        : palette.surfaceElevated.withValues(alpha: 0.92);
-    final borderColor = palette.borderSubtle.withValues(
-      alpha: context.isDarkTheme ? 0.48 : 0.72,
-    );
-    return Container(
-      width: 30,
-      height: 30,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        shape: BoxShape.circle,
-        border: Border.all(color: borderColor, width: 0.5),
-      ),
-      child: AgentBrandIcon(agentId: agentId, size: 18, tint: color),
-    );
-  }
 }

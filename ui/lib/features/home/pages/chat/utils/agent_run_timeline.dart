@@ -16,16 +16,46 @@ class AgentRunTimelineEntry {
   String get key => message?.id ?? 'agent-run-${group!.taskId}';
 }
 
+/// Whether an agent turn is still producing output.
+///
+/// This is derived at render time from the set of in-flight task ids, never
+/// from a persisted flag. A turn that is not in that set has ended — whether it
+/// ended cleanly, was cancelled, or died with the process. Gating the run
+/// header on a persisted `isFinal` boolean instead used to mean that one lost
+/// bit removed the agent avatar, the "processed" label, and the fold all at
+/// once.
+enum AgentRunStatus { running, finished }
+
 class AgentRunTimelineGroup {
   const AgentRunTimelineGroup({
     required this.taskId,
+    required this.status,
+    required this.agentId,
+    required this.startedAt,
+    this.finishedAt,
     required this.visibleMessagesNewestFirst,
     required this.processMessagesNewestFirst,
   });
 
   final String taskId;
+  final AgentRunStatus status;
+
+  /// Resolved once, when the group is built, so the live and restored render
+  /// paths cannot disagree about which agent produced the turn.
+  final String agentId;
+
+  /// Run boundaries, carried on the group so the header does not have to
+  /// re-derive elapsed time by scanning message timestamps.
+  final DateTime startedAt;
+  final DateTime? finishedAt;
+
   final List<ChatMessageModel> visibleMessagesNewestFirst;
   final List<ChatMessageModel> processMessagesNewestFirst;
+
+  bool get isRunning => status == AgentRunStatus.running;
+
+  bool get isEmpty =>
+      visibleMessagesNewestFirst.isEmpty && processMessagesNewestFirst.isEmpty;
 
   List<ChatMessageModel> get visibleMessagesOldestFirst =>
       visibleMessagesNewestFirst.reversed.toList(growable: false);
@@ -45,6 +75,7 @@ class AgentRunTimelineGroup {
 List<AgentRunTimelineEntry> buildAgentRunTimelineEntries(
   List<ChatMessageModel> messages, {
   Set<String> activeTaskIds = const <String>{},
+  String? conversationAgentId,
 }) {
   if (messages.isEmpty) {
     return const <AgentRunTimelineEntry>[];
@@ -74,6 +105,7 @@ List<AgentRunTimelineEntry> buildAgentRunTimelineEntries(
       messages,
       taskId: taskId,
       isActive: normalizedActiveTaskIds.contains(taskId),
+      conversationAgentId: conversationAgentId,
     );
     if (group == null) {
       entries.add(AgentRunTimelineEntry.message(message));
@@ -84,7 +116,79 @@ List<AgentRunTimelineEntry> buildAgentRunTimelineEntries(
     emittedTaskIds.add(taskId);
   }
 
+  // A turn that has been dispatched but has not streamed anything yet owns no
+  // messages, so the loop above never reaches it. Surface exactly ONE header
+  // for that state — "an agent is working and has produced nothing" is a single
+  // condition, not one per in-flight id. Emitting one per id is what used to
+  // stack up a column of avatars and "processing" rows.
+  final hasRunningGroup = entries.any(
+    (entry) => entry.group?.isRunning ?? false,
+  );
+  if (!hasRunningGroup) {
+    final pendingTaskId = normalizedActiveTaskIds
+        .where((taskId) => !emittedTaskIds.contains(taskId))
+        .lastOrNull;
+    if (pendingTaskId != null) {
+      entries.insert(
+        0,
+        AgentRunTimelineEntry.group(
+          AgentRunTimelineGroup(
+            taskId: pendingTaskId,
+            status: AgentRunStatus.running,
+            agentId: resolveAgentRunAgentId(
+              turnMessages: const <ChatMessageModel>[],
+              conversationAgentId: conversationAgentId,
+            ),
+            startedAt: _pendingRunStartedAt(messages, pendingTaskId),
+            visibleMessagesNewestFirst: const <ChatMessageModel>[],
+            processMessagesNewestFirst: const <ChatMessageModel>[],
+          ),
+        ),
+      );
+    }
+  }
+
   return entries;
+}
+
+/// When a dispatched-but-silent turn started.
+///
+/// Prefers the user message minted alongside the dispatch id (`<x>-user` for a
+/// `<x>-ai` task), then the newest user message, so the elapsed counter starts
+/// from when the user actually sent the prompt.
+DateTime _pendingRunStartedAt(List<ChatMessageModel> messages, String taskId) {
+  if (taskId.endsWith('-ai')) {
+    final expectedUserId = '${taskId.substring(0, taskId.length - 3)}-user';
+    for (final message in messages) {
+      if (message.id == expectedUserId) {
+        return message.createAt;
+      }
+    }
+  }
+  for (final message in messages) {
+    if (message.user == 1) {
+      return message.createAt;
+    }
+  }
+  return DateTime.now();
+}
+
+DateTime? _boundaryTimestamp(
+  List<ChatMessageModel> messages, {
+  required bool earliest,
+}) {
+  DateTime? boundary;
+  for (final message in messages) {
+    final createAt = message.createAt;
+    if (createAt.millisecondsSinceEpoch <= 0) {
+      continue;
+    }
+    if (boundary == null ||
+        (earliest ? createAt.isBefore(boundary) : createAt.isAfter(boundary))) {
+      boundary = createAt;
+    }
+  }
+  return boundary;
 }
 
 String? agentRunParentTaskId(ChatMessageModel message) {
@@ -101,10 +205,6 @@ String? agentRunParentTaskId(ChatMessageModel message) {
   }
   return _agentTaskIdFromEntryId(message.id) ??
       _agentTaskIdFromEntryId(message.contentId);
-}
-
-bool isAgentRunFinalMessage(ChatMessageModel message) {
-  return message.streamMeta?['isFinal'] == true;
 }
 
 String agentRunKind(ChatMessageModel message) {
@@ -139,52 +239,83 @@ AgentRunTimelineGroup? _buildTimelineGroup(
   List<ChatMessageModel> messages, {
   required String taskId,
   required bool isActive,
+  String? conversationAgentId,
 }) {
   final taskMessages = messages
       .where((message) => agentRunParentTaskId(message) == taskId)
       .where(_isAgentRunCandidateMessage)
       .toList(growable: false);
-  final requestMessages = taskMessages
-      .where(_isAgentRequestMessage)
-      .toList(growable: false);
-  if (taskMessages.length < 2 && requestMessages.isEmpty) {
+  if (taskMessages.isEmpty) {
     return null;
   }
+  final requestMessages = taskMessages
+      .where(isAgentRequestMessage)
+      .toList(growable: false);
 
+  // Every agent turn is a group, however small. The old "needs at least two
+  // messages" and "needs process messages" gates meant a plain question and
+  // answer never grouped, and therefore never showed an agent avatar once it
+  // came back from the database.
   final primaryVisibleMessage = _resolvePrimaryVisibleMessage(
     taskMessages,
-    isActive: isActive,
     requestMessages: requestMessages,
   );
-  if (primaryVisibleMessage == null) {
+  if (primaryVisibleMessage == null && !isActive) {
     return null;
   }
 
-  final visibleMessages = _resolveVisibleMessages(
-    taskMessages,
-    primaryVisibleMessage: primaryVisibleMessage,
-  );
+  final visibleMessages = primaryVisibleMessage == null
+      ? const <ChatMessageModel>[]
+      : _resolveVisibleMessages(
+          taskMessages,
+          primaryVisibleMessage: primaryVisibleMessage,
+        );
   final visibleIds = visibleMessages.map((message) => message.id).toSet();
   final processMessages =
       taskMessages
           .where((message) => !visibleIds.contains(message.id))
           .toList(growable: false)
         ..sort((left, right) => _compareNewestFirst(left, right));
-  if (processMessages.isEmpty && visibleMessages.length < 2) {
-    if (!_isAgentRequestMessage(primaryVisibleMessage)) {
-      return null;
-    }
-  }
-  if (processMessages.isEmpty && visibleMessages.isEmpty) {
-    return null;
-  }
 
   return AgentRunTimelineGroup(
     taskId: taskId,
+    status: isActive ? AgentRunStatus.running : AgentRunStatus.finished,
+    agentId: resolveAgentRunAgentId(
+      turnMessages: taskMessages,
+      conversationAgentId: conversationAgentId,
+    ),
+    startedAt:
+        _boundaryTimestamp(taskMessages, earliest: true) ?? DateTime.now(),
+    finishedAt: isActive
+        ? null
+        : _boundaryTimestamp(taskMessages, earliest: false),
     visibleMessagesNewestFirst: visibleMessages,
     processMessagesNewestFirst: processMessages,
   );
 }
+
+/// The one rule for "which agent produced this turn".
+///
+/// Per-message identity first, then the conversation's bound agent, then a
+/// neutral icon. The live and restored paths used to answer this differently —
+/// the live header could fall back to page state while the restored header
+/// could not — which is why a reloaded turn showed the built-in assistant
+/// avatar instead of the agent's brand.
+String resolveAgentRunAgentId({
+  required Iterable<ChatMessageModel> turnMessages,
+  String? conversationAgentId,
+}) {
+  for (final message in turnMessages) {
+    final agentId = message.agentId?.trim() ?? '';
+    if (agentId.isNotEmpty) {
+      return agentId;
+    }
+  }
+  final fallback = conversationAgentId?.trim() ?? '';
+  return fallback.isNotEmpty ? fallback : kGenericAgentId;
+}
+
+const String kGenericAgentId = 'generic-agent';
 
 bool _isAgentRunCandidateMessage(ChatMessageModel message) {
   if (message.user == 1) {
@@ -203,85 +334,23 @@ bool _isAgentRunCandidateMessage(ChatMessageModel message) {
       isAgentRequestCardType(type);
 }
 
+/// Picks the message shown outside the collapsible process section.
+///
+/// A pending request (approval / user input) always wins because it needs a
+/// reply. Otherwise it is simply the newest assistant text: whether the turn
+/// has finished is answered by the active-task set, not by inspecting the
+/// message, so there is nothing left to classify here.
 ChatMessageModel? _resolvePrimaryVisibleMessage(
   List<ChatMessageModel> taskMessages, {
-  required bool isActive,
   required List<ChatMessageModel> requestMessages,
 }) {
-  final aiTextMessages = taskMessages
-      .where((message) => message.type == 1 && message.user == 2)
-      .toList(growable: false);
-
-  if (isActive) {
-    // A text/reasoning segment can finish before the whole agent turn does.
-    // Keep ordinary in-flight output ungrouped until the task itself leaves
-    // the active set, otherwise every intermediate text snapshot briefly
-    // looks terminal and collapses the preceding process messages.
-    if (requestMessages.isNotEmpty) {
-      return _newestBySequence(requestMessages);
-    }
-    return null;
-  }
-
-  if (aiTextMessages.isEmpty) {
-    if (requestMessages.isNotEmpty) {
-      return _newestBySequence(requestMessages);
-    }
-    return null;
-  }
-
-  final directFinalMatches = aiTextMessages
-      .where((message) => _isTerminalVisibleTextMessage(message))
-      .toList(growable: false);
-  if (directFinalMatches.isNotEmpty) {
-    return _newestBySequence(directFinalMatches);
-  }
-
-  final fallbackTextSnapshots = aiTextMessages
-      .where(_isLegacyTextSnapshotFallbackCandidate)
-      .toList(growable: false);
-  if (fallbackTextSnapshots.isNotEmpty) {
-    return _newestBySequence(fallbackTextSnapshots);
-  }
-
-  final cancelledTextMessages = aiTextMessages
-      .where(_isCancelledTextMessage)
-      .toList(growable: false);
-  if (cancelledTextMessages.isNotEmpty) {
-    return _newestBySequence(cancelledTextMessages);
-  }
   if (requestMessages.isNotEmpty) {
     return _newestBySequence(requestMessages);
   }
-  return null;
-}
-
-bool _isTerminalVisibleTextMessage(ChatMessageModel message) {
-  if (isAgentRunFinalMessage(message)) {
-    return true;
-  }
-  final kind = agentRunKind(message);
-  return kind == 'clarify_required' ||
-      kind == 'permission_required' ||
-      kind == 'error' ||
-      message.isError;
-}
-
-bool _isLegacyTextSnapshotFallbackCandidate(ChatMessageModel message) {
-  if (agentRunKind(message) != 'text_snapshot') {
-    return false;
-  }
-  // Only legacy snapshots that predate the explicit completion bit may use
-  // this fallback. An explicit `isFinal: false` can be a persisted partial
-  // answer from an interrupted turn and must not be presented as processed.
-  final streamMeta = message.streamMeta;
-  return (message.text ?? '').trim().isNotEmpty &&
-      (streamMeta == null || !streamMeta.containsKey('isFinal'));
-}
-
-bool _isCancelledTextMessage(ChatMessageModel message) {
-  final text = (message.text ?? '').trim().toLowerCase();
-  return text == '任务已取消' || text == 'task canceled' || text == 'task cancelled';
+  final aiTextMessages = taskMessages
+      .where((message) => message.type == 1 && message.user == 2)
+      .toList(growable: false);
+  return aiTextMessages.isEmpty ? null : _newestBySequence(aiTextMessages);
 }
 
 List<ChatMessageModel> _resolveVisibleMessages(
@@ -301,22 +370,18 @@ List<ChatMessageModel> _resolveVisibleMessages(
   }
   if (primaryKind == 'clarify_required' ||
       primaryKind == 'permission_required' ||
-      _isAgentRequestMessage(primaryVisibleMessage)) {
+      isAgentRequestMessage(primaryVisibleMessage)) {
     visibleMessages.addAll(
       taskMessages.where(
         (message) =>
             message.id != primaryVisibleMessage.id &&
-            _isAgentRequestMessage(message),
+            isAgentRequestMessage(message),
       ),
     );
   }
   final orderedByNewest = visibleMessages.toList(growable: false)
     ..sort((left, right) => _compareNewestFirst(left, right));
   return orderedByNewest;
-}
-
-bool _isAgentRequestMessage(ChatMessageModel message) {
-  return isAgentRequestCardType(_cardType(message));
 }
 
 ChatMessageModel _newestBySequence(List<ChatMessageModel> messages) {

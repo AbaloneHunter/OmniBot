@@ -41,11 +41,13 @@ import com.agentclientprotocol.model.WriteTextFileResponse
 import com.agentclientprotocol.protocol.Protocol
 import com.agentclientprotocol.rpc.MethodName
 import com.agentclientprotocol.transport.StdioTransport
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
@@ -92,6 +94,31 @@ internal class LocalAcpRuntime(
     private val sessions = ConcurrentHashMap<String, ClientSession>()
     private val sessionCwds = ConcurrentHashMap<String, String>()
     private val activeTurnIds = ConcurrentHashMap<String, String>()
+
+    /**
+     * Last turn a thread ran, kept after the turn ends. ACP delivers session
+     * updates through [ClientSessionOperations.notify] whenever no prompt is
+     * in flight, and those carry no turn id. Without this fallback such a
+     * straggler reaches Flutter with a null turn id, where it degrades into a
+     * per-item pseudo turn and renders its own agent avatar + "processing"
+     * header.
+     */
+    private val lastTurnIds = ConcurrentHashMap<String, String>()
+
+    /**
+     * Turn ids that have already emitted their terminal event. [finishTurn] is
+     * reachable from the prompt job, from an explicit interrupt, and from
+     * teardown, so it has to be idempotent.
+     */
+    private val finishedTurns = ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * Threads currently inside a `session/load` call. Per the ACP spec the
+     * agent replays the entire conversation as `session/update` notifications
+     * before answering, and we already restore that history from Room — so the
+     * replay must not enter the live event stream.
+     */
+    private val replayingThreads = ConcurrentHashMap.newKeySet<String>()
     private val promptJobs = ConcurrentHashMap<String, Job>()
     private val pendingPermissions =
         ConcurrentHashMap<String, PendingPermissionRequest>()
@@ -281,6 +308,13 @@ internal class LocalAcpRuntime(
     }
 
     private suspend fun disconnectLocked() {
+        // Close every in-flight turn before tearing the transport down.
+        // Cancelling the prompt jobs first would leave their finally blocks
+        // racing a dead connection, and the UI would keep showing those turns
+        // as running forever.
+        activeTurnIds.entries.toList().forEach { (threadId, turnId) ->
+            finishTurn(threadId, turnId, status = "cancelled")
+        }
         promptJobs.values.toList().forEach { it.cancelAndJoin() }
         promptJobs.clear()
         pendingPermissions.values.forEach { it.response.complete(null) }
@@ -288,6 +322,7 @@ internal class LocalAcpRuntime(
         sessions.clear()
         sessionCwds.clear()
         sessionPermissionBehaviors.clear()
+        replayingThreads.clear()
         catalogSessionId = null
         activeTurnIds.clear()
         protocol?.close()
@@ -586,12 +621,20 @@ internal class LocalAcpRuntime(
                         parameters,
                         operationsFactory()
                     )
-                capabilities.loadSession ->
-                    requireClient().loadSession(
-                        SessionId(threadId),
-                        parameters,
-                        operationsFactory()
-                    )
+                capabilities.loadSession -> {
+                    // loadSession replays the conversation as session updates
+                    // before it returns; suppress that replay for the duration.
+                    replayingThreads.add(threadId)
+                    try {
+                        requireClient().loadSession(
+                            SessionId(threadId),
+                            parameters,
+                            operationsFactory()
+                        )
+                    } finally {
+                        replayingThreads.remove(threadId)
+                    }
+                }
                 else -> throw UnsupportedOperationException(
                     "The selected ACP agent did not advertise session resume or loadSession."
                 )
@@ -795,43 +838,37 @@ internal class LocalAcpRuntime(
             )
         )
         val job = scope.launch(start = CoroutineStart.LAZY) {
+            var stopReason: String? = null
+            var cancelled = false
+            var failure: Throwable? = null
             try {
                 session.prompt(blocks).collect { event ->
                     when (event) {
                         is Event.SessionUpdateEvent ->
                             handleSessionUpdate(threadId, turnId, event.update)
-                        is Event.PromptResponseEvent -> {
-                            emit(
-                                method = "turn/completed",
-                                threadId = threadId,
-                                turnId = turnId,
-                                params = mapOf(
-                                    "threadId" to threadId,
-                                    "turn" to mapOf(
-                                        "id" to turnId,
-                                        "status" to event.response.stopReason.name.lowercase()
-                                    )
-                                )
-                            )
-                        }
+                        is Event.PromptResponseEvent ->
+                            stopReason = event.response.stopReason.name.lowercase()
                     }
                 }
+            } catch (error: CancellationException) {
+                cancelled = true
             } catch (error: Throwable) {
                 Log.e(TAG, "ACP prompt failed", error)
-                emit(
-                    method = "turn/failed",
+                failure = error
+            } finally {
+                // The terminal event is emitted here rather than from the
+                // PromptResponseEvent branch so that a turn is always closed
+                // out: a flow that ends without a prompt response, one that
+                // throws, and one that is cancelled all land in this block.
+                // NonCancellable is required because `emit` suspends and the
+                // coroutine may already be cancelled.
+                promptJobs.remove(threadId)
+                finishTurn(
                     threadId = threadId,
                     turnId = turnId,
-                    params = mapOf(
-                        "threadId" to threadId,
-                        "turnId" to turnId,
-                        "error" to (error.message ?: error.javaClass.simpleName),
-                        "willRetry" to false
-                    )
+                    status = resolveTurnTerminalStatus(stopReason, cancelled, failure),
+                    error = failure?.let { it.message ?: it.javaClass.simpleName }
                 )
-            } finally {
-                activeTurnIds.remove(threadId, turnId)
-                promptJobs.remove(threadId)
             }
         }
         promptJobs[threadId] = job
@@ -841,6 +878,54 @@ internal class LocalAcpRuntime(
             "turnId" to turnId,
             "conversationId" to bindingRepository.getBindingByThreadId(threadId)?.conversationId
         )
+    }
+
+    /**
+     * The single exit through which a turn is ever declared over.
+     *
+     * ACP guarantees a `session/prompt` response carrying a stop reason, but a
+     * misbehaving adapter, a transport error, or a cancelled scope can all end
+     * a prompt without one. The UI treats "turn ended" as the trigger for
+     * finalizing assistant messages, folding the run, and clearing the
+     * processing indicator, so a missing terminal event strands the whole
+     * conversation in a running state. Emitting from here — idempotently and
+     * under [NonCancellable] — makes the terminal event unconditional.
+     */
+    private suspend fun finishTurn(
+        threadId: String,
+        turnId: String,
+        status: String,
+        error: String? = null
+    ) {
+        if (!finishedTurns.add(turnId)) return
+        activeTurnIds.remove(threadId, turnId)
+        lastTurnIds[threadId] = turnId
+        withContext(NonCancellable) {
+            if (error == null) {
+                emit(
+                    method = "turn/completed",
+                    threadId = threadId,
+                    turnId = turnId,
+                    params = mapOf(
+                        "threadId" to threadId,
+                        "turn" to mapOf("id" to turnId, "status" to status)
+                    )
+                )
+            } else {
+                emit(
+                    method = "turn/failed",
+                    threadId = threadId,
+                    turnId = turnId,
+                    params = mapOf(
+                        "threadId" to threadId,
+                        "turnId" to turnId,
+                        "status" to status,
+                        "error" to error,
+                        "willRetry" to false
+                    )
+                )
+            }
+        }
     }
 
     private suspend fun startReview(args: Map<String, Any?>): Map<String, Any?> {
@@ -883,7 +968,11 @@ internal class LocalAcpRuntime(
         val session = sessions[threadId]
             ?: throw IllegalArgumentException("ACP session is not loaded: $threadId")
         session.cancel()
-        val turnId = activeTurnIds.remove(threadId)
+        val turnId = activeTurnIds[threadId]
+        // Close the turn out explicitly. Cancelling the ACP session does not
+        // reliably produce a prompt response, and the prompt job's own finally
+        // block may never run if the flow simply stops emitting.
+        turnId?.let { finishTurn(threadId, it, status = "cancelled") }
         return mapOf(
             "ok" to true,
             "threadId" to threadId,
@@ -1223,6 +1312,26 @@ internal class LocalAcpRuntime(
         turnId: String?,
         update: SessionUpdate
     ) {
+        // `session/load` replays the whole conversation as session updates. We
+        // restore history from Room instead, so the replay must never reach the
+        // live stream — otherwise every replayed message becomes its own
+        // pseudo turn in the UI and gets persisted back over the real history.
+        if (threadId in replayingThreads) return
+        // Never let a timeline update through without a turn id. Updates that
+        // arrive outside an active prompt come via the notify callback with
+        // none, and downstream they would fall back to a per-item id — which
+        // spawns a duplicate agent avatar and "processing" header per item.
+        // The SDK closes the prompt's update channel before it emits the
+        // prompt response, so late stragglers legitimately belong to the turn
+        // that just ended; lastTurnIds keeps them attached to it.
+        @Suppress("NAME_SHADOWING")
+        val turnId = turnId?.takeIf { it.isNotBlank() }
+            ?: activeTurnIds[threadId]
+            ?: lastTurnIds[threadId]
+        if (turnId == null && update.isTurnScoped()) {
+            Log.w(TAG, "Dropping turn-scoped ACP update with no resolvable turn: $update")
+            return
+        }
         when (update) {
             is SessionUpdate.AgentMessageChunk -> emit(
                 method = "item/agentMessage/delta",
@@ -1775,6 +1884,45 @@ internal fun shouldSuppressAcpStreamReadFailure(
     currentProcess: Boolean,
     processAlive: Boolean
 ): Boolean = closing || !currentProcess || !processAlive
+
+/**
+ * Whether an ACP session update belongs to a specific prompt turn.
+ *
+ * Timeline updates (messages, reasoning, tool calls, plans) render inside a
+ * turn and are meaningless without one. Session-scoped updates (title, mode,
+ * config, usage, available commands) apply to the thread and are still worth
+ * forwarding between turns.
+ */
+private fun SessionUpdate.isTurnScoped(): Boolean = when (this) {
+    is SessionUpdate.AgentMessageChunk,
+    is SessionUpdate.AgentThoughtChunk,
+    is SessionUpdate.ToolCall,
+    is SessionUpdate.ToolCallUpdate,
+    is SessionUpdate.PlanUpdate,
+    is SessionUpdate.PlanUpdateV2,
+    is SessionUpdate.PlanRemoved -> true
+    else -> false
+}
+
+/**
+ * Collapses however a prompt ended into the single status string the UI reads.
+ *
+ * `stopReason` is the ACP-reported reason and wins when present. Cancellation
+ * beats a failure because a cancelled coroutine usually also surfaces an
+ * exception. An agent that ends its prompt flow without any response at all is
+ * treated as a normal end-of-turn: the alternative is leaving the turn running
+ * forever, which is strictly worse than mislabelling a rare silent failure.
+ */
+internal fun resolveTurnTerminalStatus(
+    stopReason: String?,
+    cancelled: Boolean,
+    error: Throwable?
+): String {
+    stopReason?.trim()?.takeIf { it.isNotEmpty() }?.let { return it.lowercase() }
+    if (cancelled) return "cancelled"
+    if (error != null) return "error"
+    return "end_turn"
+}
 
 private fun SessionConfigOption.Select.flatOptions() = when (val value = options) {
     is SessionConfigSelectOptions.Flat -> value.options

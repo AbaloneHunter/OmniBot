@@ -15,10 +15,9 @@ import '../../../../../services/app_background_service.dart';
 import '../../../../../widgets/app_background_widgets.dart';
 import '../chat_page_models.dart';
 import '../utils/agent_run_timeline.dart';
+import 'package:ui/services/agent_message_kinds.dart';
 import '../../command_overlay/widgets/message_bubble.dart';
 import '../../command_overlay/widgets/chat_input_area.dart';
-import '../../command_overlay/widgets/cards/bot_status.dart'
-    show ShimmeringStatusText;
 import 'agent_run_group_message.dart';
 import 'chat_empty_greeting.dart';
 
@@ -1919,13 +1918,9 @@ class _ChatMessageListState extends State<ChatMessageList> {
   }
 
   bool _isCancelledAgentRunMessage(ChatMessageModel message) {
-    if (message.type != 1 || message.user != 2) {
-      return false;
-    }
-    final text = (message.text ?? '').trim().toLowerCase();
-    return text == '任务已取消' ||
-        text == 'task canceled' ||
-        text == 'task cancelled';
+    return message.type == 1 &&
+        message.user == 2 &&
+        isCancelledTaskText(message);
   }
 
   void _handleParentScrollHandoff() {
@@ -2259,6 +2254,7 @@ class _ChatMessageListState extends State<ChatMessageList> {
       return buildAgentRunTimelineEntries(
         List<ChatMessageModel>.from(messageSource),
         activeTaskIds: widget.activeAgentTaskIds,
+        conversationAgentId: widget.activeAcpAgentId,
       );
     }
     final cached = _timelineEntriesCache;
@@ -2271,6 +2267,7 @@ class _ChatMessageListState extends State<ChatMessageList> {
     final entries = buildAgentRunTimelineEntries(
       List<ChatMessageModel>.from(observable),
       activeTaskIds: widget.activeAgentTaskIds,
+      conversationAgentId: widget.activeAcpAgentId,
     );
     _timelineEntriesCache = entries;
     _timelineCacheSource = observable;
@@ -2294,6 +2291,10 @@ class _ChatMessageListState extends State<ChatMessageList> {
 
     return AgentRunTimelineGroup(
       taskId: group.taskId,
+      status: group.status,
+      agentId: group.agentId,
+      startedAt: group.startedAt,
+      finishedAt: group.finishedAt,
       visibleMessagesNewestFirst: refresh(group.visibleMessagesNewestFirst),
       processMessagesNewestFirst: refresh(group.processMessagesNewestFirst),
     );
@@ -2302,7 +2303,6 @@ class _ChatMessageListState extends State<ChatMessageList> {
   Widget _buildTimelineListRow({
     required List<ChatMessageModel> messageSource,
     required AgentRunTimelineEntry entry,
-    required _ActiveAcpRunPresentation activeAcpPresentation,
     required String? latestUserMessageId,
     required EdgeInsets padding,
   }) {
@@ -2327,15 +2327,6 @@ class _ChatMessageListState extends State<ChatMessageList> {
         onToggleAgentRunGroup: _toggleAgentRunGroup,
         expandedAgentRunTaskIds: _expandedAgentRunTaskIds,
         useAcpPresentation: widget.useAcpPresentation,
-        showAcpAgentAvatar:
-            entry.message != null &&
-            activeAcpPresentation.headerMessageIds.contains(entry.message!.id),
-        activeAcpAgentId: widget.activeAcpAgentId,
-        activeAcpRunStartedAt: entry.message == null
-            ? null
-            : activeAcpPresentation.startedAtByTaskId[agentRunParentTaskId(
-                entry.message!,
-              )],
         visualProfile: widget.visualProfile,
         appearanceConfig: widget.appearanceConfig,
       );
@@ -2382,85 +2373,6 @@ class _ChatMessageListState extends State<ChatMessageList> {
         );
       },
     );
-  }
-
-  _ActiveAcpRunPresentation _resolveActiveAcpRunPresentation(
-    Iterable<ChatMessageModel> messages,
-  ) {
-    if (!widget.useAcpPresentation || widget.activeAgentTaskIds.isEmpty) {
-      return const _ActiveAcpRunPresentation();
-    }
-    final messageList = messages.toList(growable: false);
-    final activeTaskIds = widget.activeAgentTaskIds
-        .map((taskId) => taskId.trim())
-        .where((taskId) => taskId.isNotEmpty)
-        .toSet();
-    final firstOutputByTask = <String, ChatMessageModel>{};
-    for (final message in messageList) {
-      if (message.user == 1) {
-        continue;
-      }
-      final taskId = agentRunParentTaskId(message);
-      if (taskId == null || !activeTaskIds.contains(taskId)) {
-        continue;
-      }
-      final existing = firstOutputByTask[taskId];
-      if (existing == null || _isEarlierAgentText(message, existing)) {
-        firstOutputByTask[taskId] = message;
-      }
-    }
-
-    final latestUserMessage = messageList
-        .where((message) => message.user == 1)
-        .firstOrNull;
-    final startedAtByTaskId = <String, DateTime>{};
-    for (final taskId in activeTaskIds) {
-      ChatMessageModel? matchingUserMessage;
-      if (taskId.endsWith('-ai')) {
-        final expectedUserId = '${taskId.substring(0, taskId.length - 3)}-user';
-        matchingUserMessage = messageList
-            .where((message) => message.id == expectedUserId)
-            .firstOrNull;
-      }
-      startedAtByTaskId[taskId] =
-          matchingUserMessage?.createAt ??
-          latestUserMessage?.createAt ??
-          firstOutputByTask[taskId]?.createAt ??
-          DateTime.now();
-    }
-
-    final pendingRuns =
-        activeTaskIds
-            .where((taskId) => !firstOutputByTask.containsKey(taskId))
-            .map(
-              (taskId) => _PendingAcpRun(
-                taskId: taskId,
-                startedAt: startedAtByTaskId[taskId]!,
-              ),
-            )
-            .toList(growable: false)
-          ..sort((left, right) => left.startedAt.compareTo(right.startedAt));
-    return _ActiveAcpRunPresentation(
-      headerMessageIds: firstOutputByTask.values
-          .map((message) => message.id)
-          .toSet(),
-      startedAtByTaskId: startedAtByTaskId,
-      pendingRuns: pendingRuns,
-    );
-  }
-
-  bool _isEarlierAgentText(
-    ChatMessageModel candidate,
-    ChatMessageModel existing,
-  ) {
-    final candidateSequence = agentRunSequence(candidate);
-    final existingSequence = agentRunSequence(existing);
-    if (candidateSequence >= 0 &&
-        existingSequence >= 0 &&
-        candidateSequence != existingSequence) {
-      return candidateSequence < existingSequence;
-    }
-    return !candidate.createAt.isAfter(existing.createAt);
   }
 
   @override
@@ -2516,9 +2428,6 @@ class _ChatMessageListState extends State<ChatMessageList> {
     String? latestUserMessageId;
     final messageSource = _observableMessages ?? widget.messages;
     final timelineEntries = _resolveTimelineEntries(messageSource);
-    final activeAcpPresentation = _resolveActiveAcpRunPresentation(
-      messageSource,
-    );
     _pruneEntryRowKeys(timelineEntries);
     for (final item in messageSource) {
       if (item.user == 1) {
@@ -2532,21 +2441,8 @@ class _ChatMessageListState extends State<ChatMessageList> {
       physics: const ClampingScrollPhysics(),
       clipBehavior: Clip.hardEdge,
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-      itemCount:
-          timelineEntries.length + activeAcpPresentation.pendingRuns.length,
+      itemCount: timelineEntries.length,
       itemBuilder: (context, index) {
-        if (index >= timelineEntries.length) {
-          final pendingRun =
-              activeAcpPresentation.pendingRuns[index - timelineEntries.length];
-          return Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: _AcpAgentProcessingHeader(
-              key: ValueKey('acp-processing-${pendingRun.taskId}'),
-              agentId: widget.activeAcpAgentId ?? 'generic-agent',
-              startedAt: pendingRun.startedAt,
-            ),
-          );
-        }
         final dataIndex = timelineEntries.length - 1 - index;
         final entry = timelineEntries[dataIndex];
         final isOldestEntry = dataIndex == timelineEntries.length - 1;
@@ -2558,7 +2454,6 @@ class _ChatMessageListState extends State<ChatMessageList> {
           child: _buildTimelineListRow(
             messageSource: messageSource,
             entry: entry,
-            activeAcpPresentation: activeAcpPresentation,
             latestUserMessageId: latestUserMessageId,
             padding: EdgeInsets.only(top: needTopPadding ? 24.0 : 0.0),
           ),
@@ -2618,9 +2513,6 @@ class _ChatTimelineListRow extends StatelessWidget {
     required this.onToggleAgentRunGroup,
     required this.expandedAgentRunTaskIds,
     required this.useAcpPresentation,
-    required this.showAcpAgentAvatar,
-    this.activeAcpAgentId,
-    this.activeAcpRunStartedAt,
     required this.visualProfile,
     required this.appearanceConfig,
   });
@@ -2642,9 +2534,6 @@ class _ChatTimelineListRow extends StatelessWidget {
   final void Function(String taskId) onToggleAgentRunGroup;
   final Set<String> expandedAgentRunTaskIds;
   final bool useAcpPresentation;
-  final bool showAcpAgentAvatar;
-  final String? activeAcpAgentId;
-  final DateTime? activeAcpRunStartedAt;
   final AppBackgroundVisualProfile visualProfile;
   final AppBackgroundConfig appearanceConfig;
 
@@ -2690,9 +2579,7 @@ class _ChatTimelineListRow extends StatelessWidget {
           onContinueAgentMessage?.call(currentMessage),
       enableThinkingCollapse: true,
       useAgentToolPresentation: useAcpPresentation,
-      showThinkingAvatarOverride: useAcpPresentation && this.showAcpAgentAvatar
-          ? false
-          : null,
+      showThinkingAvatarOverride: null,
       parentScrollController: parentScrollController,
       onParentScrollHandoff: onParentScrollHandoff,
       onRequestAuthorize: onRequestAuthorize,
@@ -2705,184 +2592,10 @@ class _ChatTimelineListRow extends StatelessWidget {
       visualProfile: visualProfile,
       appearanceConfig: appearanceConfig,
     );
-    final messageAgentId = currentMessage.agentId?.trim() ?? '';
-    final fallbackAgentId = activeAcpAgentId?.trim() ?? '';
-    final agentId = messageAgentId.isNotEmpty
-        ? messageAgentId
-        : (fallbackAgentId.isNotEmpty ? fallbackAgentId : 'generic-agent');
-    final showAcpAgentAvatar =
-        useAcpPresentation &&
-        this.showAcpAgentAvatar &&
-        currentMessage.user != 1;
-    if (!showAcpAgentAvatar) {
-      return Padding(padding: padding, child: bubble);
-    }
-    return Padding(
-      padding: padding,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _AcpAgentProcessingHeader(
-            key: ValueKey(
-              'acp-processing-${agentRunParentTaskId(currentMessage) ?? currentMessage.id}',
-            ),
-            agentId: agentId,
-            startedAt: activeAcpRunStartedAt ?? currentMessage.createAt,
-            avatarKey: ValueKey('acp-message-avatar-${currentMessage.id}'),
-          ),
-          bubble,
-        ],
-      ),
-    );
-  }
-}
-
-class _StandaloneAcpAgentAvatar extends StatelessWidget {
-  const _StandaloneAcpAgentAvatar({super.key, required this.agentId});
-
-  final String agentId;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.omniPalette;
-    final backgroundColor = context.isDarkTheme
-        ? palette.surfaceSecondary.withValues(alpha: 0.66)
-        : palette.surfaceElevated.withValues(alpha: 0.92);
-    final borderColor = palette.borderSubtle.withValues(
-      alpha: context.isDarkTheme ? 0.48 : 0.72,
-    );
-    return Container(
-      width: 30,
-      height: 30,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        shape: BoxShape.circle,
-        border: Border.all(color: borderColor, width: 0.5),
-      ),
-      child: AgentBrandIcon(
-        agentId: agentId,
-        size: 18,
-        tint: palette.textTertiary,
-      ),
-    );
-  }
-}
-
-class _ActiveAcpRunPresentation {
-  const _ActiveAcpRunPresentation({
-    this.headerMessageIds = const <String>{},
-    this.startedAtByTaskId = const <String, DateTime>{},
-    this.pendingRuns = const <_PendingAcpRun>[],
-  });
-
-  final Set<String> headerMessageIds;
-  final Map<String, DateTime> startedAtByTaskId;
-  final List<_PendingAcpRun> pendingRuns;
-}
-
-class _PendingAcpRun {
-  const _PendingAcpRun({required this.taskId, required this.startedAt});
-
-  final String taskId;
-  final DateTime startedAt;
-}
-
-class _AcpAgentProcessingHeader extends StatefulWidget {
-  const _AcpAgentProcessingHeader({
-    super.key,
-    required this.agentId,
-    required this.startedAt,
-    this.avatarKey,
-  });
-
-  final String agentId;
-  final DateTime startedAt;
-  final Key? avatarKey;
-
-  @override
-  State<_AcpAgentProcessingHeader> createState() =>
-      _AcpAgentProcessingHeaderState();
-}
-
-class _AcpAgentProcessingHeaderState extends State<_AcpAgentProcessingHeader> {
-  Timer? _elapsedTimer;
-  late int _elapsedSeconds;
-
-  @override
-  void initState() {
-    super.initState();
-    _elapsedSeconds = _resolveElapsedSeconds();
-    _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) {
-        setState(() {
-          _elapsedSeconds = math.max(
-            _elapsedSeconds + 1,
-            _resolveElapsedSeconds(),
-          );
-        });
-      }
-    });
-  }
-
-  @override
-  void didUpdateWidget(covariant _AcpAgentProcessingHeader oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.startedAt != widget.startedAt) {
-      _elapsedSeconds = _resolveElapsedSeconds();
-    }
-  }
-
-  @override
-  void dispose() {
-    _elapsedTimer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.omniPalette;
-    final isEnglish =
-        Localizations.maybeLocaleOf(context)?.languageCode == 'en';
-    final label = isEnglish
-        ? 'Processing ${_elapsedSeconds}s'
-        : '正在处理 ${_elapsedSeconds}s';
-    final textColor = palette.textTertiary;
-    final textStyle = TextStyle(
-      fontSize: 11,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0,
-      height: 1.2,
-      color: textColor,
-      fontFamily: 'PingFang SC',
-    );
-    return Semantics(
-      liveRegion: true,
-      label: label,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          _StandaloneAcpAgentAvatar(
-            key: widget.avatarKey,
-            agentId: widget.agentId,
-          ),
-          const SizedBox(width: 8),
-          ShimmeringStatusText(
-            baseColor: textColor,
-            child: Text(
-              label,
-              key: const ValueKey('acp-processing-label'),
-              style: textStyle,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  int _resolveElapsedSeconds() {
-    return math.max(0, DateTime.now().difference(widget.startedAt).inSeconds);
+    // The agent avatar and the processing/processed label belong to the run
+    // header, which AgentRunGroupMessage renders once per turn. A loose bubble
+    // is just a bubble — that is what makes duplicate avatars impossible.
+    return Padding(padding: padding, child: bubble);
   }
 }
 

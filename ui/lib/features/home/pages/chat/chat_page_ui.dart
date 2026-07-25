@@ -867,15 +867,17 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
   }) {
     final runtime = _runtimeForMode(mode);
     final resolvedMessages = runtime?.messages ?? _messagesByMode[mode]!;
+    // `runtime.activeAgentTaskIds` is the single source of truth for which
+    // turns are in flight. Only fall back to the page-level dispatch id when
+    // there is no runtime yet to own it.
     final activeAgentTaskIds = <String>{...?runtime?.activeAgentTaskIds};
-    final pendingDispatchTaskId =
-        runtime?.currentDispatchTaskId ?? _currentDispatchTaskIdByMode[mode];
-    final isAwaitingAgent =
-        runtime?.isAiResponding ?? (_isAiRespondingByMode[mode] ?? false);
-    if (mode == ChatPageMode.agent &&
-        isAwaitingAgent &&
-        pendingDispatchTaskId?.trim().isNotEmpty == true) {
-      activeAgentTaskIds.add(pendingDispatchTaskId!.trim());
+    if (runtime == null && mode == ChatPageMode.agent) {
+      final isAwaitingAgent = _isAiRespondingByMode[mode] ?? false;
+      final pendingDispatchTaskId =
+          _currentDispatchTaskIdByMode[mode]?.trim() ?? '';
+      if (isAwaitingAgent && pendingDispatchTaskId.isNotEmpty) {
+        activeAgentTaskIds.add(pendingDispatchTaskId);
+      }
     }
     final toolActivitySnapshot = resolveAgentToolActivitySnapshot(
       List<ChatMessageModel>.from(resolvedMessages),

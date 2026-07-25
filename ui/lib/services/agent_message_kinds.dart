@@ -2,6 +2,7 @@ import 'package:ui/models/chat_message_model.dart';
 import 'package:ui/services/agent_tool_call_parser.dart';
 
 const String kAgentToolUiStyle = 'agent_tool';
+const String kAgentToolSummaryCardType = 'agent_tool_summary';
 const String kAgentRequestCardType = 'agent_request';
 
 // Read-only compatibility for conversation snapshots created before Agent mode
@@ -31,6 +32,40 @@ String canonicalAgentRequestCardType(Object? value) {
   return isAgentRequestCardType(value)
       ? kAgentRequestCardType
       : (value?.toString().trim() ?? '');
+}
+
+/// Whether the message is a tool-summary card, from any agent.
+///
+/// The built-in assistant and the ACP agents share this card type; use
+/// [isAcpAgentToolSummaryMessage] when the distinction matters. These two
+/// predicates previously existed as three private copies with two different
+/// definitions, so the same card counted as a tool call in one file and not in
+/// another.
+bool isAgentToolSummaryMessage(ChatMessageModel message) {
+  return (message.cardData?['type'] ?? '').toString().trim() ==
+      kAgentToolSummaryCardType;
+}
+
+/// Whether the message is a tool-summary card produced by an ACP agent.
+bool isAcpAgentToolSummaryMessage(ChatMessageModel message) {
+  final cardData = message.cardData;
+  return isAgentToolSummaryMessage(message) &&
+      isAgentToolUiStyle(cardData?['uiStyle']);
+}
+
+/// Whether the message is a request card (approval / user input).
+bool isAgentRequestMessage(ChatMessageModel message) {
+  return isAgentRequestCardType(message.cardData?['type']);
+}
+
+/// Whether the text reads as the "task cancelled" marker.
+///
+/// Three producers mint this body — the native runtime, the chat page, and the
+/// ACP reducer — and three separate readers used to match it with three copies
+/// of the same literal triple.
+bool isCancelledTaskText(ChatMessageModel message) {
+  final text = (message.text ?? '').trim().toLowerCase();
+  return text == '任务已取消' || text == 'task canceled' || text == 'task cancelled';
 }
 
 ChatMessageModel canonicalizeAgentHistoryMessage(ChatMessageModel message) {

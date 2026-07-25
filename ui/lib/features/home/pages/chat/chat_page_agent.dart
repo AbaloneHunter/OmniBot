@@ -3355,7 +3355,7 @@ bool _shouldPreserveRemoteRuntimeMessage(
     final taskId = _messageTaskId(message);
     return taskId != null && snapshotTaskIds.contains(taskId);
   }
-  final isAgentTool = _isAgentToolSummaryMessage(message);
+  final isAgentTool = isAcpAgentToolSummaryMessage(message);
   if (isAiResponding &&
       activeTaskId != null &&
       _messageBelongsToTask(message, activeTaskId)) {
@@ -3445,12 +3445,6 @@ String? _messageTaskId(ChatMessageModel message) {
       _asAgentString(cardData?['taskId']) ??
       _asAgentString(cardData?['taskID']);
   return parentTaskId;
-}
-
-bool _isAgentToolSummaryMessage(ChatMessageModel message) {
-  final cardData = message.cardData;
-  return cardData?['type'] == 'agent_tool_summary' &&
-      isAgentToolUiStyle(cardData?['uiStyle']);
 }
 
 bool _isAgentRequestMessage(ChatMessageModel message) {

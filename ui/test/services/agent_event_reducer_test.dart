@@ -39,6 +39,66 @@ void main() {
     expect(runtime.messages.single.user, 2);
   });
 
+  test('many message ids in one turn stay a single active turn', () {
+    // ACP mints a new `agent_message_chunk.messageId` for each assistant
+    // message inside a turn, and the reducer caches text per message id. That
+    // cache used to feed `activeAgentTaskIds`, so a five-message turn reported
+    // five in-flight "tasks" and the chat list drew five agent avatars with
+    // five "正在处理" rows. Message identity is not turn identity.
+    for (final messageId in <String>['msg-a', 'msg-b', 'msg-c', 'msg-d']) {
+      reducer.reduce(
+        runtime: runtime,
+        event: {
+          'turnId': 'turn-1',
+          'message': {
+            'method': 'item/agentMessage/delta',
+            'params': {
+              'turnId': 'turn-1',
+              'itemId': messageId,
+              'delta': 'chunk for $messageId',
+            },
+          },
+        },
+      );
+    }
+
+    expect(runtime.messages, hasLength(4));
+    expect(runtime.currentAiMessages, hasLength(4));
+    expect(runtime.activeAgentTaskIds, <String>{'turn-1'});
+  });
+
+  test('turn completion clears the active turn and its text cache', () {
+    reducer.reduce(
+      runtime: runtime,
+      event: {
+        'turnId': 'turn-1',
+        'message': {
+          'method': 'item/agentMessage/delta',
+          'params': {'turnId': 'turn-1', 'itemId': 'msg-a', 'delta': '答案'},
+        },
+      },
+    );
+    expect(runtime.activeAgentTaskIds, <String>{'turn-1'});
+
+    reducer.reduce(
+      runtime: runtime,
+      event: {
+        'turnId': 'turn-1',
+        'message': {
+          'method': 'turn/completed',
+          'params': {
+            'threadId': 'thread-1',
+            'turn': {'id': 'turn-1', 'status': 'end_turn'},
+          },
+        },
+      },
+    );
+
+    expect(runtime.isAiResponding, isFalse);
+    expect(runtime.activeAgentTaskIds, isEmpty);
+    expect(runtime.currentAiMessages, isEmpty);
+  });
+
   test('maps reasoning deltas into deep thinking card', () {
     reducer.reduce(
       runtime: runtime,

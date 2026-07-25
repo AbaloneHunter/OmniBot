@@ -717,7 +717,11 @@ void main() {
       );
       await tester.pump();
 
-      final processingHeader = find.byKey(ValueKey('acp-processing-$taskId'));
+      // One header per turn, live or restored — so the in-flight state uses
+      // the same key as the folded state.
+      final processingHeader = find.byKey(
+        ValueKey('agent-run-summary-$taskId'),
+      );
       expect(processingHeader, findsOneWidget);
       expect(find.textContaining('正在处理 3s'), findsOneWidget);
       expect(
@@ -795,22 +799,13 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 320));
 
+      // While running, the run's single header owns the avatar. There is no
+      // per-message avatar any more, which is what makes it impossible for one
+      // turn to show several.
       final activeAvatar = find.byKey(
-        const ValueKey('acp-message-avatar-task-1-thinking'),
+        const ValueKey('agent-run-acp-avatar-task-1'),
       );
       expect(activeAvatar, findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('acp-message-avatar-task-1-text')),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const ValueKey('acp-message-avatar-task-1-text-2')),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const ValueKey('acp-message-avatar-task-1-tool-search-1')),
-        findsNothing,
-      );
       final activeBrandIcon = tester.widget<AgentBrandIcon>(
         find.descendant(
           of: activeAvatar,
@@ -824,24 +819,24 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('agent-run-summary-task-1')),
-        findsNothing,
+        findsOneWidget,
       );
       expect(find.byType(AgentBrandIcon), findsOneWidget);
+      expect(find.textContaining('正在处理'), findsOneWidget);
 
       setState(() {
         activeTaskIds = <String>{};
       });
       await tester.pumpAndSettle();
 
-      expect(activeAvatar, findsNothing);
-      expect(
-        find.byKey(const ValueKey('agent-run-acp-avatar-task-1')),
-        findsOneWidget,
-      );
+      // Same header, same avatar — only the label and the fold affordance
+      // change once the turn ends.
+      expect(activeAvatar, findsOneWidget);
       expect(
         find.byKey(const ValueKey('agent-run-summary-task-1')),
         findsOneWidget,
       );
+      expect(find.textContaining('已处理'), findsOneWidget);
       expect(find.text('工具完成后的正文'), findsOneWidget);
     },
   );

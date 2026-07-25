@@ -1119,19 +1119,16 @@ class AgentRuntimeManager private constructor(
                 ?.name
                 ?: localAcpRuntime.activeAgentName()
         }
-        val localConversationId = syncMessage(method, message, params, threadId)
-        if (method == "turn/completed" ||
-            protocolEventType == "task_complete" ||
-            protocolEventType == "turn_complete") {
-            TaskRuntimeSettings.onTaskFinished(appContext)
-            TaskRuntimeSettings.notifyTaskFinished(
-                context = appContext,
-                title = "$eventAgentName task completed",
-                message = "Tap to view the completed Agent turn.",
-                conversationId = localConversationId,
-                conversationMode = "codex"
-            )
-        }
+        val localConversationId = runCatching {
+            syncMessage(method, message, params, threadId)
+        }.onFailure { error ->
+            Log.w("AgentRuntimeManager", "syncMessage failed for $method: ${error.message}")
+        }.getOrNull()
+
+        // Deliver to Flutter FIRST. The completion side effects below only run
+        // for the terminal event, so anything that throws in them used to drop
+        // exactly that one event while every other event sailed through —
+        // leaving the turn permanently "running" in the UI.
         emitEvent(
             linkedMapOf(
                 "method" to method,
@@ -1145,6 +1142,27 @@ class AgentRuntimeManager private constructor(
                 "message" to message
             )
         )
+
+        if (method == "turn/completed" ||
+            method == "turn/failed" ||
+            protocolEventType == "task_complete" ||
+            protocolEventType == "turn_complete") {
+            runCatching {
+                TaskRuntimeSettings.onTaskFinished(appContext)
+                TaskRuntimeSettings.notifyTaskFinished(
+                    context = appContext,
+                    title = "$eventAgentName task completed",
+                    message = "Tap to view the completed Agent turn.",
+                    conversationId = localConversationId,
+                    conversationMode = "codex"
+                )
+            }.onFailure { error ->
+                Log.w(
+                    "AgentRuntimeManager",
+                    "task completion notification failed: ${error.message}"
+                )
+            }
+        }
     }
 
     private suspend fun syncMessage(

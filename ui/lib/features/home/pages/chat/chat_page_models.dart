@@ -6,6 +6,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:ui/features/home/pages/chat/utils/agent_run_timeline.dart';
 import 'package:ui/models/chat_message_model.dart';
+import 'package:ui/services/agent_message_kinds.dart';
 
 enum ChatIslandDisplayLayer {
   mode('mode'),
@@ -183,7 +184,7 @@ class ObservableChatMessageList extends ChangeNotifier
       return true;
     }
     if (previousTaskId != null &&
-        _isCancelledTaskText(previous) != _isCancelledTaskText(next)) {
+        isCancelledTaskText(previous) != isCancelledTaskText(next)) {
       return true;
     }
     return false;
@@ -191,11 +192,6 @@ class ObservableChatMessageList extends ChangeNotifier
 
   static String _timelineCardType(ChatMessageModel message) {
     return (message.cardData?['type'] ?? '').toString().trim();
-  }
-
-  static bool _isCancelledTaskText(ChatMessageModel message) {
-    final text = (message.text ?? '').trim().toLowerCase();
-    return text == '任务已取消' || text == 'task canceled' || text == 'task cancelled';
   }
 
   @override

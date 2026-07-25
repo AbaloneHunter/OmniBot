@@ -66,7 +66,9 @@ List<ChatMessageAnchor> buildChatMessageAnchors(
       continue;
     }
     final group = entry.group;
-    if (group == null) {
+    // A dispatched turn that has not produced anything yet has nothing to
+    // anchor to.
+    if (group == null || group.isEmpty) {
       continue;
     }
     var preview = '';
