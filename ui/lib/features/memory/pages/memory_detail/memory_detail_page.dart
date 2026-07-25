@@ -36,11 +36,11 @@ class MemoryDetailPage extends StatelessWidget {
                 backgroundColor: Colors.transparent,
                 insetPadding: EdgeInsets.all(0),
                 child: ImageUtil.buildImage(
-                  memory.imagePath??'',
+                  memory.imagePath ?? '',
                   width: MediaQuery.of(context).size.width,
                   fit: BoxFit.contain,
                 ),
-              )
+              ),
             ),
             Padding(
               padding: const EdgeInsets.only(bottom: 40, top: 10),
@@ -62,7 +62,10 @@ class MemoryDetailPage extends StatelessWidget {
                           width: 12,
                           height: 12,
                           alignment: Alignment.center,
-                          colorFilter: ColorFilter.mode(Color(0xff808080), BlendMode.srcIn),
+                          colorFilter: ColorFilter.mode(
+                            Color(0xff808080),
+                            BlendMode.srcIn,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -75,28 +78,32 @@ class MemoryDetailPage extends StatelessWidget {
                             color: Color(0xff808080),
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
-                            decoration: TextDecoration.none
+                            decoration: TextDecoration.none,
                           ),
-                        )
-                      )
+                        ),
+                      ),
                     ],
                   ),
-                )
+                ),
               ),
-            )
+            ),
           ],
         );
       },
     );
   }
 
-  void _showContextMenu(MemoryCardModel vm, BuildContext context, Offset position) async {
+  void _showContextMenu(
+    MemoryCardModel vm,
+    BuildContext context,
+    Offset position,
+  ) async {
     final action = await showRecordContextMenu(
-      context: context, 
-      position: position, 
+      context: context,
+      position: position,
       deleteLabel: '删除',
       deleteIconAsset: 'assets/memory/memory_delete.svg',
-      showEdit: false
+      showEdit: false,
     );
     switch (action) {
       case RecordMenuAction.delete:
@@ -152,7 +159,7 @@ class MemoryDetailPage extends StatelessWidget {
       ),
       body: SafeArea(
         top: false,
-        bottom: true,
+        bottom: false,
         child: Stack(
           children: [
             // 上半部分图片：添加点击弹窗
@@ -186,14 +193,14 @@ class MemoryDetailPage extends StatelessWidget {
                     topLeft: Radius.circular(18),
                     topRight: Radius.circular(18),
                   ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.text05,
-                    blurRadius: 8.76,
-                    offset: Offset(0, -3.50),
-                    spreadRadius: 1,
-                  )
-                ],
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.text05,
+                      blurRadius: 8.76,
+                      offset: Offset(0, -3.50),
+                      spreadRadius: 1,
+                    ),
+                  ],
                 ),
                 child: Stack(
                   children: [
@@ -226,12 +233,12 @@ class MemoryDetailPage extends StatelessWidget {
                       ),
                     ),
                   ],
-                )
+                ),
               ),
-            )
+            ),
           ],
         ),
-      )
+      ),
     );
   }
 
@@ -261,10 +268,7 @@ class MemoryDetailPage extends StatelessWidget {
         await Gal.putImage(file.path, album: _albumName);
       } else {
         final bytes = await rootBundle.load(imagePath);
-        await Gal.putImageBytes(
-          bytes.buffer.asUint8List(),
-          album: _albumName,
-        );
+        await Gal.putImageBytes(bytes.buffer.asUint8List(), album: _albumName);
       }
 
       showToast('保存成功', type: ToastType.success);

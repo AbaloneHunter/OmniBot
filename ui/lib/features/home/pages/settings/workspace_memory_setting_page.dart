@@ -211,7 +211,10 @@ class _WorkspaceMemorySettingPageState
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
+              padding: edgeToEdgeScrollPadding(
+                context,
+                const EdgeInsets.fromLTRB(18, 12, 18, 28),
+              ),
               children: [
                 SettingsSectionTitle(
                   label: context.l10n.workspaceMemoryCapability,

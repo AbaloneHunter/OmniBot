@@ -4,6 +4,7 @@ import 'package:ui/l10n/l10n.dart';
 import 'package:ui/services/special_permission.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/utils/cache_util.dart';
+import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
 import 'package:ui/widgets/settings_section_title.dart';
 
@@ -254,8 +255,12 @@ class _AuthorizeSettingPageState extends State<AuthorizeSettingPage>
       ),
       body: SafeArea(
         top: false,
+        bottom: false,
         child: ListView.separated(
-          padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
+          padding: edgeToEdgeScrollPadding(
+            context,
+            const EdgeInsets.fromLTRB(18, 12, 18, 28),
+          ),
           itemCount: sections.length + 1,
           separatorBuilder: (_, __) => const SizedBox(height: 24),
           itemBuilder: (context, index) {

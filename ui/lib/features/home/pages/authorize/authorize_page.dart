@@ -165,6 +165,7 @@ class _AuthorizePageState extends State<AuthorizePage>
       ),
       body: SafeArea(
         top: false,
+        bottom: false,
         child: Column(
           children: [
             Expanded(
@@ -219,9 +220,9 @@ class _AuthorizePageState extends State<AuthorizePage>
                 ),
               ),
             ),
-            Container(
-              padding: const EdgeInsets.fromLTRB(62, 16, 62, 34),
-              decoration: BoxDecoration(color: palette.pageBackground),
+            SafeArea(
+              top: false,
+              minimum: const EdgeInsets.fromLTRB(62, 16, 62, 16),
               child: ValueListenableBuilder<bool>(
                 valueListenable: _canContinue,
                 builder: (context, authorized, child) {

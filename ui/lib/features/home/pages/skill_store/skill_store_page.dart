@@ -293,6 +293,8 @@ class _SkillStorePageState extends State<SkillStorePage> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : SafeArea(
+              top: false,
+              bottom: false,
               child: Column(
                 children: [
                   Padding(
@@ -329,7 +331,10 @@ class _SkillStorePageState extends State<SkillStorePage> {
     final palette = context.omniPalette;
     return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(18, 4, 18, 24),
+      padding: edgeToEdgeScrollPadding(
+        context,
+        const EdgeInsets.fromLTRB(18, 4, 18, 24),
+      ),
       itemCount: visibleSkills.length,
       separatorBuilder: (context, index) {
         return Padding(
@@ -350,7 +355,10 @@ class _SkillStorePageState extends State<SkillStorePage> {
   Widget _buildStateList({required Widget child}) {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(18, 24, 18, 24),
+      padding: edgeToEdgeScrollPadding(
+        context,
+        const EdgeInsets.fromLTRB(18, 24, 18, 24),
+      ),
       children: [SizedBox(height: 160, child: child)],
     );
   }

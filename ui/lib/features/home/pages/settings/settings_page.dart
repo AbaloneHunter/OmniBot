@@ -269,8 +269,13 @@ class _SettingsPageState extends State<SettingsPage> {
       backgroundColor: palette.pageBackground,
       appBar: CommonAppBar(title: context.l10n.settingsTitle, primary: true),
       body: SafeArea(
+        top: false,
+        bottom: false,
         child: ListView.separated(
-          padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
+          padding: edgeToEdgeScrollPadding(
+            context,
+            const EdgeInsets.fromLTRB(18, 10, 18, 28),
+          ),
           itemCount: sections.length,
           separatorBuilder: (_, __) => const SizedBox(height: 24),
           itemBuilder: (context, index) {

@@ -93,9 +93,7 @@ class _RuntimeLogsPageState extends State<RuntimeLogsPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(LegacyTextLocalizer.localize('确定删除吗？')),
-        content: Text(
-          LegacyTextLocalizer.localize('删除后该内容将不可找回'),
-        ),
+        content: Text(LegacyTextLocalizer.localize('删除后该内容将不可找回')),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -113,27 +111,18 @@ class _RuntimeLogsPageState extends State<RuntimeLogsPage> {
     try {
       await RuntimeLogService.clear();
       if (!mounted) return;
-      showToast(
-        LegacyTextLocalizer.localize('已删除'),
-        type: ToastType.success,
-      );
+      showToast(LegacyTextLocalizer.localize('已删除'), type: ToastType.success);
       _loadLogs();
     } catch (e) {
       if (!mounted) return;
-      showToast(
-        LegacyTextLocalizer.localize('删除失败'),
-        type: ToastType.error,
-      );
+      showToast(LegacyTextLocalizer.localize('删除失败'), type: ToastType.error);
     }
   }
 
   Future<void> _copyText(String text) async {
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
-    showToast(
-      LegacyTextLocalizer.localize('已复制'),
-      type: ToastType.success,
-    );
+    showToast(LegacyTextLocalizer.localize('已复制'), type: ToastType.success);
   }
 
   String _buildExportText(List<RuntimeLogEntry> logs) {
@@ -222,7 +211,9 @@ class _RuntimeLogsPageState extends State<RuntimeLogsPage> {
               child: _buildOverviewMetric(
                 context,
                 label: LegacyTextLocalizer.localize('最近一条'),
-                value: _logs.isEmpty ? '-' : _formatDateTime(_logs.first.createdAt).substring(5, 10),
+                value: _logs.isEmpty
+                    ? '-'
+                    : _formatDateTime(_logs.first.createdAt).substring(5, 10),
                 alignEnd: true,
               ),
             ),
@@ -347,10 +338,7 @@ class _RuntimeLogsPageState extends State<RuntimeLogsPage> {
         child: Container(
           width: 6,
           height: 6,
-          decoration: BoxDecoration(
-            color: markerColor,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: markerColor, shape: BoxShape.circle),
         ),
       ),
     );
@@ -397,8 +385,9 @@ class _RuntimeLogsPageState extends State<RuntimeLogsPage> {
                                     vertical: 2,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: _levelColor(log.level)
-                                        .withValues(alpha: 0.12),
+                                    color: _levelColor(
+                                      log.level,
+                                    ).withValues(alpha: 0.12),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
@@ -420,8 +409,9 @@ class _RuntimeLogsPageState extends State<RuntimeLogsPage> {
                                       vertical: 2,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFFD93025)
-                                          .withValues(alpha: 0.12),
+                                      color: const Color(
+                                        0xFFD93025,
+                                      ).withValues(alpha: 0.12),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text(
@@ -511,8 +501,7 @@ class _RuntimeLogsPageState extends State<RuntimeLogsPage> {
                                   ),
                                 ),
                                 TextButton(
-                                  onPressed: () =>
-                                      _copyText(log.stackTrace!),
+                                  onPressed: () => _copyText(log.stackTrace!),
                                   style: TextButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 8,
@@ -534,10 +523,12 @@ class _RuntimeLogsPageState extends State<RuntimeLogsPage> {
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
                                 color: context.isDarkTheme
-                                    ? palette.surfaceSecondary
-                                        .withValues(alpha: 0.62)
-                                    : palette.surfaceSecondary
-                                        .withValues(alpha: 0.82),
+                                    ? palette.surfaceSecondary.withValues(
+                                        alpha: 0.62,
+                                      )
+                                    : palette.surfaceSecondary.withValues(
+                                        alpha: 0.82,
+                                      ),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: SelectableText(
@@ -597,7 +588,10 @@ class _RuntimeLogsPageState extends State<RuntimeLogsPage> {
       onRefresh: _loadLogs,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
+        padding: edgeToEdgeScrollPadding(
+          context,
+          const EdgeInsets.fromLTRB(18, 10, 18, 28),
+        ),
         children: [
           if (_logs.isNotEmpty) ...[
             _buildOverviewSection(context),

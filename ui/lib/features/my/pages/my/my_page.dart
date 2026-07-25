@@ -8,6 +8,7 @@ import 'package:ui/features/my/pages/my/widgets/setting_tile.dart';
 import 'package:ui/theme/app_colors.dart';
 import 'package:ui/core/router/go_router_manager.dart';
 import 'package:ui/utils/cache_util.dart';
+import 'package:ui/utils/ui.dart';
 
 class MyPage extends StatefulWidget {
   const MyPage({super.key});
@@ -80,6 +81,7 @@ class MyPageState extends State<MyPage> {
       backgroundColor: bg,
       body: SafeArea(
         top: false,
+        bottom: false,
         child: Stack(
           children: [
             Positioned.fill(
@@ -113,7 +115,10 @@ class MyPageState extends State<MyPage> {
                   Expanded(
                     child: ListView(
                       controller: _scrollController,
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      padding: edgeToEdgeScrollPadding(
+                        context,
+                        const EdgeInsets.fromLTRB(24, 0, 24, 40),
+                      ),
                       children: [
                         // 第一组： 震动
                         SettingSection(
@@ -166,7 +171,6 @@ class MyPageState extends State<MyPage> {
                           ],
                         ),
                         const SizedBox(height: 32),
-                        const SizedBox(height: 40),
                       ],
                     ),
                   ),

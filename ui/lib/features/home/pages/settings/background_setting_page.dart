@@ -504,8 +504,12 @@ class _BackgroundSettingPageState extends State<BackgroundSettingPage> {
       appBar: CommonAppBar(title: context.l10n.appearanceTitle, primary: true),
       body: SafeArea(
         top: false,
+        bottom: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          padding: edgeToEdgeScrollPadding(
+            context,
+            const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

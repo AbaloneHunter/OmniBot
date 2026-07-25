@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ui/l10n/l10n.dart';
 import 'package:ui/theme/theme_context.dart';
+import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
 import 'package:ui/widgets/theme_mode_setting_card.dart';
 
@@ -15,7 +16,10 @@ class ThemeColorPage extends StatelessWidget {
       backgroundColor: palette.pageBackground,
       appBar: CommonAppBar(title: context.l10n.themeModeTitle, primary: true),
       body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: edgeToEdgeScrollPadding(
+          context,
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
         children: [const ThemeModeSettingCard()],
       ),
     );

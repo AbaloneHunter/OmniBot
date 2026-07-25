@@ -151,7 +151,9 @@ class _RemoteMcpServersPageState extends State<RemoteMcpServersPage> {
         _servers.removeWhere((item) => item.id == server.id);
       });
       showToast(
-        Localizations.localeOf(context).languageCode == 'en' ? 'Deleted' : '已删除',
+        Localizations.localeOf(context).languageCode == 'en'
+            ? 'Deleted'
+            : '已删除',
       );
     } catch (e) {
       showToast(
@@ -238,7 +240,10 @@ class _RemoteMcpServersPageState extends State<RemoteMcpServersPage> {
           : RefreshIndicator(
               onRefresh: _loadServers,
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+                padding: edgeToEdgeScrollPadding(
+                  context,
+                  const EdgeInsets.fromLTRB(18, 12, 18, 24),
+                ),
                 children: [
                   SettingsSectionTitle(
                     label: Localizations.localeOf(context).languageCode == 'en'
@@ -258,7 +263,7 @@ class _RemoteMcpServersPageState extends State<RemoteMcpServersPage> {
   Widget _buildEmpty() {
     final palette = context.omniPalette;
     return ListView(
-      padding: const EdgeInsets.all(24),
+      padding: edgeToEdgeScrollPadding(context, const EdgeInsets.all(24)),
       children: [
         const SizedBox(height: 120),
         Icon(
@@ -515,11 +520,11 @@ class _RemoteMcpServerEditorSheetState
           Text(
             widget.server == null
                 ? (Localizations.localeOf(context).languageCode == 'en'
-                    ? 'Add MCP Service'
-                    : '添加 MCP 服务')
+                      ? 'Add MCP Service'
+                      : '添加 MCP 服务')
                 : (Localizations.localeOf(context).languageCode == 'en'
-                    ? 'Edit MCP Service'
-                    : '编辑 MCP 服务'),
+                      ? 'Edit MCP Service'
+                      : '编辑 MCP 服务'),
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 16),

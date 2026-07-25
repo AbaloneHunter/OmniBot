@@ -303,6 +303,7 @@ class _WebViewPageState extends State<WebViewPage> {
             : null,
         body: SafeArea(
           top: !widget.showAppBar,
+          bottom: false,
           child: Stack(
             children: [
               // WebView内容

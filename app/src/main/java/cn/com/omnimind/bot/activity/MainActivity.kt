@@ -4,8 +4,11 @@ import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import cn.com.omnimind.baselib.util.OmniLog
 import cn.com.omnimind.bot.App
@@ -56,6 +59,7 @@ class MainActivity : FlutterActivity() {
         applyResponsiveOrientation()
         applySoftInputResizeMode()
         super.onCreate(savedInstanceState)
+        applyEdgeToEdgeWindow()
         TaskRuntimeSettings.attachActivity(this)
         TaskRuntimeSettings.consumeTaskCompletionNotificationIntent(this, intent)
 
@@ -117,6 +121,15 @@ class MainActivity : FlutterActivity() {
 
     private fun applySoftInputResizeMode() {
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+    }
+
+    private fun applyEdgeToEdgeWindow() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        @Suppress("DEPRECATION")
+        window.navigationBarColor = Color.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

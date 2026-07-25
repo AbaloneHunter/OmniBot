@@ -4,15 +4,13 @@ import 'package:ui/core/router/go_router_manager.dart';
 import 'package:ui/features/home/pages/permission_guide/permission_guide_data.dart';
 import 'package:ui/features/home/pages/permission_guide/permission_guide_routes.dart';
 import 'package:ui/theme/app_colors.dart';
+import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
 
 class PermissionGuidePage extends StatefulWidget {
   final String? initialBrand;
 
-  const PermissionGuidePage({
-    super.key,
-    this.initialBrand,
-  });
+  const PermissionGuidePage({super.key, this.initialBrand});
 
   @override
   State<PermissionGuidePage> createState() => _PermissionGuidePageState();
@@ -57,8 +55,12 @@ class _PermissionGuidePageState extends State<PermissionGuidePage> {
       appBar: const CommonAppBar(title: '权限开通指引', primary: true),
       body: SafeArea(
         top: false,
+        bottom: false,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          padding: edgeToEdgeScrollPadding(
+            context,
+            const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          ),
           children: [
             _buildHeroCard(brandInfo),
             const SizedBox(height: 16),
@@ -91,10 +93,7 @@ class _PermissionGuidePageState extends State<PermissionGuidePage> {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Color(0xFFF5FAFF),
-            Color(0xFFE8F1FF),
-          ],
+          colors: [Color(0xFFF5FAFF), Color(0xFFE8F1FF)],
         ),
         boxShadow: [
           BoxShadow(
@@ -150,10 +149,7 @@ class _PermissionGuidePageState extends State<PermissionGuidePage> {
                 const SizedBox(height: 8),
                 Text(
                   '示例系统：${brandInfo.osLabel}',
-                  style: const TextStyle(
-                    color: AppColors.text70,
-                    fontSize: 12,
-                  ),
+                  style: const TextStyle(color: AppColors.text70, fontSize: 12),
                 ),
               ],
             ),
@@ -203,10 +199,7 @@ class _PermissionGuidePageState extends State<PermissionGuidePage> {
     );
   }
 
-  Widget _buildTopicCard(
-    PermissionGuideTopicInfo topic,
-    String brandId,
-  ) {
+  Widget _buildTopicCard(PermissionGuideTopicInfo topic, String brandId) {
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(18),
@@ -214,10 +207,7 @@ class _PermissionGuidePageState extends State<PermissionGuidePage> {
         borderRadius: BorderRadius.circular(18),
         onTap: () {
           GoRouterManager.push(
-            PermissionGuideRoutes.detail(
-              brand: brandId,
-              type: topic.id,
-            ),
+            PermissionGuideRoutes.detail(brand: brandId, type: topic.id),
           );
         },
         child: Padding(
@@ -232,11 +222,7 @@ class _PermissionGuidePageState extends State<PermissionGuidePage> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 alignment: Alignment.center,
-                child: SvgPicture.asset(
-                  topic.iconPath,
-                  width: 24,
-                  height: 24,
-                ),
+                child: SvgPicture.asset(topic.iconPath, width: 24, height: 24),
               ),
               const SizedBox(width: 12),
               Expanded(

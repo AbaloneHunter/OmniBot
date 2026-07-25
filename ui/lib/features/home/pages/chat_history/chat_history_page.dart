@@ -352,7 +352,7 @@ class _ChatHistoryPageState extends State<ChatHistoryPage> {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: edgeToEdgeScrollPadding(context, const EdgeInsets.all(16)),
       itemCount: _conversations.length,
       itemBuilder: (context, index) {
         final conversation = _conversations[index];

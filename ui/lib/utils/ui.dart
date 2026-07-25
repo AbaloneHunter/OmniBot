@@ -1125,3 +1125,15 @@ class _CustomLoadingWidgetState extends State<_CustomLoadingWidget>
     );
   }
 }
+
+/// Adds the physical bottom system inset to a scroll view's content padding.
+///
+/// Full-screen page scrollables should use this together with
+/// `SafeArea(bottom: false)`: the viewport can then extend behind the gesture
+/// navigation handle, while the final item can still scroll to a safe resting
+/// position above it.
+EdgeInsets edgeToEdgeScrollPadding(BuildContext context, EdgeInsets padding) {
+  return padding.copyWith(
+    bottom: padding.bottom + MediaQuery.viewPaddingOf(context).bottom,
+  );
+}

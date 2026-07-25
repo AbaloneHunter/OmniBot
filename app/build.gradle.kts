@@ -87,7 +87,7 @@ android {
     defaultConfig {
         applicationId = "cn.com.omnimind.bot"
         minSdk = 29
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "0.5.6.11"
         buildConfigField("String", "IMAGE_BASE_URL", buildConfigString(omnibotImageBaseUrl))

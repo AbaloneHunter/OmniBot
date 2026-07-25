@@ -787,13 +787,17 @@ class _TermuxSettingPageState extends State<TermuxSettingPage>
       ),
       body: SafeArea(
         top: false,
+        bottom: false,
         child: RefreshIndicator(
           onRefresh: () async {
             await _refreshInventory();
             await _refreshAutoStartTasks();
           },
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            padding: edgeToEdgeScrollPadding(
+              context,
+              const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            ),
             children: [
               _buildDistributionCard(),
               const SizedBox(height: 14),
