@@ -53,6 +53,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
@@ -111,6 +112,23 @@ internal class LocalAcpRuntime(
      * teardown, so it has to be idempotent.
      */
     private val finishedTurns = ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * Wall-clock time of the last session update seen for an in-flight turn.
+     *
+     * ACP closes a turn with the `session/prompt` *response* (carrying the stop
+     * reason), and the SDK's prompt flow only completes when that response
+     * arrives. At least one adapter (codex-acp / MiMo Code) streams its full
+     * answer as session updates and then never sends the response, leaving the
+     * flow — and therefore the prompt job's `finally` — suspended forever. The
+     * turn stays "running" in the UI indefinitely.
+     *
+     * The stall watchdog uses this timestamp to detect that situation: a turn
+     * that has produced nothing for [STALL_DEADLINE_MS] is finalized
+     * synthetically. Adapters that send the response complete normally first,
+     * so this only ever fires for a genuinely stalled flow.
+     */
+    private val lastTurnActivityAt = ConcurrentHashMap<String, Long>()
 
     /**
      * Threads currently inside a `session/load` call. Per the ACP spec the
@@ -843,11 +861,14 @@ internal class LocalAcpRuntime(
             var failure: Throwable? = null
             try {
                 session.prompt(blocks).collect { event ->
+                    lastTurnActivityAt[threadId] = System.currentTimeMillis()
                     when (event) {
                         is Event.SessionUpdateEvent ->
                             handleSessionUpdate(threadId, turnId, event.update)
-                        is Event.PromptResponseEvent ->
+                        is Event.PromptResponseEvent -> {
                             stopReason = event.response.stopReason.name.lowercase()
+                            Log.i(TAG, "ACP prompt response for turn=$turnId stopReason=$stopReason")
+                        }
                     }
                 }
             } catch (error: CancellationException) {
@@ -872,7 +893,31 @@ internal class LocalAcpRuntime(
             }
         }
         promptJobs[threadId] = job
+        lastTurnActivityAt[threadId] = System.currentTimeMillis()
         job.start()
+        // Guards against an adapter that streams its answer and then never
+        // sends the `session/prompt` response (see [lastTurnActivityAt]). The
+        // watchdog cancels itself as soon as the prompt job ends for any other
+        // reason, so it only ever finalizes a genuinely stalled turn.
+        val watchdog = scope.launch(start = CoroutineStart.LAZY) {
+            while (true) {
+                delay(STALL_CHECK_INTERVAL_MS)
+                val last = lastTurnActivityAt[threadId] ?: return@launch
+                if (System.currentTimeMillis() - last >= STALL_DEADLINE_MS) {
+                    Log.w(
+                        TAG,
+                        "ACP turn=$turnId on session=$threadId produced no updates for " +
+                            "$STALL_DEADLINE_MS ms; finalizing because the adapter did not " +
+                            "send a session/prompt response."
+                    )
+                    finishTurn(threadId = threadId, turnId = turnId, status = "end_turn")
+                    runCatching { job.cancelAndJoin() }
+                    return@launch
+                }
+            }
+        }
+        job.invokeOnCompletion { watchdog.cancel() }
+        watchdog.start()
         return linkedMapOf(
             "threadId" to threadId,
             "turnId" to turnId,
@@ -900,6 +945,7 @@ internal class LocalAcpRuntime(
         if (!finishedTurns.add(turnId)) return
         activeTurnIds.remove(threadId, turnId)
         lastTurnIds[threadId] = turnId
+        lastTurnActivityAt.remove(threadId)
         withContext(NonCancellable) {
             if (error == null) {
                 emit(
@@ -1457,6 +1503,15 @@ internal class LocalAcpRuntime(
         private const val INITIALIZE_TIMEOUT_MS = 90_000L
         private const val COMMAND_PROBE_TIMEOUT_MS = 20_000L
         private const val MAX_FILE_LINES = 20_000
+
+        // How long a turn may stay silent before the stall watchdog finalizes
+        // it. Picked well above the longest gap a healthy turn produces between
+        // updates — a tool that runs for a while still emits output deltas, so
+        // a gap this wide means the adapter stopped without sending the
+        // `session/prompt` response. Lower recovers stuck turns faster but
+        // risks cutting off a slow one; 120 s is the conservative default.
+        private const val STALL_DEADLINE_MS = 120_000L
+        private const val STALL_CHECK_INTERVAL_MS = 15_000L
     }
 }
 
