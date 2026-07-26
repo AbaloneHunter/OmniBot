@@ -1,6 +1,7 @@
 package cn.com.omnimind.baselib.llm
 
 import android.content.Context
+import cn.com.omnimind.baselib.R
 import cn.com.omnimind.baselib.i18n.AppLanguageMode
 import cn.com.omnimind.baselib.i18n.AppLocaleManager
 import cn.com.omnimind.baselib.util.OmniLog
@@ -112,14 +113,10 @@ object ModelSceneRegistry {
                 return emptyMap()
             }
 
-            // 读取 raw 资源
-            val inputStream = context.resources.openRawResource(
-                context.resources.getIdentifier(
-                    "model_scenes_default",
-                    "raw",
-                    context.packageName
-                )
-            )
+            // Keep a compile-time resource reference so Release resource
+            // shrinking can prove that the built-in scene catalog is used.
+            val inputStream =
+                context.resources.openRawResource(R.raw.model_scenes_default)
             val json = inputStream.bufferedReader().use { it.readText() }
             
             // 解析 JSON
