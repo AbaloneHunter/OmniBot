@@ -195,8 +195,15 @@ internal object ConversationSnapshotOrdering {
             return null
         }
         val prefix = normalized.takeWhile(Char::isDigit)
-        return prefix.toLongOrNull()
+        // Legacy task ids begin with an epoch timestamp, while ACP/WebChat
+        // turns use UUIDs. A UUID such as `7abc...` used to be interpreted as
+        // timestamp 7, randomly moving the whole turn ahead of or behind other
+        // turns. Only accept a prefix long enough to be a real epoch value.
+        return prefix.takeIf { it.length >= MIN_TIMESTAMP_PREFIX_LENGTH }
+            ?.toLongOrNull()
     }
+
+    private const val MIN_TIMESTAMP_PREFIX_LENGTH = 10
 
     private fun comparePreparedMessages(
         left: PreparedMessage,

@@ -2535,7 +2535,8 @@ class _AgentQuestion {
 }
 
 bool _isReasoningMethod(String method) {
-  return method == 'item/reasoning/summaryPartAdded' ||
+  return method == 'item/reasoning/delta' ||
+      method == 'item/reasoning/summaryPartAdded' ||
       method == 'item/reasoning/summaryTextDelta' ||
       method == 'item/reasoning/textDelta';
 }
