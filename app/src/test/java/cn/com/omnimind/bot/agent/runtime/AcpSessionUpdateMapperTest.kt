@@ -42,6 +42,18 @@ class AcpSessionUpdateMapperTest {
     }
 
     @Test
+    fun agentThoughtChunkUsesTheReasoningDeltaContract() {
+        val event = SessionUpdate.AgentThoughtChunk(
+            content = ContentBlock.Text("先检查消息顺序"),
+            messageId = MessageId("msg_thinking")
+        ).toAcpUiEvent("thread-1")
+
+        assertEquals("item/reasoning/delta", event?.method)
+        assertEquals("msg_thinking", event?.params?.get("itemId"))
+        assertEquals("先检查消息顺序", event?.params?.get("delta"))
+    }
+
+    @Test
     fun toolCallUpdateOnlyCompletesOnATerminalStatus() {
         fun methodFor(status: ToolCallStatus?): String? = SessionUpdate.ToolCallUpdate(
             toolCallId = ToolCallId("call-1"),

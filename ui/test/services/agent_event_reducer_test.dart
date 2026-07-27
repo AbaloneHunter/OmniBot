@@ -116,6 +116,30 @@ void main() {
     expect(cardData['isLoading'], isTrue);
   });
 
+  test('maps ACP agent thought chunks into deep thinking card', () {
+    final result = reducer.reduce(
+      runtime: runtime,
+      event: {
+        'turnId': 'turn-claude',
+        'message': {
+          'method': 'item/reasoning/delta',
+          'params': {
+            'turnId': 'turn-claude',
+            'itemId': 'claude-message-1',
+            'delta': '先确认用户消息与当前轮次',
+          },
+        },
+      },
+    );
+
+    expect(result.handled, isTrue);
+    final message = runtime.messages.single;
+    expect(message.id, 'claude-message-1-agent-thinking');
+    expect(message.cardData?['type'], 'deep_thinking');
+    expect(message.cardData?['taskID'], 'turn-claude');
+    expect(message.cardData?['thinkingContent'], '先确认用户消息与当前轮次');
+  });
+
   test('maps command output deltas into terminal tool card', () {
     reducer.reduce(
       runtime: runtime,

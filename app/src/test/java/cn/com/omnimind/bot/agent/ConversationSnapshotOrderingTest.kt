@@ -387,6 +387,45 @@ class ConversationSnapshotOrderingTest {
         )
     }
 
+    @Test
+    fun `prepareForStorage does not treat uuid prefixes as timestamps`() {
+        val messages = listOf(
+            assistantMessage(
+                id = "1fedcba0-0000-0000-0000-000000000000-agent-message",
+                createAt = "2026-07-26T08:52:03.000",
+                text = "第二轮助手"
+            ),
+            userMessage(
+                id = "1aaaaaa0-0000-0000-0000-000000000000-user",
+                createAt = "2026-07-26T08:52:02.000",
+                text = "第二轮用户"
+            ),
+            assistantMessage(
+                id = "9fedcba0-0000-0000-0000-000000000000-agent-message",
+                createAt = "2026-07-26T08:52:01.000",
+                text = "第一轮助手"
+            ),
+            userMessage(
+                id = "9aaaaaa0-0000-0000-0000-000000000000-user",
+                createAt = "2026-07-26T08:52:00.000",
+                text = "第一轮用户"
+            )
+        )
+
+        val orderedIds = ConversationSnapshotOrdering.prepareForStorage(messages)
+            .map { it.payload["id"] }
+
+        assertEquals(
+            listOf(
+                "9aaaaaa0-0000-0000-0000-000000000000-user",
+                "9fedcba0-0000-0000-0000-000000000000-agent-message",
+                "1aaaaaa0-0000-0000-0000-000000000000-user",
+                "1fedcba0-0000-0000-0000-000000000000-agent-message"
+            ),
+            orderedIds
+        )
+    }
+
     private fun userMessage(
         id: String,
         createAt: String,

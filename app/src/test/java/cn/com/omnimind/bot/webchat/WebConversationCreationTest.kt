@@ -93,7 +93,7 @@ class WebConversationCreationTest {
             "thinking",
             parseWebAgentEvent(
                 mapOf(
-                    "method" to "item/reasoning/textDelta",
+                    "method" to "item/reasoning/delta",
                     "turnId" to "turn-1",
                     "params" to mapOf(
                         "itemId" to "reasoning-1",
