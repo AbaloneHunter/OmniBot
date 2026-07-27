@@ -353,7 +353,10 @@ class _StorageUsagePageState extends State<StorageUsagePage> {
               color: palette.accentPrimary,
               onRefresh: _loadSummary,
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+                padding: edgeToEdgeScrollPadding(
+                  context,
+                  const EdgeInsets.fromLTRB(18, 12, 18, 24),
+                ),
                 children: [
                   SettingsSectionTitle(
                     label: _t(context, '存储概览', 'Storage overview'),

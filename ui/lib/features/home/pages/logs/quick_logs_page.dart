@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
 import 'package:ui/services/quick_log_service.dart';
 import 'package:ui/theme/theme_context.dart';
+import 'package:ui/utils/ui.dart';
 import 'package:ui/widgets/common_app_bar.dart';
 
 class QuickLogsPage extends StatefulWidget {
@@ -55,7 +56,10 @@ class _QuickLogsPageState extends State<QuickLogsPage> {
         _isLoading = false;
       });
       _showMessage(
-        _t('\u52a0\u8f7d\u65e5\u5fd7\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5', 'Failed to load logs. Please try again.'),
+        _t(
+          '\u52a0\u8f7d\u65e5\u5fd7\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5',
+          'Failed to load logs. Please try again.',
+        ),
       );
     }
   }
@@ -64,7 +68,10 @@ class _QuickLogsPageState extends State<QuickLogsPage> {
     final content = _composerController.text.trim();
     if (content.isEmpty) {
       _showMessage(
-        _t('\u5148\u5199\u70b9\u5185\u5bb9\u518d\u4fdd\u5b58\u5427', 'Write something before saving.'),
+        _t(
+          '\u5148\u5199\u70b9\u5185\u5bb9\u518d\u4fdd\u5b58\u5427',
+          'Write something before saving.',
+        ),
       );
       return;
     }
@@ -85,7 +92,10 @@ class _QuickLogsPageState extends State<QuickLogsPage> {
     } catch (_) {
       if (!mounted) return;
       _showMessage(
-        _t('\u4fdd\u5b58\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5', 'Save failed. Please try again.'),
+        _t(
+          '\u4fdd\u5b58\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5',
+          'Save failed. Please try again.',
+        ),
       );
     } finally {
       if (mounted) {
@@ -108,7 +118,10 @@ class _QuickLogsPageState extends State<QuickLogsPage> {
             controller: controller,
             maxLines: 6,
             decoration: InputDecoration(
-              hintText: _t('\u4fee\u6539\u8fd9\u6761\u65e5\u5fd7', 'Update this log'),
+              hintText: _t(
+                '\u4fee\u6539\u8fd9\u6761\u65e5\u5fd7',
+                'Update this log',
+              ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: BorderSide(color: palette.accentPrimary),
@@ -124,7 +137,8 @@ class _QuickLogsPageState extends State<QuickLogsPage> {
               child: Text(_t('\u53d6\u6d88', 'Cancel')),
             ),
             FilledButton(
-              onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+              onPressed: () =>
+                  Navigator.of(context).pop(controller.text.trim()),
               child: Text(_t('\u4fdd\u5b58', 'Save')),
             ),
           ],
@@ -143,7 +157,10 @@ class _QuickLogsPageState extends State<QuickLogsPage> {
     } catch (_) {
       if (!mounted) return;
       _showMessage(
-        _t('\u66f4\u65b0\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5', 'Update failed. Please try again.'),
+        _t(
+          '\u66f4\u65b0\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5',
+          'Update failed. Please try again.',
+        ),
       );
     }
   }
@@ -153,7 +170,12 @@ class _QuickLogsPageState extends State<QuickLogsPage> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text(_t('\u5220\u9664\u8fd9\u6761\u65e5\u5fd7\uff1f', 'Delete this log?')),
+          title: Text(
+            _t(
+              '\u5220\u9664\u8fd9\u6761\u65e5\u5fd7\uff1f',
+              'Delete this log?',
+            ),
+          ),
           content: Text(
             _t(
               '\u5df2\u540c\u6b65\u5230\u77ed\u671f\u8bb0\u5fc6\u7684\u5185\u5bb9\u4e0d\u4f1a\u56de\u6eda\uff0c\u4f46\u8fd9\u6761\u65e5\u5fd7\u4f1a\u4ece\u5217\u8868\u79fb\u9664\u3002',
@@ -184,7 +206,10 @@ class _QuickLogsPageState extends State<QuickLogsPage> {
     } catch (_) {
       if (!mounted) return;
       _showMessage(
-        _t('\u5220\u9664\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5', 'Delete failed. Please try again.'),
+        _t(
+          '\u5220\u9664\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5',
+          'Delete failed. Please try again.',
+        ),
       );
     }
   }
@@ -196,9 +221,9 @@ class _QuickLogsPageState extends State<QuickLogsPage> {
   }
 
   String _formatTime(int millis) {
-    return DateFormat('yyyy-MM-dd HH:mm').format(
-      DateTime.fromMillisecondsSinceEpoch(millis),
-    );
+    return DateFormat(
+      'yyyy-MM-dd HH:mm',
+    ).format(DateTime.fromMillisecondsSinceEpoch(millis));
   }
 
   String _sourceLabel(String source) {
@@ -231,7 +256,10 @@ class _QuickLogsPageState extends State<QuickLogsPage> {
         onRefresh: _loadLogs,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          padding: edgeToEdgeScrollPadding(
+            context,
+            const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          ),
           children: [
             Container(
               padding: const EdgeInsets.all(18),
@@ -249,7 +277,9 @@ class _QuickLogsPageState extends State<QuickLogsPage> {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0EA5E9).withValues(alpha: 0.12),
+                          color: const Color(
+                            0xFF0EA5E9,
+                          ).withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: const Icon(
@@ -263,7 +293,10 @@ class _QuickLogsPageState extends State<QuickLogsPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              _t('\u968f\u624b\u8bb0\u4e00\u6761', 'Capture a quick note'),
+                              _t(
+                                '\u968f\u624b\u8bb0\u4e00\u6761',
+                                'Capture a quick note',
+                              ),
                               style: TextStyle(
                                 fontSize: 17,
                                 fontWeight: FontWeight.w700,
@@ -518,7 +551,9 @@ class _QuickLogCard extends StatelessWidget {
             children: [
               _QuickLogTag(
                 label: sourceLabel,
-                backgroundColor: const Color(0xFF0EA5E9).withValues(alpha: 0.12),
+                backgroundColor: const Color(
+                  0xFF0EA5E9,
+                ).withValues(alpha: 0.12),
                 textColor: const Color(0xFF0284C7),
               ),
               _QuickLogTag(

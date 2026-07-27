@@ -569,7 +569,10 @@ class _AiRequestLogsPageState extends State<AiRequestLogsPage> {
       onRefresh: _loadLogs,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
+        padding: edgeToEdgeScrollPadding(
+          context,
+          const EdgeInsets.fromLTRB(18, 10, 18, 28),
+        ),
         children: [
           if (_logs.isNotEmpty) ...[
             _buildOverviewSection(context),

@@ -746,6 +746,7 @@ class CodexRemoteWorkspaceBrowserState
     final palette = context.omniPalette;
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
+      padding: edgeToEdgeScrollPadding(context, EdgeInsets.zero),
       children: [
         SizedBox(
           height: 280,
@@ -811,7 +812,10 @@ class CodexRemoteWorkspaceBrowserState
             )
           : ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              padding: edgeToEdgeScrollPadding(
+                context,
+                const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              ),
               itemCount: itemCount,
               itemBuilder: (context, index) {
                 final isFirst = index == 0;

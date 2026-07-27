@@ -721,6 +721,8 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
       backgroundColor: palette.pageBackground,
       appBar: CommonAppBar(title: _title, primary: true),
       body: SafeArea(
+        top: false,
+        bottom: false,
         child: RefreshIndicator(onRefresh: _loadSessions, child: _buildBody()),
       ),
     );
@@ -742,7 +744,10 @@ class _AgentSessionsPageState extends State<AgentSessionsPage> {
     final visibleSessions = _filteredSessions;
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 32),
+      padding: edgeToEdgeScrollPadding(
+        context,
+        const EdgeInsets.fromLTRB(18, 12, 18, 32),
+      ),
       children: [
         _buildOverviewPanel(),
         if (_error != null) ...[
@@ -1468,6 +1473,7 @@ class _AgentSessionWorkspacePage extends StatelessWidget {
       appBar: CommonAppBar(title: title, primary: true),
       body: SafeArea(
         top: false,
+        bottom: false,
         child: CodexRemoteWorkspaceBrowser(
           workspacePath: workspacePath,
           remoteBridgeUrl: remoteBridgeUrl,

@@ -253,6 +253,7 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
       ),
       body: SafeArea(
         top: false,
+        bottom: false,
         child: _loading
             ? const Center(child: CircularProgressIndicator())
             : _error != null && (_catalog?.agents.isEmpty ?? true)
@@ -273,7 +274,10 @@ class _AgentModeSettingPageState extends State<AgentModeSettingPage> {
                 ),
               )
             : ListView(
-                padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
+                padding: edgeToEdgeScrollPadding(
+                  context,
+                  const EdgeInsets.fromLTRB(18, 12, 18, 28),
+                ),
                 children: [
                   SettingsSectionTitle(
                     label: _text('托管 Agent', 'Managed Agents'),
@@ -767,10 +771,7 @@ class _RemoteBridgeCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: palette.textTertiary,
-              ),
+              Icon(Icons.chevron_right_rounded, color: palette.textTertiary),
             ],
           ),
         ),

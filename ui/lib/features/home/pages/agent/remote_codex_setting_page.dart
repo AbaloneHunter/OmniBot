@@ -327,10 +327,14 @@ class _RemoteCodexSettingPageState extends State<RemoteCodexSettingPage> {
       ),
       body: SafeArea(
         top: false,
+        bottom: false,
         child: _loading
             ? const Center(child: CircularProgressIndicator())
             : ListView(
-                padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
+                padding: edgeToEdgeScrollPadding(
+                  context,
+                  const EdgeInsets.fromLTRB(18, 12, 18, 28),
+                ),
                 children: [
                   SettingsSectionTitle(
                     label: _text('Codex 远程运行', 'Remote Codex runtime'),

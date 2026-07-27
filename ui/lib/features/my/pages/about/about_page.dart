@@ -703,36 +703,38 @@ class _AboutPageState extends State<AboutPage> {
       ),
       body: SafeArea(
         top: false,
+        bottom: false,
         child: LayoutBuilder(
           builder: (context, constraints) {
             final compact = constraints.maxHeight < 760;
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                24,
-                compact ? 8 : 18,
-                24,
-                compact ? 12 : 22,
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        SizedBox(height: compact ? 4 : 12),
-                        _buildHero(compact),
-                        SizedBox(height: compact ? 16 : 20),
-                        _buildUpdateSection(
-                          compact,
-                          updateButtonGradient,
-                          updateButtonTextColor,
-                        ),
-                        SizedBox(height: compact ? 18 : 24),
-                        _buildPreferenceSection(compact),
-                        SizedBox(height: compact ? 8 : 16),
-                      ],
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 468),
+                child: SingleChildScrollView(
+                  padding: edgeToEdgeScrollPadding(
+                    context,
+                    EdgeInsets.fromLTRB(
+                      24,
+                      compact ? 8 : 18,
+                      24,
+                      compact ? 12 : 22,
                     ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(height: compact ? 4 : 12),
+                      _buildHero(compact),
+                      SizedBox(height: compact ? 16 : 20),
+                      _buildUpdateSection(
+                        compact,
+                        updateButtonGradient,
+                        updateButtonTextColor,
+                      ),
+                      SizedBox(height: compact ? 18 : 24),
+                      _buildPreferenceSection(compact),
+                      SizedBox(height: compact ? 8 : 16),
+                    ],
                   ),
                 ),
               ),

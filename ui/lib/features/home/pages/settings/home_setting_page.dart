@@ -143,8 +143,13 @@ class _HomeSettingPageState extends State<HomeSettingPage> {
       backgroundColor: palette.pageBackground,
       appBar: CommonAppBar(title: context.trLegacy('首页设置'), primary: true),
       body: SafeArea(
+        top: false,
+        bottom: false,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
+          padding: edgeToEdgeScrollPadding(
+            context,
+            const EdgeInsets.fromLTRB(18, 10, 18, 28),
+          ),
           children: [
             _buildSectionTitle(context.trLegacy('首页问候')),
             _SettingSurface(

@@ -601,7 +601,7 @@ class _ScheduledTaskListPageState extends State<ScheduledTaskListPage> {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: edgeToEdgeScrollPadding(context, const EdgeInsets.all(16)),
       itemCount: _exactAlarms.length,
       itemBuilder: (context, index) {
         final alarm = _exactAlarms[index];
@@ -697,7 +697,7 @@ class _ScheduledTaskListPageState extends State<ScheduledTaskListPage> {
 
   Widget _buildTaskList() {
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: edgeToEdgeScrollPadding(context, const EdgeInsets.all(16)),
       itemCount: _scheduledTasks.length,
       itemBuilder: (context, index) {
         final task = _scheduledTasks[index];

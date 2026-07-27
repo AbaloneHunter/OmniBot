@@ -62,8 +62,7 @@ class _PermissionGuideDetailPageState extends State<PermissionGuideDetailPage> {
     final topic = _topic!;
     final brandInfo = PermissionGuideRepository.brandInfo(_selectedBrand);
     final steps = topic.stepsFor(_selectedBrand);
-    final brands = PermissionGuideRepository
-        .selectableBrands()
+    final brands = PermissionGuideRepository.selectableBrands()
         .where((brand) => topic.supportsBrand(brand.id))
         .toList(growable: false);
 
@@ -72,48 +71,52 @@ class _PermissionGuideDetailPageState extends State<PermissionGuideDetailPage> {
       appBar: CommonAppBar(title: topic.title, primary: true),
       body: SafeArea(
         top: false,
+        bottom: false,
         child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                children: [
-                  _buildSummaryCard(topic, brandInfo),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final brand in brands)
-                        ChoiceChip(
-                          label: Text(brand.name),
-                          selected: brand.id == _selectedBrand,
-                          selectedColor: const Color(0xFFE8F2FF),
-                          backgroundColor: Colors.white,
-                          side: BorderSide(
-                            color: brand.id == _selectedBrand
-                                ? AppColors.buttonPrimary
-                                : Colors.transparent,
-                          ),
-                          labelStyle: TextStyle(
-                            color: brand.id == _selectedBrand
-                                ? AppColors.buttonPrimary
-                                : AppColors.text,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          onSelected: (_) {
-                            setState(() {
-                              _selectedBrand = brand.id;
-                            });
-                          },
-                        ),
-                    ],
+          padding: edgeToEdgeScrollPadding(
+            context,
+            const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          ),
+          children: [
+            _buildSummaryCard(topic, brandInfo),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final brand in brands)
+                  ChoiceChip(
+                    label: Text(brand.name),
+                    selected: brand.id == _selectedBrand,
+                    selectedColor: const Color(0xFFE8F2FF),
+                    backgroundColor: Colors.white,
+                    side: BorderSide(
+                      color: brand.id == _selectedBrand
+                          ? AppColors.buttonPrimary
+                          : Colors.transparent,
+                    ),
+                    labelStyle: TextStyle(
+                      color: brand.id == _selectedBrand
+                          ? AppColors.buttonPrimary
+                          : AppColors.text,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    onSelected: (_) {
+                      setState(() {
+                        _selectedBrand = brand.id;
+                      });
+                    },
                   ),
-                  const SizedBox(height: 16),
-                  for (var i = 0; i < steps.length; i++) ...[
-                    _buildStepCard(i + 1, steps[i]),
-                    const SizedBox(height: 12),
-                  ],
-                ],
-              ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            for (var i = 0; i < steps.length; i++) ...[
+              _buildStepCard(i + 1, steps[i]),
+              const SizedBox(height: 12),
+            ],
+          ],
+        ),
       ),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -160,11 +163,7 @@ class _PermissionGuideDetailPageState extends State<PermissionGuideDetailPage> {
               borderRadius: BorderRadius.circular(14),
             ),
             alignment: Alignment.center,
-            child: SvgPicture.asset(
-              topic.iconPath,
-              width: 26,
-              height: 26,
-            ),
+            child: SvgPicture.asset(topic.iconPath, width: 26, height: 26),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -280,10 +279,7 @@ class _PermissionGuideDetailPageState extends State<PermissionGuideDetailPage> {
                     alignment: Alignment.center,
                     child: const Text(
                       '示意图暂不可用',
-                      style: TextStyle(
-                        color: AppColors.text70,
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: AppColors.text70, fontSize: 12),
                     ),
                   );
                 },

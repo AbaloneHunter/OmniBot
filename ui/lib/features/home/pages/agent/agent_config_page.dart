@@ -310,12 +310,16 @@ class _AgentConfigPageState extends State<AgentConfigPage> {
         ),
         body: SafeArea(
           top: false,
+          bottom: false,
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : _error != null && _agent == null
               ? _ErrorState(error: _error!, onRetry: _load)
               : ListView(
-                  padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
+                  padding: edgeToEdgeScrollPadding(
+                    context,
+                    const EdgeInsets.fromLTRB(18, 12, 18, 28),
+                  ),
                   children: [
                     SettingsSectionTitle(
                       label: _pageTitle,

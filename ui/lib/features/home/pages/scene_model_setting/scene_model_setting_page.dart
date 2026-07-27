@@ -1292,10 +1292,14 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
       ),
       body: SafeArea(
         top: false,
+        bottom: false,
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : ListView(
-                padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+                padding: edgeToEdgeScrollPadding(
+                  context,
+                  const EdgeInsets.fromLTRB(18, 12, 18, 24),
+                ),
                 children: [
                   SettingsSectionTitle(
                     label: context.l10n.sceneModelMapping,

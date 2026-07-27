@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ui/utils/ui.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
@@ -47,9 +48,9 @@ class DetailContent extends StatelessWidget {
               letterSpacing: AppTextStyles.letterSpacingWide,
             ),
           ),
-          
+
           const SizedBox(height: 10),
-          
+
           // 应用标签和时间
           Row(
             children: [
@@ -58,7 +59,7 @@ class DetailContent extends StatelessWidget {
                 child: Row(
                   children: [
                     // 渲染tags中的数据
-                    if (tags != null && tags!.isNotEmpty)...[
+                    if (tags != null && tags!.isNotEmpty) ...[
                       Wrap(
                         spacing: 6,
                         runSpacing: 6,
@@ -71,20 +72,12 @@ class DetailContent extends StatelessWidget {
                           );
                         }).toList(),
                       ),
-                    ] else if(appName != null && appName!.isNotEmpty)... [
+                    ] else if (appName != null && appName!.isNotEmpty) ...[
                       if (appSvgPath != null) ...[
-                        SvgPicture.asset(
-                          appSvgPath!,
-                          width: 14,
-                          height: 14,
-                        ),
+                        SvgPicture.asset(appSvgPath!, width: 14, height: 14),
                         const SizedBox(width: 4),
-                      ] else if (appIconProvider != null)...[
-                        Image(
-                          image: appIconProvider!,
-                          width: 14,
-                          height: 14,
-                        ),
+                      ] else if (appIconProvider != null) ...[
+                        Image(image: appIconProvider!, width: 14, height: 14),
                         const SizedBox(width: 4),
                       ],
                       Text(
@@ -98,11 +91,7 @@ class DetailContent extends StatelessWidget {
                         ),
                       ),
                     ] else ...[
-                      Icon(
-                        Icons.apps,
-                        size: 14,
-                        color: Color(0xFF666666),
-                      ),
+                      Icon(Icons.apps, size: 14, color: Color(0xFF666666)),
                       const SizedBox(width: 2),
                       Text(
                         '未知应用',
@@ -140,14 +129,18 @@ class DetailContent extends StatelessWidget {
               const AiGeneratedBadge(),
             ],
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // 正文内容
           Expanded(
             child: SingleChildScrollView(
+              padding: edgeToEdgeScrollPadding(
+                context,
+                const EdgeInsets.only(bottom: 25),
+              ),
               child: Padding(
-                padding: const EdgeInsets.only(bottom: 25),
+                padding: EdgeInsets.zero,
                 child: MarkdownBody(
                   data: content,
                   styleSheet: MarkdownStyleSheet(
@@ -218,10 +211,7 @@ class DetailContent extends StatelessWidget {
                     blockquoteDecoration: BoxDecoration(
                       color: AppColors.text10,
                       border: Border(
-                        left: BorderSide(
-                          color: AppColors.text20,
-                          width: 4,
-                        ),
+                        left: BorderSide(color: AppColors.text20, width: 4),
                       ),
                     ),
                     listBullet: TextStyle(
@@ -234,7 +224,7 @@ class DetailContent extends StatelessWidget {
                     listBulletPadding: const EdgeInsets.only(right: 8),
                   ),
                 ),
-              )
+              ),
             ),
           ),
         ],
