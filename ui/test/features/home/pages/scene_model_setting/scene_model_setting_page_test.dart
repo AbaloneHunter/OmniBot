@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -8,6 +9,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ui/features/home/pages/agent/remote_codex_setting_page.dart';
 import 'package:ui/features/home/pages/scene_model_setting/scene_model_setting_page.dart';
 import 'package:ui/l10n/generated/app_localizations.dart';
+import 'package:ui/services/model_provider_config_service.dart';
+import 'package:ui/services/models_dev_catalog_service.dart';
 import 'package:ui/services/storage_service.dart';
 import 'package:ui/services/voice_playback_coordinator.dart';
 import 'package:ui/theme/app_theme.dart';
@@ -32,6 +35,22 @@ class _SvgTestAssetBundle extends CachingAssetBundle {
   }
 }
 
+const _modelsDevCatalogJson = '''
+{
+  "custom": {
+    "id": "custom",
+    "name": "Custom",
+    "models": {
+      "scene-model": {
+        "id": "scene-model",
+        "name": "Scene Model",
+        "limit": {"context": 128000}
+      }
+    }
+  }
+}
+''';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -53,12 +72,14 @@ void main() {
   late Map<String, dynamic> codexReadConfig;
   late Map<String, dynamic>? savedCodexConfig;
   late int codexWriteCount;
+  late bool providerConfigured;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     await StorageService.init();
     await VoicePlaybackCoordinator.instance.debugResetForTest();
     codexWriteCount = 0;
+    providerConfigured = true;
     savedCodexConfig = null;
     codexReadConfig = <String, dynamic>{
       'remoteEnabled': true,
@@ -123,7 +144,7 @@ void main() {
                     'name': 'Provider One',
                     'baseUrl': 'https://example.com/v1',
                     'apiKey': 'secret',
-                    'configured': true,
+                    'configured': providerConfigured,
                     'protocolType': 'openai_compatible',
                   },
                 ],
@@ -164,7 +185,53 @@ void main() {
         .setMockMethodCallHandler(channel, null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(agentRuntimeChannel, null);
+    ModelsDevCatalogService.resetForTesting();
     await VoicePlaybackCoordinator.instance.debugResetForTest();
+  });
+
+  testWidgets('scene page does not wait for metadata refresh', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    providerConfigured = false;
+    await ModelProviderConfigService.saveCachedFetchedModels(
+      profileId: 'provider-1',
+      apiBase: 'https://example.com/v1',
+      models: const [
+        ProviderModelOption(id: 'scene-model', displayName: 'scene-model'),
+      ],
+    );
+    final loader = Completer<ModelsDevCatalog>();
+    addTearDown(() {
+      if (!loader.isCompleted) {
+        loader.complete(const ModelsDevCatalog(providers: {}));
+      }
+    });
+    var loadCount = 0;
+    ModelsDevCatalogService.setCatalogLoaderForTesting(() {
+      loadCount += 1;
+      return loader.future;
+    });
+
+    await tester.pumpWidget(buildTestApp(const SceneModelSettingPage()));
+    for (var index = 0; index < 6; index++) {
+      await tester.pump(const Duration(milliseconds: 1));
+    }
+
+    expect(find.byType(ListView), findsWidgets);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.text('Voice'), findsOneWidget);
+    expect(loadCount, 1);
+
+    loader.complete(
+      ModelsDevCatalogService.parseCatalog(_modelsDevCatalogJson),
+    );
+    for (var index = 0; index < 4; index++) {
+      await tester.pump(const Duration(milliseconds: 1));
+    }
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('voice scene expands and saves voice settings', (tester) async {

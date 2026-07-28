@@ -756,9 +756,9 @@ class ModelProviderConfigService {
   static Future<List<ProviderModelOption>> getStoredModelOptionsForProfile(
     String profileId, {
     ModelProviderProfileSummary? profile,
+    bool enrichMetadata = true,
   }) async {
     final normalizedProfileId = _canonicalProfileId(profileId);
-    final resolvedProfile = profile ?? await _findProfileById(profileId);
     final manualModelIds = await getManualModelIds(
       profileId: normalizedProfileId,
     );
@@ -769,6 +769,10 @@ class ModelProviderConfigService {
       remoteModels: remoteModels,
       manualModelIds: manualModelIds,
     );
+    if (!enrichMetadata || merged.isEmpty) {
+      return merged;
+    }
+    final resolvedProfile = profile ?? await _findProfileById(profileId);
     return enrichModelsForProfile(
       profileId: normalizedProfileId,
       providerName: resolvedProfile?.name ?? '',

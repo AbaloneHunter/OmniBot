@@ -653,19 +653,30 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
             profileId: editingProfile.id,
           );
       final storedModels = await Future.wait<dynamic>([
-        _loadManualModelsForProfile(editingProfile, manualModelIds),
-        _loadRemoteModelsForProfile(editingProfile),
+        _loadManualModelsForProfile(
+          editingProfile,
+          manualModelIds,
+          enrichMetadata: false,
+        ),
+        _loadRemoteModelsForProfile(editingProfile, enrichMetadata: false),
       ]);
       if (!mounted) return;
 
+      final manualModels = storedModels[0] as List<ProviderModelOption>;
+      final remoteModels = storedModels[1] as List<ProviderModelOption>;
       _applyProfile(
         profiles: payload.profiles,
         editingProfileId: editingProfile.id,
         manualModelIds: manualModelIds,
         hiddenChatModelIds: hiddenChatModelIds,
-        manualModels: storedModels[0] as List<ProviderModelOption>,
-        remoteModels: storedModels[1] as List<ProviderModelOption>,
+        manualModels: manualModels,
+        remoteModels: remoteModels,
         syncControllers: true,
+      );
+      _scheduleMetadataRefresh(
+        profile: editingProfile,
+        manualModels: manualModels,
+        remoteModels: remoteModels,
       );
     } catch (_) {
       if (!mounted) return;
@@ -726,19 +737,24 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
   }
 
   Future<List<ProviderModelOption>> _loadRemoteModelsForProfile(
-    ModelProviderProfileSummary profile,
-  ) async {
+    ModelProviderProfileSummary profile, {
+    bool enrichMetadata = true,
+  }) async {
     final cached = await ModelProviderConfigService.getCachedFetchedModels(
       profileId: profile.id,
       apiBase: profile.baseUrl,
     );
+    if (!enrichMetadata) {
+      return cached;
+    }
     return _enrichModelsForProfile(profile, cached);
   }
 
   Future<List<ProviderModelOption>> _loadManualModelsForProfile(
     ModelProviderProfileSummary profile,
-    List<String> manualModelIds,
-  ) {
+    List<String> manualModelIds, {
+    bool enrichMetadata = true,
+  }) {
     final manualModels = manualModelIds
         .map(
           (modelId) => ProviderModelOption(
@@ -748,6 +764,9 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
           ),
         )
         .toList();
+    if (!enrichMetadata) {
+      return Future<List<ProviderModelOption>>.value(manualModels);
+    }
     return _enrichModelsForProfile(profile, manualModels);
   }
 
@@ -761,6 +780,52 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
       apiBase: profile.baseUrl,
       models: models,
     );
+  }
+
+  void _scheduleMetadataRefresh({
+    required ModelProviderProfileSummary profile,
+    required List<ProviderModelOption> manualModels,
+    required List<ProviderModelOption> remoteModels,
+  }) {
+    if (manualModels.isEmpty && remoteModels.isEmpty) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          _editingProfileId != profile.id ||
+          !identical(_manualModels, manualModels) ||
+          !identical(_remoteModels, remoteModels)) {
+        return;
+      }
+      unawaited(
+        _refreshMetadata(
+          profile: profile,
+          manualModels: manualModels,
+          remoteModels: remoteModels,
+        ),
+      );
+    });
+  }
+
+  Future<void> _refreshMetadata({
+    required ModelProviderProfileSummary profile,
+    required List<ProviderModelOption> manualModels,
+    required List<ProviderModelOption> remoteModels,
+  }) async {
+    final enriched = await Future.wait<List<ProviderModelOption>>([
+      _enrichModelsForProfile(profile, manualModels),
+      _enrichModelsForProfile(profile, remoteModels),
+    ]);
+    if (!mounted ||
+        _editingProfileId != profile.id ||
+        !identical(_manualModels, manualModels) ||
+        !identical(_remoteModels, remoteModels)) {
+      return;
+    }
+    setState(() {
+      _manualModels = enriched[0];
+      _remoteModels = enriched[1];
+    });
   }
 
   String? _buildBaseUrlHelperText(String rawValue) {

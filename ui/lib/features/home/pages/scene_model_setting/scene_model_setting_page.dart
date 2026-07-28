@@ -244,6 +244,8 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
         providerModelsByProfileId[profile.id] =
             await ModelProviderConfigService.getStoredModelOptionsForProfile(
               profile.id,
+              profile: profile,
+              enrichMetadata: false,
             );
       }
 
@@ -260,6 +262,10 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
         _voiceConfig = voiceConfig;
       });
       _syncVoiceControllers(voiceConfig);
+      _scheduleMetadataRefresh(
+        profiles: profilesPayload.profiles,
+        providerModelsByProfileId: enriched,
+      );
       if (refreshProviderModels &&
           _profiles.any((profile) => profile.configured)) {
         unawaited(_refreshProviderModels());
@@ -296,6 +302,60 @@ class _SceneModelSettingPageState extends State<SceneModelSettingPage> {
       }
     }
     return result;
+  }
+
+  void _scheduleMetadataRefresh({
+    required List<ModelProviderProfileSummary> profiles,
+    required Map<String, List<ProviderModelOption>> providerModelsByProfileId,
+  }) {
+    if (!providerModelsByProfileId.values.any((models) => models.isNotEmpty)) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !identical(_providerModelsByProfileId, providerModelsByProfileId)) {
+        return;
+      }
+      unawaited(
+        _refreshMetadata(
+          profiles: profiles,
+          providerModelsByProfileId: providerModelsByProfileId,
+        ),
+      );
+    });
+  }
+
+  Future<void> _refreshMetadata({
+    required List<ModelProviderProfileSummary> profiles,
+    required Map<String, List<ProviderModelOption>> providerModelsByProfileId,
+  }) async {
+    final enrichedEntries =
+        await Future.wait<MapEntry<String, List<ProviderModelOption>>>(
+          profiles.map((profile) async {
+            final models =
+                providerModelsByProfileId[profile.id] ??
+                const <ProviderModelOption>[];
+            return MapEntry(
+              profile.id,
+              await ModelProviderConfigService.enrichModelsForProfile(
+                profileId: profile.id,
+                providerName: profile.name,
+                apiBase: profile.baseUrl,
+                models: models,
+              ),
+            );
+          }),
+        );
+    if (!mounted ||
+        !identical(_providerModelsByProfileId, providerModelsByProfileId)) {
+      return;
+    }
+    setState(() {
+      _providerModelsByProfileId = <String, List<ProviderModelOption>>{
+        ...providerModelsByProfileId,
+        for (final entry in enrichedEntries) entry.key: entry.value,
+      };
+    });
   }
 
   Future<void> _refreshProviderModels() async {

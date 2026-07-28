@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -161,6 +164,65 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('provider page does not wait for metadata refresh', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'manual_provider_model_ids_v2': jsonEncode(<String, List<String>>{
+        'provider-1': <String>['gpt-4o'],
+      }),
+    });
+    await StorageService.init();
+    ModelsDevCatalogService.resetForTesting();
+    final loader = Completer<ModelsDevCatalog>();
+    addTearDown(() {
+      if (!loader.isCompleted) {
+        loader.complete(const ModelsDevCatalog(providers: {}));
+      }
+    });
+    var loadCount = 0;
+    ModelsDevCatalogService.setCatalogLoaderForTesting(() {
+      loadCount += 1;
+      return loader.future;
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        home: const ModelProviderSettingPage(),
+      ),
+    );
+    for (var index = 0; index < 6; index++) {
+      await tester.pump(const Duration(milliseconds: 1));
+    }
+
+    expect(find.byType(ListView), findsWidgets);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('provider-model-gpt-4o')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('provider-model-reasoning-gpt-4o')),
+      findsNothing,
+    );
+    expect(loadCount, 1);
+
+    loader.complete(
+      ModelsDevCatalogService.parseCatalog(_modelsDevCatalogJson),
+    );
+    for (var index = 0; index < 4; index++) {
+      await tester.pump(const Duration(milliseconds: 1));
+    }
+
+    expect(
+      find.byKey(const Key('provider-model-reasoning-gpt-4o')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('provider labels stay bounded on narrow layout', (tester) async {
     tester.view.devicePixelRatio = 1.0;

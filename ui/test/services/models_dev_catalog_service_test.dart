@@ -1,5 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ui/services/models_dev_catalog_service.dart';
+import 'package:ui/services/storage_service.dart';
 
 const _catalogJson = '''
 {
@@ -67,6 +73,53 @@ const _catalogJson = '''
 ''';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  tearDown(ModelsDevCatalogService.resetForTesting);
+
+  test('deduplicates concurrent catalog refreshes', () async {
+    SharedPreferences.setMockInitialValues({});
+    await StorageService.init();
+    final catalog = ModelsDevCatalogService.parseCatalog(_catalogJson);
+    final loader = Completer<ModelsDevCatalog>();
+    var loadCount = 0;
+    ModelsDevCatalogService.setCatalogLoaderForTesting(() {
+      loadCount += 1;
+      return loader.future;
+    });
+
+    final first = ModelsDevCatalogService.loadCatalog();
+    final second = ModelsDevCatalogService.loadCatalog();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(loadCount, 1);
+    loader.complete(catalog);
+    final results = await Future.wait([first, second]);
+    expect(results[0].providers['openai']?.name, 'OpenAI');
+    expect(results[1].providers['openai']?.name, 'OpenAI');
+  });
+
+  test('parses a downloaded catalog off the main isolate', () async {
+    SharedPreferences.setMockInitialValues({});
+    await StorageService.init();
+    final client = MockClient((_) async => http.Response(_catalogJson, 200));
+
+    final catalog = await ModelsDevCatalogService.loadCatalog(client: client);
+
+    expect(catalog.providers['openai']?.findModel('gpt-4o'), isNotNull);
+
+    ModelsDevCatalogService.resetForTesting();
+    var fallbackLoadCount = 0;
+    ModelsDevCatalogService.setCatalogLoaderForTesting(() async {
+      fallbackLoadCount += 1;
+      return const ModelsDevCatalog(providers: {});
+    });
+    final cachedCatalog = await ModelsDevCatalogService.loadCatalog();
+
+    expect(fallbackLoadCount, 0);
+    expect(cachedCatalog.providers['openai']?.findModel('gpt-4o'), isNotNull);
+  });
+
   test('parses models.dev provider and model metadata', () {
     final catalog = ModelsDevCatalogService.parseCatalog(_catalogJson);
     final openai = catalog.providers['openai'];
@@ -115,10 +168,7 @@ void main() {
   test('groups models by vendor via model id patterns', () {
     expect(ModelsDevCatalogService.groupModelId('gpt-4o'), 'openai');
     expect(ModelsDevCatalogService.groupModelId('o3-mini'), 'openai');
-    expect(
-      ModelsDevCatalogService.groupModelId('chatgpt-4o-latest'),
-      'openai',
-    );
+    expect(ModelsDevCatalogService.groupModelId('chatgpt-4o-latest'), 'openai');
     expect(
       ModelsDevCatalogService.groupModelId('claude-sonnet-4-5'),
       'anthropic',
@@ -142,10 +192,7 @@ void main() {
     expect(ModelsDevCatalogService.groupModelId('glm-4-plus'), 'zhipu');
     expect(ModelsDevCatalogService.groupModelId('moonshot-v1-8k'), 'moonshot');
     expect(ModelsDevCatalogService.groupModelId('kimi-k2'), 'moonshot');
-    expect(
-      ModelsDevCatalogService.groupModelId('doubao-pro-32k'),
-      'bytedance',
-    );
+    expect(ModelsDevCatalogService.groupModelId('doubao-pro-32k'), 'bytedance');
     expect(ModelsDevCatalogService.groupModelId('grok-3'), 'xai');
     expect(
       ModelsDevCatalogService.groupModelId('meta-llama/llama-3.1-70b'),
@@ -180,10 +227,7 @@ void main() {
       'anthropic',
     );
     expect(
-      ModelsDevCatalogService.groupModelId(
-        'farui-plus',
-        providerId: 'alibaba',
-      ),
+      ModelsDevCatalogService.groupModelId('farui-plus', providerId: 'alibaba'),
       'alibaba',
     );
     expect(
