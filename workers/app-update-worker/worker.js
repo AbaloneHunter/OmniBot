@@ -5,6 +5,19 @@ const DEFAULT_EDITIONS = ["standard"];
 const DEFAULT_R2_RELEASES_PREFIX = "releases";
 const DEFAULT_R2_METADATA_PREFIX = "metadata/releases";
 const DEFAULT_ANALYTICS_DATASET = "omnibot_app_updates";
+const DEFAULT_MODELS_DEV_UPSTREAM_URL = "https://models.dev/api.json";
+const DEFAULT_MODELS_DEV_R2_PREFIX = "metadata/models-dev";
+const DEFAULT_MODELS_DEV_REQUIRED_PROVIDERS = [
+  "openai",
+  "anthropic",
+  "google",
+  "openrouter",
+  "deepseek",
+  "alibaba",
+];
+const MODELS_DEV_PUBLIC_PATH = "/catalog/models-dev/api.json";
+const ADMIN_MODELS_DEV_PATH = "/admin/models-dev";
+const ADMIN_MODELS_DEV_REFRESH_PATH = "/admin/models-dev/refresh";
 const DOWNLOAD_ROUTE_PREFIX = "/downloads/";
 const ADMIN_RELEASE_ROUTE_PREFIX = "/admin/releases/";
 const ADMIN_ANALYTICS_ROUTE_PREFIX = "/admin/analytics/";
@@ -15,7 +28,7 @@ const JSON_HEADERS = {
   "access-control-allow-origin": "*",
 };
 
-export default {
+const worker = {
   async fetch(request, env) {
     const url = new URL(request.url);
     const pathname = normalizePath(url.pathname);
@@ -26,7 +39,7 @@ export default {
         headers: {
           ...JSON_HEADERS,
           "access-control-allow-methods": "GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS",
-          "access-control-allow-headers": "authorization,content-type,x-content-sha256,x-content-size,x-update-token",
+          "access-control-allow-headers": "authorization,content-type,if-none-match,x-content-sha256,x-content-size,x-update-token",
         },
       });
     }
@@ -43,9 +56,12 @@ export default {
           storage: "r2",
           routes: [
             "/updates",
+            MODELS_DEV_PUBLIC_PATH,
             "/downloads/:tag/:asset",
             "/admin",
             "/admin/api/session",
+            ADMIN_MODELS_DEV_PATH,
+            ADMIN_MODELS_DEV_REFRESH_PATH,
             "/admin/releases",
             "/admin/releases/:tag",
             "/admin/releases/:tag/assets/:asset",
@@ -58,6 +74,13 @@ export default {
         return await handleUpdateCheck(request, url, env);
       }
 
+      if (
+        (request.method === "GET" || request.method === "HEAD") &&
+        pathname === MODELS_DEV_PUBLIC_PATH
+      ) {
+        return await handleModelsDevCatalog(request, env);
+      }
+
       if (request.method === "GET" && pathname === "/admin") {
         return adminPage();
       }
@@ -65,6 +88,19 @@ export default {
       if (pathname === "/admin/api/session" && request.method === "GET") {
         requireAdmin(request, env);
         return json({ ok: true, authorized: true, analyticsConfigured: isAnalyticsQueryConfigured(env) });
+      }
+
+      if (pathname === ADMIN_MODELS_DEV_PATH && request.method === "GET") {
+        requireAdmin(request, env);
+        return await handleModelsDevStatus(env);
+      }
+
+      if (pathname === ADMIN_MODELS_DEV_REFRESH_PATH && request.method === "POST") {
+        requireAdmin(request, env);
+        const result = await refreshModelsDevCatalog(env, {
+          force: parseBoolean(url.searchParams.get("force")),
+        });
+        return json({ ok: true, ...result });
       }
 
       if (request.method === "GET" && pathname.startsWith(ADMIN_ANALYTICS_ROUTE_PREFIX)) {
@@ -125,7 +161,13 @@ export default {
       return json({ ok: false, error: error.message || "Internal error" }, status);
     }
   },
+
+  async scheduled(_controller, env) {
+    await refreshModelsDevCatalog(env);
+  },
 };
+
+export default worker;
 
 function adminPage() {
   return new Response(ADMIN_HTML, {
@@ -137,6 +179,489 @@ function adminPage() {
       "x-frame-options": "DENY",
     },
   });
+}
+
+async function handleModelsDevCatalog(request, env) {
+  const bucket = requireBucket(env);
+  const key = modelsDevCurrentObjectKey(env);
+  const object = request.method === "HEAD"
+    ? await bucket.head(key)
+    : await bucket.get(key);
+
+  if (!object) {
+    return json({
+      ok: false,
+      error: "Models.dev catalog mirror has not been initialized",
+    }, 503);
+  }
+
+  const metadata = object.customMetadata || {};
+  const sha256 = stringValue(metadata.sha256);
+  const etag = sha256 ? `"${sha256}"` : quoteEtag(object.etag);
+  const headers = modelsDevResponseHeaders(metadata, etag);
+
+  if (etag && requestEtagMatches(request.headers.get("if-none-match"), etag)) {
+    return new Response(null, { status: 304, headers });
+  }
+
+  return new Response(request.method === "HEAD" ? null : object.body, {
+    status: 200,
+    headers,
+  });
+}
+
+async function handleModelsDevStatus(env) {
+  const bucket = requireBucket(env);
+  const [current, refresh] = await Promise.all([
+    bucket.head(modelsDevCurrentObjectKey(env)),
+    readModelsDevRefreshStatus(bucket, env),
+  ]);
+  const metadata = current?.customMetadata || {};
+
+  return json({
+    ok: true,
+    configured: true,
+    publicPath: MODELS_DEV_PUBLIC_PATH,
+    upstreamUrl: modelsDevUpstreamUrl(env),
+    current: current ? {
+      key: current.key || modelsDevCurrentObjectKey(env),
+      size: current.size || normalizeSize(metadata.size),
+      upstreamEtag: stringValue(metadata.upstreamEtag),
+      sha256: stringValue(metadata.sha256),
+      fetchedAt: normalizeSize(metadata.fetchedAt),
+      providerCount: normalizeSize(metadata.providerCount),
+      modelCount: normalizeSize(metadata.modelCount),
+    } : null,
+    refresh,
+  });
+}
+
+async function refreshModelsDevCatalog(env, { force = false, fetchImpl = fetch } = {}) {
+  const bucket = requireBucket(env);
+  const config = modelsDevConfig(env);
+  const checkedAt = Date.now();
+  const currentKey = modelsDevCurrentObjectKey(env);
+  const [current, previousStatus] = await Promise.all([
+    bucket.head(currentKey),
+    readModelsDevRefreshStatus(bucket, env),
+  ]);
+  const currentMetadata = current?.customMetadata || {};
+  const previousUpstreamUrl = stringValue(
+    previousStatus?.upstreamUrl || currentMetadata.sourceUrl,
+  );
+  const previousEtag = previousUpstreamUrl === config.upstreamUrl
+    ? stringValue(previousStatus?.upstreamEtag || currentMetadata.upstreamEtag)
+    : "";
+  const requestHeaders = {
+    accept: "application/json",
+    "cache-control": "no-cache",
+    "user-agent": "OpenOmniBot-model-catalog-mirror/1.0",
+  };
+  if (previousEtag) {
+    requestHeaders["if-none-match"] = previousEtag;
+  }
+
+  let timeout;
+  try {
+    const controller = new AbortController();
+    timeout = setTimeout(() => controller.abort("Models.dev refresh timed out"), config.timeoutMs);
+    const response = await fetchImpl(config.upstreamUrl, {
+      method: "GET",
+      headers: requestHeaders,
+      redirect: "follow",
+      signal: controller.signal,
+    });
+
+    if (response.status === 304) {
+      if (!current) {
+        throw new Error("Models.dev returned 304 before the mirror was initialized");
+      }
+      const status = modelsDevSuccessStatus({
+        previousStatus,
+        currentMetadata,
+        checkedAt,
+        upstreamUrl: config.upstreamUrl,
+        upstreamEtag: response.headers.get("etag") || previousEtag,
+        changed: false,
+      });
+      await writeModelsDevRefreshStatus(bucket, env, status);
+      return modelsDevRefreshResult(status);
+    }
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(
+        `Models.dev refresh failed (${response.status}): ${body.slice(0, 300)}`,
+      );
+    }
+
+    const contentType = stringValue(response.headers.get("content-type")).toLowerCase();
+    if (!contentType.includes("json")) {
+      throw new Error(`Models.dev returned unexpected content type: ${contentType || "missing"}`);
+    }
+
+    const payload = await response.text();
+    const validation = validateModelsDevCatalog(payload, {
+      config,
+      currentMetadata,
+      previousStatus,
+      force,
+    });
+    const sha256 = await sha256Hex(payload);
+    const upstreamEtag = stringValue(response.headers.get("etag"));
+    const fetchedAt = Date.now();
+    const changed = sha256 !== stringValue(currentMetadata.sha256);
+    const metadata = omitEmpty({
+      sha256,
+      upstreamEtag,
+      fetchedAt: String(fetchedAt),
+      providerCount: String(validation.providerCount),
+      modelCount: String(validation.modelCount),
+      size: String(validation.size),
+      sourceUrl: config.upstreamUrl,
+    });
+
+    if (changed) {
+      const snapshotKey = modelsDevSnapshotObjectKey(env, sha256);
+      const existingSnapshot = await bucket.head(snapshotKey);
+      if (!existingSnapshot) {
+        await bucket.put(snapshotKey, payload, modelsDevObjectOptions(metadata));
+      }
+      await bucket.put(currentKey, payload, modelsDevObjectOptions(metadata));
+      try {
+        await cleanupModelsDevSnapshots(bucket, env, {
+          keep: config.snapshotRetention,
+          currentSha256: sha256,
+        });
+      } catch (error) {
+        console.warn("Models.dev snapshot cleanup failed", error);
+      }
+    }
+
+    const status = {
+      lastCheckedAt: checkedAt,
+      lastSuccessfulAt: fetchedAt,
+      lastChangedAt: changed
+        ? fetchedAt
+        : normalizeSize(previousStatus?.lastChangedAt || currentMetadata.fetchedAt),
+      changed,
+      consecutiveFailures: 0,
+      lastError: "",
+      upstreamUrl: config.upstreamUrl,
+      upstreamEtag,
+      sha256,
+      providerCount: validation.providerCount,
+      modelCount: validation.modelCount,
+      size: validation.size,
+    };
+    await writeModelsDevRefreshStatus(bucket, env, status);
+    return modelsDevRefreshResult(status);
+  } catch (error) {
+    const status = {
+      ...(previousStatus || {}),
+      lastCheckedAt: checkedAt,
+      changed: false,
+      consecutiveFailures: normalizeSize(previousStatus?.consecutiveFailures) + 1,
+      lastError: error?.message || String(error),
+      upstreamUrl: config.upstreamUrl,
+    };
+    try {
+      await writeModelsDevRefreshStatus(bucket, env, status);
+    } catch {
+      // Preserve the original refresh failure.
+    }
+    throw error;
+  } finally {
+    if (timeout !== undefined) {
+      clearTimeout(timeout);
+    }
+  }
+}
+
+function validateModelsDevCatalog(payload, {
+  config,
+  currentMetadata = {},
+  previousStatus = null,
+  force = false,
+} = {}) {
+  const resolvedConfig = config || modelsDevConfig({});
+  const size = new TextEncoder().encode(payload).byteLength;
+  if (size < resolvedConfig.minBytes || size > resolvedConfig.maxBytes) {
+    throw new Error(
+      `Models.dev payload size ${size} is outside ${resolvedConfig.minBytes}-${resolvedConfig.maxBytes} bytes`,
+    );
+  }
+
+  let decoded;
+  try {
+    decoded = JSON.parse(payload);
+  } catch {
+    throw new Error("Models.dev returned invalid JSON");
+  }
+  if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) {
+    throw new Error("Models.dev catalog root must be an object");
+  }
+
+  let providerCount = 0;
+  let modelCount = 0;
+  for (const provider of Object.values(decoded)) {
+    if (!provider || typeof provider !== "object" || Array.isArray(provider)) continue;
+    if (!provider.models || typeof provider.models !== "object" || Array.isArray(provider.models)) continue;
+    providerCount += 1;
+    modelCount += Object.keys(provider.models).length;
+  }
+
+  if (providerCount < resolvedConfig.minProviders) {
+    throw new Error(
+      `Models.dev provider count ${providerCount} is below ${resolvedConfig.minProviders}`,
+    );
+  }
+  if (modelCount < resolvedConfig.minModels) {
+    throw new Error(
+      `Models.dev model count ${modelCount} is below ${resolvedConfig.minModels}`,
+    );
+  }
+
+  for (const providerId of resolvedConfig.requiredProviders) {
+    const provider = decoded[providerId];
+    if (!provider || typeof provider !== "object" || !provider.models) {
+      throw new Error(`Models.dev catalog is missing required provider: ${providerId}`);
+    }
+  }
+
+  const previousProviderCount = normalizeSize(
+    previousStatus?.providerCount || currentMetadata.providerCount,
+  );
+  const previousModelCount = normalizeSize(
+    previousStatus?.modelCount || currentMetadata.modelCount,
+  );
+  if (!force && previousProviderCount > 0) {
+    const minimum = Math.floor(previousProviderCount * (1 - resolvedConfig.maxDropRatio));
+    if (providerCount < minimum) {
+      throw new Error(
+        `Models.dev provider count dropped from ${previousProviderCount} to ${providerCount}; use force=true after review`,
+      );
+    }
+  }
+  if (!force && previousModelCount > 0) {
+    const minimum = Math.floor(previousModelCount * (1 - resolvedConfig.maxDropRatio));
+    if (modelCount < minimum) {
+      throw new Error(
+        `Models.dev model count dropped from ${previousModelCount} to ${modelCount}; use force=true after review`,
+      );
+    }
+  }
+
+  return { providerCount, modelCount, size };
+}
+
+function modelsDevSuccessStatus({
+  previousStatus,
+  currentMetadata,
+  checkedAt,
+  upstreamUrl,
+  upstreamEtag,
+  changed,
+}) {
+  return {
+    ...(previousStatus || {}),
+    lastCheckedAt: checkedAt,
+    lastSuccessfulAt: checkedAt,
+    lastChangedAt: normalizeSize(
+      previousStatus?.lastChangedAt || currentMetadata.fetchedAt,
+    ),
+    changed,
+    consecutiveFailures: 0,
+    lastError: "",
+    upstreamUrl,
+    upstreamEtag,
+    sha256: stringValue(previousStatus?.sha256 || currentMetadata.sha256),
+    providerCount: normalizeSize(
+      previousStatus?.providerCount || currentMetadata.providerCount,
+    ),
+    modelCount: normalizeSize(
+      previousStatus?.modelCount || currentMetadata.modelCount,
+    ),
+    size: normalizeSize(previousStatus?.size || currentMetadata.size),
+  };
+}
+
+function modelsDevRefreshResult(status) {
+  return {
+    changed: Boolean(status.changed),
+    checkedAt: normalizeSize(status.lastCheckedAt),
+    successfulAt: normalizeSize(status.lastSuccessfulAt),
+    sha256: stringValue(status.sha256),
+    upstreamEtag: stringValue(status.upstreamEtag),
+    providerCount: normalizeSize(status.providerCount),
+    modelCount: normalizeSize(status.modelCount),
+    size: normalizeSize(status.size),
+  };
+}
+
+function modelsDevConfig(env) {
+  return {
+    upstreamUrl: modelsDevUpstreamUrl(env),
+    minBytes: configInt(env.MODELS_DEV_MIN_BYTES, 1, 50_000_000, 100_000),
+    maxBytes: configInt(env.MODELS_DEV_MAX_BYTES, 1, 50_000_000, 10_000_000),
+    minProviders: configInt(env.MODELS_DEV_MIN_PROVIDERS, 1, 10_000, 50),
+    minModels: configInt(env.MODELS_DEV_MIN_MODELS, 1, 1_000_000, 1_000),
+    maxDropRatio: configRatio(env.MODELS_DEV_MAX_DROP_RATIO, 0.35),
+    timeoutMs: configInt(env.MODELS_DEV_REFRESH_TIMEOUT_MS, 1_000, 300_000, 60_000),
+    snapshotRetention: configInt(env.MODELS_DEV_SNAPSHOT_RETENTION, 1, 100, 5),
+    requiredProviders: stringValue(env.MODELS_DEV_REQUIRED_PROVIDERS)
+      ? stringValue(env.MODELS_DEV_REQUIRED_PROVIDERS)
+        .split(",")
+        .map((item) => item.trim().toLowerCase())
+        .filter(Boolean)
+      : DEFAULT_MODELS_DEV_REQUIRED_PROVIDERS,
+  };
+}
+
+function modelsDevUpstreamUrl(env) {
+  const value = stringValue(env.MODELS_DEV_UPSTREAM_URL) || DEFAULT_MODELS_DEV_UPSTREAM_URL;
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw httpError(500, "MODELS_DEV_UPSTREAM_URL must be a valid URL");
+  }
+  if (url.protocol !== "https:") {
+    throw httpError(500, "MODELS_DEV_UPSTREAM_URL must use HTTPS");
+  }
+  return url.toString();
+}
+
+function modelsDevR2Prefix(env) {
+  return stringValue(env.MODELS_DEV_R2_PREFIX).replace(/^\/+|\/+$/g, "") ||
+    DEFAULT_MODELS_DEV_R2_PREFIX;
+}
+
+function modelsDevCurrentObjectKey(env) {
+  return `${modelsDevR2Prefix(env)}/current.json`;
+}
+
+function modelsDevStatusObjectKey(env) {
+  return `${modelsDevR2Prefix(env)}/status.json`;
+}
+
+function modelsDevSnapshotObjectKey(env, sha256) {
+  return `${modelsDevR2Prefix(env)}/snapshots/${sha256}.json`;
+}
+
+async function cleanupModelsDevSnapshots(bucket, env, {
+  keep,
+  currentSha256,
+}) {
+  const prefix = `${modelsDevR2Prefix(env)}/snapshots/`;
+  const snapshots = [];
+  let cursor;
+  do {
+    const page = await bucket.list({ prefix, cursor });
+    snapshots.push(...(page.objects || []));
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+
+  snapshots.sort((left, right) => {
+    const leftTime = new Date(left.uploaded || 0).getTime();
+    const rightTime = new Date(right.uploaded || 0).getTime();
+    return rightTime - leftTime;
+  });
+  const currentKey = modelsDevSnapshotObjectKey(env, currentSha256);
+  const retained = new Set(
+    [currentKey, ...snapshots.slice(0, keep).map((item) => item.key)],
+  );
+  const expired = snapshots
+    .map((item) => item.key)
+    .filter((key) => !retained.has(key));
+  for (let index = 0; index < expired.length; index += 1_000) {
+    await bucket.delete(expired.slice(index, index + 1_000));
+  }
+}
+
+function modelsDevObjectOptions(metadata) {
+  return {
+    httpMetadata: {
+      contentType: "application/json; charset=utf-8",
+      cacheControl: "public, max-age=3600",
+    },
+    customMetadata: metadata,
+  };
+}
+
+async function readModelsDevRefreshStatus(bucket, env) {
+  const object = await bucket.get(modelsDevStatusObjectKey(env));
+  if (!object) return null;
+  try {
+    return JSON.parse(await object.text());
+  } catch {
+    return null;
+  }
+}
+
+function writeModelsDevRefreshStatus(bucket, env, status) {
+  return bucket.put(
+    modelsDevStatusObjectKey(env),
+    JSON.stringify(status),
+    {
+      httpMetadata: {
+        contentType: "application/json; charset=utf-8",
+        cacheControl: "no-store",
+      },
+    },
+  );
+}
+
+function modelsDevResponseHeaders(metadata, etag) {
+  const headers = new Headers({
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "public, max-age=3600, stale-while-revalidate=86400, stale-if-error=604800",
+    "access-control-allow-origin": "*",
+    "access-control-expose-headers": "etag,x-models-dev-fetched-at,x-models-dev-provider-count,x-models-dev-model-count",
+    "x-content-type-options": "nosniff",
+  });
+  if (etag) headers.set("etag", etag);
+  if (metadata.fetchedAt) headers.set("x-models-dev-fetched-at", metadata.fetchedAt);
+  if (metadata.providerCount) headers.set("x-models-dev-provider-count", metadata.providerCount);
+  if (metadata.modelCount) headers.set("x-models-dev-model-count", metadata.modelCount);
+  return headers;
+}
+
+function requestEtagMatches(rawHeader, etag) {
+  if (!rawHeader || !etag) return false;
+  const normalizedTarget = normalizeEtag(etag);
+  return rawHeader.split(",").some((candidate) => {
+    const value = candidate.trim();
+    return value === "*" || normalizeEtag(value) === normalizedTarget;
+  });
+}
+
+function normalizeEtag(raw) {
+  return stringValue(raw).replace(/^W\//i, "");
+}
+
+function quoteEtag(raw) {
+  const value = stringValue(raw).replace(/^W\//i, "").replace(/^"|"$/g, "");
+  return value ? `"${value}"` : "";
+}
+
+async function sha256Hex(value) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function configInt(raw, min, max, fallback) {
+  const value = Number(raw);
+  if (!Number.isInteger(value)) return fallback;
+  return Math.min(max, Math.max(min, value));
+}
+
+function configRatio(raw, fallback) {
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0 || value >= 1) return fallback;
+  return value;
 }
 
 async function handleUpdateCheck(request, url, env) {
@@ -1183,3 +1708,9 @@ function json(payload, status = 200) {
     headers: JSON_HEADERS,
   });
 }
+
+export {
+  handleModelsDevCatalog,
+  refreshModelsDevCatalog,
+  validateModelsDevCatalog,
+};

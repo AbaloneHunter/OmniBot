@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -102,11 +103,23 @@ void main() {
   test('parses a downloaded catalog off the main isolate', () async {
     SharedPreferences.setMockInitialValues({});
     await StorageService.init();
-    final client = MockClient((_) async => http.Response(_catalogJson, 200));
+    final client = MockClient((request) async {
+      expect(request.url, Uri.parse(ModelsDevCatalogService.catalogUrl));
+      expect(request.headers['accept'], 'application/json');
+      return http.Response(
+        _catalogJson,
+        200,
+        headers: const {'etag': '"catalog-v1"'},
+      );
+    });
 
     final catalog = await ModelsDevCatalogService.loadCatalog(client: client);
 
     expect(catalog.providers['openai']?.findModel('gpt-4o'), isNotNull);
+    final stored = jsonDecode(
+      StorageService.getString('models_dev_catalog_cache_v1')!,
+    );
+    expect(stored['etag'], '"catalog-v1"');
 
     ModelsDevCatalogService.resetForTesting();
     var fallbackLoadCount = 0;
@@ -118,6 +131,75 @@ void main() {
 
     expect(fallbackLoadCount, 0);
     expect(cachedCatalog.providers['openai']?.findModel('gpt-4o'), isNotNull);
+  });
+
+  test(
+    'returns stale cache immediately and refreshes it conditionally',
+    () async {
+      final staleFetchedAt = DateTime.now()
+          .subtract(const Duration(days: 2))
+          .millisecondsSinceEpoch;
+      SharedPreferences.setMockInitialValues({
+        'models_dev_catalog_cache_v1': jsonEncode({
+          'fetchedAt': staleFetchedAt,
+          'payload': _catalogJson,
+          'etag': '"catalog-v1"',
+        }),
+      });
+      await StorageService.init();
+
+      final response = Completer<http.Response>();
+      final requestSeen = Completer<http.Request>();
+      final client = MockClient((request) {
+        requestSeen.complete(request);
+        return response.future;
+      });
+
+      final catalog = await ModelsDevCatalogService.loadCatalog(
+        client: client,
+      ).timeout(const Duration(seconds: 1));
+      expect(catalog.providers['openai']?.findModel('gpt-4o'), isNotNull);
+
+      final request = await requestSeen.future;
+      expect(request.headers['if-none-match'], '"catalog-v1"');
+      response.complete(
+        http.Response('', 304, headers: const {'etag': '"catalog-v1"'}),
+      );
+      await ModelsDevCatalogService.waitForRefreshForTesting();
+
+      final stored =
+          jsonDecode(StorageService.getString('models_dev_catalog_cache_v1')!)
+              as Map<String, dynamic>;
+      expect(stored['fetchedAt'], greaterThan(staleFetchedAt));
+      expect(stored['etag'], '"catalog-v1"');
+    },
+  );
+
+  test('keeps stale cache when a background refresh fails', () async {
+    final staleFetchedAt = DateTime.now()
+        .subtract(const Duration(days: 2))
+        .millisecondsSinceEpoch;
+    SharedPreferences.setMockInitialValues({
+      'models_dev_catalog_cache_v1': jsonEncode({
+        'fetchedAt': staleFetchedAt,
+        'payload': _catalogJson,
+        'etag': '"catalog-v1"',
+      }),
+    });
+    await StorageService.init();
+    final client = MockClient(
+      (_) async => http.Response('upstream unavailable', 503),
+    );
+
+    final catalog = await ModelsDevCatalogService.loadCatalog(client: client);
+    expect(catalog.providers['openai']?.findModel('gpt-4o'), isNotNull);
+    await ModelsDevCatalogService.waitForRefreshForTesting();
+
+    final stored =
+        jsonDecode(StorageService.getString('models_dev_catalog_cache_v1')!)
+            as Map<String, dynamic>;
+    expect(stored['fetchedAt'], staleFetchedAt);
+    expect(stored['etag'], '"catalog-v1"');
   });
 
   test('parses models.dev provider and model metadata', () {

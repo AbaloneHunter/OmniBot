@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -91,14 +92,33 @@ class ModelsDevCatalog {
   }
 }
 
+class _ModelsDevCatalogCache {
+  final ModelsDevCatalog catalog;
+  final DateTime fetchedAt;
+  final String payload;
+  final String etag;
+
+  const _ModelsDevCatalogCache({
+    required this.catalog,
+    required this.fetchedAt,
+    required this.payload,
+    required this.etag,
+  });
+}
+
 class ModelsDevCatalogService {
-  static const String catalogUrl = 'https://models.dev/api.json';
+  static const String catalogUrl = String.fromEnvironment(
+    'OMNIBOT_MODELS_CATALOG_URL',
+    defaultValue: 'https://omni.1775885.xyz/catalog/models-dev/api.json',
+  );
   static const String _kCacheKey = 'models_dev_catalog_cache_v1';
   static const Duration _kCacheTtl = Duration(hours: 24);
+  static const Duration _kRequestTimeout = Duration(seconds: 15);
 
   static ModelsDevCatalog? _memoryCatalog;
   static DateTime? _memoryCatalogFetchedAt;
   static Future<ModelsDevCatalog>? _catalogLoadInFlight;
+  static Future<void>? _catalogRefreshInFlight;
   static Future<ModelsDevCatalog> Function()? _catalogLoaderForTesting;
 
   static const Map<String, String> _kKnownHostProviderIds = {
@@ -215,31 +235,89 @@ class ModelsDevCatalogService {
     required DateTime now,
   }) async {
     final cached = await _readCachedCatalog();
-    if (!forceRefresh &&
-        cached != null &&
-        now.difference(cached.$2) < _kCacheTtl) {
-      _memoryCatalog = cached.$1;
-      _memoryCatalogFetchedAt = cached.$2;
-      return cached.$1;
+    if (cached != null) {
+      _memoryCatalog = cached.catalog;
+      _memoryCatalogFetchedAt = cached.fetchedAt;
+      if (!forceRefresh && now.difference(cached.fetchedAt) < _kCacheTtl) {
+        return cached.catalog;
+      }
+      if (!forceRefresh) {
+        _refreshCatalogInBackground(client: client, cached: cached);
+        return cached.catalog;
+      }
     }
 
+    return _refreshCatalog(client: client, cached: cached, now: now);
+  }
+
+  static void _refreshCatalogInBackground({
+    required http.Client? client,
+    required _ModelsDevCatalogCache cached,
+  }) {
+    if (_catalogRefreshInFlight != null) return;
+    final refresh = _refreshCatalog(
+      client: client,
+      cached: cached,
+      now: DateTime.now(),
+    ).then<void>((_) {});
+    _catalogRefreshInFlight = refresh;
+    unawaited(
+      refresh.whenComplete(() {
+        if (identical(_catalogRefreshInFlight, refresh)) {
+          _catalogRefreshInFlight = null;
+        }
+      }),
+    );
+  }
+
+  static Future<ModelsDevCatalog> _refreshCatalog({
+    required http.Client? client,
+    required _ModelsDevCatalogCache? cached,
+    required DateTime now,
+  }) async {
     final catalogLoaderForTesting = _catalogLoaderForTesting;
     if (catalogLoaderForTesting != null) {
-      final catalog = await catalogLoaderForTesting();
-      _memoryCatalog = catalog;
-      _memoryCatalogFetchedAt = now;
-      return catalog;
+      try {
+        final catalog = await catalogLoaderForTesting();
+        _memoryCatalog = catalog;
+        _memoryCatalogFetchedAt = now;
+        return catalog;
+      } catch (_) {
+        return cached?.catalog ?? const ModelsDevCatalog(providers: {});
+      }
     }
 
     final ownsClient = client == null;
     final httpClient = client ?? http.Client();
     try {
+      final headers = <String, String>{'accept': 'application/json'};
+      if (cached != null && cached.etag.isNotEmpty) {
+        headers['if-none-match'] = cached.etag;
+      }
       final response = await httpClient
-          .get(Uri.parse(catalogUrl))
-          .timeout(const Duration(seconds: 6));
+          .get(Uri.parse(catalogUrl), headers: headers)
+          .timeout(_kRequestTimeout);
+      if (response.statusCode == 304 && cached != null) {
+        final etag = response.headers['etag']?.trim();
+        await _writeCachedCatalog(
+          cached.payload,
+          now,
+          etag: etag?.isNotEmpty == true ? etag! : cached.etag,
+        );
+        _memoryCatalog = cached.catalog;
+        _memoryCatalogFetchedAt = now;
+        return cached.catalog;
+      }
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final catalog = await compute(parseCatalog, response.body);
-        await _writeCachedCatalog(response.body, now);
+        if (catalog.isEmpty) {
+          throw const FormatException('Models.dev catalog is empty');
+        }
+        await _writeCachedCatalog(
+          response.body,
+          now,
+          etag: response.headers['etag']?.trim() ?? '',
+        );
         _memoryCatalog = catalog;
         _memoryCatalogFetchedAt = now;
         return catalog;
@@ -253,9 +331,9 @@ class ModelsDevCatalogService {
     }
 
     if (cached != null) {
-      _memoryCatalog = cached.$1;
-      _memoryCatalogFetchedAt = cached.$2;
-      return cached.$1;
+      _memoryCatalog = cached.catalog;
+      _memoryCatalogFetchedAt = cached.fetchedAt;
+      return cached.catalog;
     }
     return const ModelsDevCatalog(providers: {});
   }
@@ -494,6 +572,7 @@ class ModelsDevCatalogService {
     _memoryCatalog = null;
     _memoryCatalogFetchedAt = null;
     _catalogLoadInFlight = null;
+    _catalogRefreshInFlight = null;
     _catalogLoaderForTesting = null;
   }
 
@@ -510,10 +589,16 @@ class ModelsDevCatalogService {
     _memoryCatalog = null;
     _memoryCatalogFetchedAt = null;
     _catalogLoadInFlight = null;
+    _catalogRefreshInFlight = null;
     _catalogLoaderForTesting = loader;
   }
 
-  static Future<(ModelsDevCatalog, DateTime)?> _readCachedCatalog() async {
+  @visibleForTesting
+  static Future<void> waitForRefreshForTesting() {
+    return _catalogRefreshInFlight ?? Future<void>.value();
+  }
+
+  static Future<_ModelsDevCatalogCache?> _readCachedCatalog() async {
     final raw = StorageService.getString(_kCacheKey, defaultValue: '');
     if (raw == null || raw.trim().isEmpty) {
       return null;
@@ -521,7 +606,7 @@ class ModelsDevCatalogService {
     return compute(_parseCachedCatalog, raw);
   }
 
-  static (ModelsDevCatalog, DateTime)? _parseCachedCatalog(String raw) {
+  static _ModelsDevCatalogCache? _parseCachedCatalog(String raw) {
     try {
       final decoded = jsonDecode(raw);
       if (decoded is! Map<String, dynamic>) return null;
@@ -530,21 +615,28 @@ class ModelsDevCatalogService {
       if (fetchedAtMs == null || payload == null || payload.isEmpty) {
         return null;
       }
-      return (
-        parseCatalog(payload),
-        DateTime.fromMillisecondsSinceEpoch(fetchedAtMs),
+      return _ModelsDevCatalogCache(
+        catalog: parseCatalog(payload),
+        fetchedAt: DateTime.fromMillisecondsSinceEpoch(fetchedAtMs),
+        payload: payload,
+        etag: _readNonEmptyString(decoded['etag']) ?? '',
       );
     } catch (_) {
       return null;
     }
   }
 
-  static Future<void> _writeCachedCatalog(String payload, DateTime fetchedAt) {
+  static Future<void> _writeCachedCatalog(
+    String payload,
+    DateTime fetchedAt, {
+    String etag = '',
+  }) {
     return StorageService.setString(
       _kCacheKey,
       jsonEncode({
         'fetchedAt': fetchedAt.millisecondsSinceEpoch,
         'payload': payload,
+        'etag': etag,
       }),
     );
   }

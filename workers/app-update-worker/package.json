@@ -1,0 +1,8 @@
+{
+  "name": "omnibot-app-update-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test worker.test.mjs"
+  }
+}
