@@ -198,7 +198,7 @@ class AgentRuntimeManager private constructor(
             return localAcpRuntime.handleMethod(method, args)
         }
         if (resolveRuntime().kind == AgentRuntimeKind.LOCAL && method in LOCAL_ACP_METHODS) {
-            ensureLocalAcpConnected(method, args)
+            ensureLocalAcpConnected(args)
             return localAcpRuntime.handleMethod(method, args)
         }
         return when (method) {
@@ -971,28 +971,41 @@ class AgentRuntimeManager private constructor(
         return result.isOk && result.exitCode == 0
     }
 
-    private suspend fun ensureLocalAcpConnected(
-        method: String,
-        args: Map<String, Any?>
-    ) {
+    private suspend fun ensureLocalAcpConnected(args: Map<String, Any?>) {
+        val requestedAgentId = args.stringValue("agentId")
         val explicitThreadId = args.stringValue("threadId")
-        val requestedThreadId = explicitThreadId ?: if (
-            method != "turn/start" && method != "review/start"
-        ) {
-            args.longValue("conversationId")
+        val requestedThreadId = explicitThreadId
+            ?: args.longValue("conversationId")
                 ?.let { bindingRepository.getBindingByConversationId(it)?.threadId }
-        } else {
-            null
-        }
         val boundAgentId = requestedThreadId?.let {
             acpAgentProfileStore.agentIdForSession(it)
                 ?: AcpAgentProfileStore.DEFAULT_CODEX_AGENT_ID
         }
-        if (!boundAgentId.isNullOrBlank() &&
-            boundAgentId != acpAgentProfileStore.selected().id
+        require(
+            requestedAgentId == null ||
+                boundAgentId == null ||
+                requestedAgentId == boundAgentId
         ) {
+            "ACP session $requestedThreadId belongs to agent $boundAgentId, not $requestedAgentId."
+        }
+        val targetAgentId = boundAgentId ?: requestedAgentId
+        val targetProfile = targetAgentId?.let { agentId ->
+            acpAgentProfileStore.list().firstOrNull { it.id == agentId }
+                ?: throw IllegalArgumentException("Unknown ACP agent: $agentId")
+        }
+        if (targetProfile != null) {
+            require(targetProfile.enabled) {
+                "ACP agent ${targetProfile.name} is disabled."
+            }
+        }
+        if (targetProfile != null &&
+            targetProfile.id != acpAgentProfileStore.selected().id
+        ) {
+            check(!localAcpRuntime.hasActiveTurns()) {
+                "设备当前已有其他 ACP Agent 任务，暂时不能切换 Agent。"
+            }
             localAcpRuntime.disconnect()
-            acpAgentProfileStore.select(boundAgentId)
+            acpAgentProfileStore.select(targetProfile.id)
         }
         if (localAcpRuntime.isConnected) {
             return

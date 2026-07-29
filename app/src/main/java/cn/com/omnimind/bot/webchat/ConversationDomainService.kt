@@ -40,6 +40,18 @@ class ConversationDomainService(
         const val AGENT_MODE_STORAGE_VALUE = "codex"
     }
 
+    fun listWebAgentProfiles(): List<Map<String, Any?>> {
+        return acpAgentProfileStore.list().map { profile ->
+            linkedMapOf(
+                "id" to profile.id,
+                "name" to profile.name,
+                "description" to profile.description,
+                "enabled" to profile.enabled,
+                "builtIn" to profile.builtIn
+            )
+        }
+    }
+
     suspend fun listConversationPayloads(
         includeArchived: Boolean = true,
         archivedOnly: Boolean = false
@@ -58,20 +70,22 @@ class ConversationDomainService(
             } else {
                 emptyList()
             }
-        val agentCwdByConversationId =
-            agentBindings.associate { binding -> binding.conversationId to binding.cwd }
-        val agentIdByConversationId =
-            agentBindings.associate { binding ->
-                binding.conversationId to
-                    acpAgentProfileStore.agentIdForSession(binding.threadId)
-                        .orEmpty()
-                        .ifEmpty { AcpAgentProfileStore.DEFAULT_CODEX_AGENT_ID }
-            }
+        val agentBindingByConversationId =
+            agentBindings.associateBy { binding -> binding.conversationId }
         return conversations.map { conversation ->
+            val agentBinding = agentBindingByConversationId[conversation.id]
+            val agentId = if (conversation.mode == AGENT_MODE_STORAGE_VALUE) {
+                agentBinding?.let { binding ->
+                    acpAgentProfileStore.agentIdForSession(binding.threadId)
+                        ?: AcpAgentProfileStore.DEFAULT_CODEX_AGENT_ID
+                } ?: acpAgentProfileStore.agentIdForConversation(conversation.id)
+            } else {
+                null
+            }
             conversationToPayload(
                 conversation,
-                agentCwd = agentCwdByConversationId[conversation.id],
-                agentId = agentIdByConversationId[conversation.id]
+                agentCwd = agentBinding?.cwd,
+                agentId = agentId
             )
         }
     }
@@ -83,9 +97,13 @@ class ConversationDomainService(
         } else {
             null
         }
-        val agentId = agentBinding?.let { binding ->
-            acpAgentProfileStore.agentIdForSession(binding.threadId)
-                ?: AcpAgentProfileStore.DEFAULT_CODEX_AGENT_ID
+        val agentId = if (conversation.mode == AGENT_MODE_STORAGE_VALUE) {
+            agentBinding?.let { binding ->
+                acpAgentProfileStore.agentIdForSession(binding.threadId)
+                    ?: AcpAgentProfileStore.DEFAULT_CODEX_AGENT_ID
+            } ?: acpAgentProfileStore.agentIdForConversation(conversation.id)
+        } else {
+            null
         }
         return conversationToPayload(
             conversation,
@@ -100,13 +118,19 @@ class ConversationDomainService(
         summary: String? = null,
         parentConversationId: Long? = null,
         parentConversationMode: String? = null,
-        scheduledTaskId: String? = null
+        scheduledTaskId: String? = null,
+        agentId: String? = null
     ): Map<String, Any?> {
         val now = System.currentTimeMillis()
+        val normalizedMode = normalizeConversationMode(mode)
+        val resolvedAgentId = validateRequestedAgentId(
+            conversationMode = normalizedMode,
+            requestedAgentId = agentId
+        )
         val conversation = Conversation(
             id = 0,
             title = title.ifBlank { "新对话" },
-            mode = normalizeConversationMode(mode),
+            mode = normalizedMode,
             parentConversationId = parentConversationId?.takeIf { it > 0L },
             parentConversationMode = parentConversationMode
                 ?.let(::normalizeConversationMode)
@@ -121,8 +145,11 @@ class ConversationDomainService(
         val inserted = requireNotNull(DatabaseHelper.getConversationById(insertedId)) {
             "Conversation was inserted but cannot be loaded back"
         }
-        val payload = conversationToPayload(inserted)
-        publishConversationEvent("conversation_created", inserted)
+        resolvedAgentId?.let {
+            acpAgentProfileStore.bindConversation(inserted.id, it)
+        }
+        val payload = conversationToPayload(inserted, agentId = resolvedAgentId)
+        publishConversationEvent("conversation_created", inserted, resolvedAgentId)
         return payload
     }
 
@@ -277,6 +304,7 @@ class ConversationDomainService(
             ?: return
         historyRepository.deleteConversation(conversationId)
         DatabaseHelper.deleteConversationById(conversationId)
+        acpAgentProfileStore.unbindConversation(conversationId)
         val payload = conversationToPayload(existing)
         RealtimeHub.publish(
             "conversation_deleted",
@@ -434,12 +462,18 @@ class ConversationDomainService(
         agentCwd: String? = null,
         agentId: String? = null
     ): Map<String, Any?> {
+        val resolvedAgentId = agentId
+            ?: if (conversation.mode == AGENT_MODE_STORAGE_VALUE) {
+                acpAgentProfileStore.agentIdForConversation(conversation.id)
+            } else {
+                null
+            }
         return linkedMapOf(
             "id" to conversation.id,
             "title" to conversation.title,
             "mode" to conversation.mode,
             "agentCwd" to agentCwd?.trim()?.takeIf { it.isNotEmpty() },
-            "agentId" to agentId?.trim()?.takeIf { it.isNotEmpty() },
+            "agentId" to resolvedAgentId?.trim()?.takeIf { it.isNotEmpty() },
             "isArchived" to conversation.isArchived,
             "isPinned" to conversation.isPinned,
             "parentConversationId" to conversation.parentConversationId,
@@ -465,6 +499,21 @@ class ConversationDomainService(
         return if (normalized.isEmpty()) "normal" else normalized
     }
 
+    private fun validateRequestedAgentId(
+        conversationMode: String,
+        requestedAgentId: String?
+    ): String? {
+        val normalizedAgentId = requestedAgentId?.trim()?.takeIf { it.isNotEmpty() }
+            ?: return null
+        require(conversationMode == AGENT_MODE_STORAGE_VALUE) {
+            "agentId is only supported for Agent conversations."
+        }
+        val profile = acpAgentProfileStore.list().firstOrNull { it.id == normalizedAgentId }
+            ?: throw IllegalArgumentException("Unknown ACP agent: $normalizedAgentId")
+        require(profile.enabled) { "ACP agent ${profile.name} is disabled." }
+        return profile.id
+    }
+
     private suspend fun publishMessagesReplaced(
         conversationId: Long,
         conversationMode: String,
@@ -488,9 +537,10 @@ class ConversationDomainService(
 
     private fun publishConversationEvent(
         eventName: String,
-        conversation: Conversation
+        conversation: Conversation,
+        agentId: String? = null
     ) {
-        val payload = conversationToPayload(conversation)
+        val payload = conversationToPayload(conversation, agentId = agentId)
         RealtimeHub.publish(
             eventName,
             mapOf(

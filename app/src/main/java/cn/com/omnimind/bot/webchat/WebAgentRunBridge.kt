@@ -104,13 +104,15 @@ internal class WebAgentRunBridge(
         userMessage: String,
         attachments: List<Map<String, Any?>>,
         cwd: String?,
+        agentId: String? = null,
         userMessageCreatedAt: Long? = null
     ): Map<String, Any?> {
         val state = WebAgentRunState(
             taskId = taskId,
             conversationId = conversationId,
             createdAt = userMessageCreatedAt?.takeIf { it > 0L }
-                ?: System.currentTimeMillis()
+                ?: System.currentTimeMillis(),
+            agentId = agentId?.trim()?.takeIf { it.isNotEmpty() }
         )
         val existing = runsByConversationId.putIfAbsent(conversationId, state)
         check(existing == null || existing.finished.get()) {
@@ -137,7 +139,8 @@ internal class WebAgentRunBridge(
                 conversationId = conversationId,
                 userMessage = userMessage,
                 attachments = attachments,
-                cwd = cwd
+                cwd = cwd,
+                agentId = agentId
             )
             val response = normalizeMap(
                 manager.handleMethod("turn/start", arguments)
@@ -563,7 +566,8 @@ internal fun buildWebAgentTurnArguments(
     conversationId: Long,
     userMessage: String,
     attachments: List<Map<String, Any?>>,
-    cwd: String?
+    cwd: String?,
+    agentId: String? = null
 ): Map<String, Any?> {
     return linkedMapOf<String, Any?>(
         "conversationId" to conversationId,
@@ -573,6 +577,9 @@ internal fun buildWebAgentTurnArguments(
         "approvalsReviewer" to "user",
         "sandboxPolicy" to mapOf("type" to "dangerFullAccess")
     ).apply {
+        agentId?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            this["agentId"] = it
+        }
         cwd?.trim()?.takeIf { it.isNotEmpty() }?.let {
             this["cwd"] = it
         }

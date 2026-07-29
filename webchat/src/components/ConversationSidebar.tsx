@@ -15,7 +15,12 @@ import {
   type RefObject,
 } from "react";
 import { conversationKey, modeLabel, relativeDate } from "../format";
-import type { ConnectionStatus, Conversation, ConversationMode } from "../types";
+import type {
+  AgentProfile,
+  ConnectionStatus,
+  Conversation,
+  ConversationCreateTarget,
+} from "../types";
 import { Icon, type IconName } from "./Icon";
 
 interface ConversationSidebarProps {
@@ -23,8 +28,9 @@ interface ConversationSidebarProps {
   archivedConversations: Conversation[];
   archivedLoading: boolean;
   selected: Conversation | null;
+  agentProfiles: AgentProfile[];
   connectionStatus: ConnectionStatus;
-  onCreate: (mode: ConversationMode) => void;
+  onCreate: (target: ConversationCreateTarget) => void;
   onSelect: (conversation: Conversation) => void;
   onLoadArchived: () => Promise<void>;
   onArchive: (conversation: Conversation) => Promise<void>;
@@ -45,38 +51,60 @@ const STATUS_LABELS: Record<ConnectionStatus, string> = {
   connecting: "正在连接实时事件",
 };
 
-const SECTION_ORDER = ["pinned", "codex", "agent", "chat"] as const;
+const SECTION_ORDER = [
+  "pinned",
+  "codex",
+  "claude",
+  "opencode",
+  "acp",
+  "omni",
+  "chat",
+] as const;
 
 type ConversationSection = typeof SECTION_ORDER[number];
 
 const SECTION_LABELS: Record<ConversationSection, string> = {
   pinned: "置顶会话",
   codex: "Codex",
-  agent: "Agent",
+  claude: "Claude Code",
+  opencode: "OpenCode",
+  acp: "Agent",
+  omni: "小万",
   chat: "纯聊天",
 };
 
 const SECTION_ICONS: Record<Exclude<ConversationSection, "pinned">, IconName> = {
   codex: "codex",
-  agent: "agent",
+  claude: "claude",
+  opencode: "opencode",
+  acp: "agent",
+  omni: "agent",
   chat: "chat",
 };
 
-const CREATE_OPTIONS: ReadonlyArray<{
-  mode: ConversationMode;
-  label: string;
-  icon: IconName;
-}> = [
-  { mode: "normal", label: "Agent 模式", icon: "agent" },
-  { mode: "codex", label: "Codex 模式", icon: "codex" },
-  { mode: "chat_only", label: "纯聊天模式", icon: "chat" },
+const FALLBACK_AGENT_PROFILES: AgentProfile[] = [
+  { id: "codex-acp", name: "Codex", enabled: true, builtIn: true },
+  { id: "claude-code-acp", name: "Claude Code", enabled: true, builtIn: true },
+  { id: "opencode-acp", name: "OpenCode", enabled: true, builtIn: true },
 ];
+
+function agentIcon(agentId?: string): IconName {
+  if (agentId === "codex-acp") return "codex";
+  if (agentId === "claude-code-acp") return "claude";
+  if (agentId === "opencode-acp") return "opencode";
+  return "agent";
+}
 
 function conversationSection(conversation: Conversation): ConversationSection {
   if (conversation.isPinned) return "pinned";
-  if (conversation.mode === "codex") return "codex";
+  if (conversation.mode === "codex") {
+    if (!conversation.agentId || conversation.agentId === "codex-acp") return "codex";
+    if (conversation.agentId === "claude-code-acp") return "claude";
+    if (conversation.agentId === "opencode-acp") return "opencode";
+    return "acp";
+  }
   if (conversation.mode === "chat_only") return "chat";
-  return "agent";
+  return "omni";
 }
 
 function clampMenuPosition(value: number, size: number, viewportSize: number): number {
@@ -89,6 +117,7 @@ export function ConversationSidebar({
   archivedConversations,
   archivedLoading,
   selected,
+  agentProfiles,
   connectionStatus,
   onCreate,
   onSelect,
@@ -112,6 +141,34 @@ export function ConversationSidebar({
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const contextMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const query = search.trim().toLowerCase();
+  const createOptions = useMemo(() => {
+    const profiles = agentProfiles.length ? agentProfiles : FALLBACK_AGENT_PROFILES;
+    return [
+      {
+        key: "omni",
+        target: { mode: "normal" } as ConversationCreateTarget,
+        label: "小万",
+        icon: "agent" as IconName,
+      },
+      ...profiles
+        .filter((profile) => profile.enabled !== false)
+        .map((profile) => ({
+          key: profile.id,
+          target: {
+            mode: "codex",
+            agentId: profile.id,
+          } as ConversationCreateTarget,
+          label: profile.name,
+          icon: agentIcon(profile.id),
+        })),
+      {
+        key: "chat",
+        target: { mode: "chat_only" } as ConversationCreateTarget,
+        label: "纯聊天模式",
+        icon: "chat" as IconName,
+      },
+    ];
+  }, [agentProfiles]);
 
   useEffect(() => {
     if (!createMenuOpen) return undefined;
@@ -210,9 +267,9 @@ export function ConversationSidebar({
     items[nextIndex].focus();
   }
 
-  function createConversation(mode: ConversationMode) {
+  function createConversation(target: ConversationCreateTarget) {
     setCreateMenuOpen(false);
-    onCreate(mode);
+    onCreate(target);
   }
 
   function toggleCreateMenu() {
@@ -456,13 +513,13 @@ export function ConversationSidebar({
               ref={createMenuRef}
               onKeyDown={(event) => handleMenuKeyDown(event, createMenuRef)}
             >
-              {CREATE_OPTIONS.map((option) => (
+              {createOptions.map((option) => (
                 <button
                   className="new-conversation-menu-item"
                   type="button"
                   role="menuitem"
-                  key={option.mode}
-                  onClick={() => createConversation(option.mode)}
+                  key={option.key}
+                  onClick={() => createConversation(option.target)}
                 >
                   <span className="new-conversation-menu-icon">
                     <Icon name={option.icon} size={17} />
@@ -515,7 +572,9 @@ export function ConversationSidebar({
               <div className={`section-body${collapsed ? " collapsed" : ""}`}>
                 {section.items.map((conversation) => {
                   const active = conversationKey(conversation) === conversationKey(selected);
-                  const preview = conversation.summary || conversation.lastMessage || modeLabel(conversation.mode);
+                  const preview = conversation.summary
+                    || conversation.lastMessage
+                    || modeLabel(conversation.mode, conversation.agentId);
                   return (
                     <button
                       key={conversationKey(conversation)}
