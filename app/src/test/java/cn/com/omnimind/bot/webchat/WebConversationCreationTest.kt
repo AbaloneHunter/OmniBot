@@ -116,7 +116,8 @@ class WebConversationCreationTest {
             conversationId = 42L,
             userMessage = "检查权限",
             attachments = emptyList(),
-            cwd = " /workspace "
+            cwd = " /workspace ",
+            agentId = " claude-code-acp "
         )
 
         assertEquals(42L, arguments["conversationId"])
@@ -128,6 +129,33 @@ class WebConversationCreationTest {
             arguments["sandboxPolicy"]
         )
         assertEquals("/workspace", arguments["cwd"])
+        assertEquals("claude-code-acp", arguments["agentId"])
+    }
+
+    @Test
+    fun `web agent selection prefers the stored conversation binding`() {
+        assertEquals(
+            "opencode-acp",
+            resolveWebAgentId(
+                storedAgentId = "opencode-acp",
+                requestedAgentId = null
+            )
+        )
+        assertEquals(
+            "claude-code-acp",
+            resolveWebAgentId(
+                storedAgentId = null,
+                requestedAgentId = " claude-code-acp "
+            )
+        )
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `web agent selection rejects a conflicting request`() {
+        resolveWebAgentId(
+            storedAgentId = "codex-acp",
+            requestedAgentId = "opencode-acp"
+        )
     }
 
     @Test

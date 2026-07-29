@@ -3,9 +3,23 @@ export type MobileSection = "chat" | "workspace" | "browser";
 export type ContextPanelName = "workspace" | "browser";
 export type ConversationMode = "normal" | "codex" | "chat_only";
 
+export interface ConversationCreateTarget {
+  mode: ConversationMode;
+  agentId?: string;
+}
+
+export interface AgentProfile {
+  id: string;
+  name: string;
+  description?: string;
+  enabled?: boolean;
+  builtIn?: boolean;
+}
+
 export interface Conversation {
   id: number;
   mode?: string;
+  agentId?: string;
   title?: string;
   summary?: string;
   lastMessage?: string;
@@ -62,6 +76,7 @@ export interface BrowserSnapshot {
 }
 
 export interface BootstrapPayload {
+  agentProfiles?: AgentProfile[];
   workspace?: {
     workspace?: WorkspaceInfo | null;
     root?: { path?: string } | null;

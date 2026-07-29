@@ -47,6 +47,7 @@ object WebChatRoutes {
                             "workspace" to true,
                             "browserMirror" to true
                         ),
+                        "agentProfiles" to conversationService.listWebAgentProfiles(),
                         "routes" to mapOf(
                             "events" to "/webchat/api/events",
                             "browserFrame" to "/webchat/api/browser/frame",
@@ -89,7 +90,8 @@ object WebChatRoutes {
                         parentConversationId = (body["parentConversationId"] as? Number)
                             ?.toLong(),
                         parentConversationMode = body["parentConversationMode"]?.toString(),
-                        scheduledTaskId = body["scheduledTaskId"]?.toString()
+                        scheduledTaskId = body["scheduledTaskId"]?.toString(),
+                        agentId = body["agentId"]?.toString()
                     )
                 )
             }

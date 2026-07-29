@@ -14,12 +14,14 @@ import { useRealtime } from "./hooks/useRealtime";
 import { reconcileCodexMessages } from "./messageReconciliation";
 import type {
   Attachment,
+  AgentProfile,
   BootstrapPayload,
   BrowserActionResult,
   BrowserSnapshot,
   ChatMessage,
   ContextPanelName,
   Conversation,
+  ConversationCreateTarget,
   ConversationMode,
   MobileSection,
   RealtimeEventData,
@@ -65,6 +67,7 @@ export default function App() {
   const [loginError, setLoginError] = useState("");
   const [globalError, setGlobalError] = useState("");
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
   const [archivedLoading, setArchivedLoading] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
@@ -249,6 +252,9 @@ export default function App() {
       workspacePathRef.current = rootPath;
       setWorkspacePath(rootPath);
       setBrowserSnapshot(bootstrap?.browser ?? null);
+      setAgentProfiles(
+        Array.isArray(bootstrap?.agentProfiles) ? bootstrap.agentProfiles : [],
+      );
       setAuthenticated(true);
 
       const url = new URL(window.location.href);
@@ -269,9 +275,13 @@ export default function App() {
     }
   }
 
-  function createConversation(mode: ConversationMode) {
+  function createConversation(target: ConversationCreateTarget) {
     setGlobalError("");
-    const draftConversation = createConversationDraft(mode);
+    const draftConversation = createConversationDraft(
+      target.mode,
+      Date.now(),
+      target.agentId,
+    );
     selectedRef.current = draftConversation;
     setSelectedConversation(draftConversation);
     setMessages([]);
@@ -358,11 +368,20 @@ export default function App() {
       let conversation = selectedRef.current;
       if (!isPersistedConversation(conversation)) {
         const draftMode = normalizeConversationMode(conversation?.mode);
+        const draftAgentId = conversation?.agentId?.trim() || undefined;
         conversation = await request<Conversation>("/conversations", {
           method: "POST",
-          body: { title: "新对话", mode: draftMode },
+          body: {
+            title: "新对话",
+            mode: draftMode,
+            agentId: draftAgentId,
+          },
         });
-        conversation = { ...conversation, mode: draftMode };
+        conversation = {
+          ...conversation,
+          mode: draftMode,
+          agentId: conversation.agentId ?? draftAgentId,
+        };
         conversationCreatedForSend = conversation;
         selectedRef.current = conversation;
         setSelectedConversation(conversation);
@@ -400,6 +419,7 @@ export default function App() {
           userMessage: text,
           userMessageCreatedAt,
           conversationMode,
+          agentId: conversation.agentId,
           attachments,
         },
       });
@@ -407,6 +427,7 @@ export default function App() {
         const updatedConversation = {
           ...result.conversation,
           mode: result.conversationMode ?? conversationMode,
+          agentId: result.conversation.agentId ?? conversation.agentId,
         };
         selectedRef.current = updatedConversation;
         setSelectedConversation(updatedConversation);
@@ -448,6 +469,8 @@ export default function App() {
             ) {
               const draft = createConversationDraft(
                 normalizeConversationMode(createdConversation.mode),
+                Date.now(),
+                createdConversation.agentId,
               );
               selectedRef.current = draft;
               setSelectedConversation(draft);
@@ -705,6 +728,7 @@ export default function App() {
           archivedConversations={archivedConversations}
           archivedLoading={archivedLoading}
           selected={selectedConversation}
+          agentProfiles={agentProfiles}
           connectionStatus={connectionStatus}
           onCreate={createConversation}
           onSelect={(conversation) => void selectConversation(conversation)}

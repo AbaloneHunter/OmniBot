@@ -6,10 +6,11 @@ import {
 } from "../src/conversationDraft.ts";
 
 test("choosing a new conversation mode creates only a local draft", () => {
-  const draft = createConversationDraft("codex", 1234);
+  const draft = createConversationDraft("codex", 1234, "claude-code-acp");
 
   assert.equal(draft.id, 0);
   assert.equal(draft.mode, "codex");
+  assert.equal(draft.agentId, "claude-code-acp");
   assert.equal(draft.updatedAt, 1234);
   assert.equal(isPersistedConversation(draft), false);
 });

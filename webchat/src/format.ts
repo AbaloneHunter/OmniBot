@@ -142,13 +142,19 @@ export function markdownToHtml(value: unknown): string {
   }).join("");
 }
 
-export function modeLabel(mode?: string): string {
+export function modeLabel(mode?: string, agentId?: string): string {
+  if (mode === "codex") {
+    return ({
+      "codex-acp": "Codex",
+      "claude-code-acp": "Claude Code",
+      "opencode-acp": "OpenCode",
+    } as Record<string, string>)[agentId ?? ""] ?? "Agent";
+  }
   return ({
-    normal: "Agent",
+    normal: "小万",
     chat_only: "纯聊天",
     openclaw: "OpenClaw",
     subagent: "SubAgent",
-    codex: "Codex",
   } as Record<string, string>)[mode ?? "normal"] ?? "普通";
 }
 

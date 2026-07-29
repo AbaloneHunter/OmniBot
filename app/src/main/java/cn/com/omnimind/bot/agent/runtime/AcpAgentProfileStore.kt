@@ -122,6 +122,34 @@ internal class AcpAgentProfileStore(context: Context) {
     }
 
     @Synchronized
+    fun bindConversation(conversationId: Long, agentId: String) {
+        if (conversationId <= 0L) return
+        val normalizedAgentId = agentId.trim()
+        if (normalizedAgentId.isEmpty()) return
+        val bindings = conversationBindings().toMutableMap()
+        bindings[conversationId.toString()] = normalizedAgentId
+        preferences.edit().putString(KEY_CONVERSATION_BINDINGS, gson.toJson(bindings)).apply()
+    }
+
+    fun agentIdForConversation(conversationId: Long): String? {
+        if (conversationId <= 0L) return null
+        return conversationBindings()[conversationId.toString()]
+            ?.takeIf(String::isNotBlank)
+            ?.takeUnless { it in RETIRED_AGENT_IDS }
+    }
+
+    @Synchronized
+    fun unbindConversation(conversationId: Long) {
+        if (conversationId <= 0L) return
+        val bindings = conversationBindings().toMutableMap()
+        if (bindings.remove(conversationId.toString()) != null) {
+            preferences.edit()
+                .putString(KEY_CONVERSATION_BINDINGS, gson.toJson(bindings))
+                .apply()
+        }
+    }
+
+    @Synchronized
     fun select(id: String): AcpAgentProfile {
         val selected = list().firstOrNull { it.id == id.trim() }
             ?: throw IllegalArgumentException("Unknown ACP agent: $id")
@@ -177,8 +205,11 @@ internal class AcpAgentProfileStore(context: Context) {
         val officialOverrides = readStoredProfiles().filter { it.id in OFFICIAL_AGENT_IDS }
         writeProfiles(officialOverrides + remaining)
         val remainingBindings = sessionBindings().filterValues { it != normalizedId }
+        val remainingConversationBindings =
+            conversationBindings().filterValues { it != normalizedId }
         preferences.edit()
             .putString(KEY_SESSION_BINDINGS, gson.toJson(remainingBindings))
+            .putString(KEY_CONVERSATION_BINDINGS, gson.toJson(remainingConversationBindings))
             .apply()
         clearHealth(normalizedId)
         if (preferences.getString(KEY_SELECTED_PROFILE_ID, null) == normalizedId) {
@@ -229,6 +260,15 @@ internal class AcpAgentProfileStore(context: Context) {
 
     private fun sessionBindings(): Map<String, String> = runCatching {
         val json = preferences.getString(KEY_SESSION_BINDINGS, null)
+            ?: return@runCatching emptyMap()
+        gson.fromJson<Map<String, String>>(
+            json,
+            object : TypeToken<Map<String, String>>() {}.type
+        )
+    }.getOrNull().orEmpty()
+
+    private fun conversationBindings(): Map<String, String> = runCatching {
+        val json = preferences.getString(KEY_CONVERSATION_BINDINGS, null)
             ?: return@runCatching emptyMap()
         gson.fromJson<Map<String, String>>(
             json,
@@ -327,6 +367,7 @@ internal class AcpAgentProfileStore(context: Context) {
         private const val KEY_PROFILES = "profiles"
         private const val KEY_SELECTED_PROFILE_ID = "selected_profile_id"
         private const val KEY_SESSION_BINDINGS = "session_bindings"
+        private const val KEY_CONVERSATION_BINDINGS = "conversation_bindings"
         private const val KEY_HEALTH = "health"
         private val ENVIRONMENT_NAME = Regex("[A-Za-z_][A-Za-z0-9_]*")
     }

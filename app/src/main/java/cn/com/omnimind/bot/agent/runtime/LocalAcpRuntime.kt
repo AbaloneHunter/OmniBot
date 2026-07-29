@@ -164,6 +164,8 @@ internal class LocalAcpRuntime(
     val isConnected: Boolean
         get() = connection?.isRunning == true && client != null && agentInfo != null
 
+    fun hasActiveTurns(): Boolean = activeTurnIds.isNotEmpty()
+
     fun activeAgentId(): String = (activeProfile ?: profileStore.selected()).id
 
     fun activeAgentName(): String = (activeProfile ?: profileStore.selected()).name
@@ -603,6 +605,7 @@ internal class LocalAcpRuntime(
                 conversationId = args.longValue("conversationId"),
                 cwd = cwd
             )
+            profileStore.bindConversation(conversationId, activeAgentId())
             emit(
                 method = "thread/started",
                 threadId = session.sessionId.value,
@@ -664,6 +667,7 @@ internal class LocalAcpRuntime(
                 conversationId = args.longValue("conversationId"),
                 cwd = cwd
             )
+            profileStore.bindConversation(conversationId, activeAgentId())
             sessionPayload(restored, conversationId)
         }
 

@@ -48,6 +48,18 @@ internal fun resolveWebConversationRunKind(mode: String?): WebConversationRunKin
     }
 }
 
+internal fun resolveWebAgentId(
+    storedAgentId: String?,
+    requestedAgentId: String?
+): String? {
+    val stored = storedAgentId?.trim()?.takeIf { it.isNotEmpty() }
+    val requested = requestedAgentId?.trim()?.takeIf { it.isNotEmpty() }
+    require(stored == null || requested == null || stored == requested) {
+        "The requested Agent does not match this conversation."
+    }
+    return stored ?: requested
+}
+
 internal fun buildWebPureChatContent(
     existingMessages: List<Map<String, Any?>>,
     userMessage: String,
@@ -537,6 +549,14 @@ class AgentRunService(
             requestedMode = request["conversationMode"]?.toString()
         )
         val runKind = resolveWebConversationRunKind(conversationMode)
+        val agentId = if (runKind == WebConversationRunKind.AGENT) {
+            resolveWebAgentId(
+                storedAgentId = storedConversation["agentId"]?.toString(),
+                requestedAgentId = request["agentId"]?.toString()
+            )
+        } else {
+            null
+        }
         when (runKind) {
             WebConversationRunKind.OMNIAI -> if (manager.hasActiveAgentRuns()) {
                 throw IllegalStateException("设备当前已有运行中的 Agent 任务，请稍后重试")
@@ -616,6 +636,7 @@ class AgentRunService(
                     storedConversation["agentCwd"]
                         ?: storedConversation["codexCwd"]
                     )?.toString(),
+                agentId = agentId,
                 userMessageCreatedAt = (request["userMessageCreatedAt"] as? Number)?.toLong()
             )
         }
