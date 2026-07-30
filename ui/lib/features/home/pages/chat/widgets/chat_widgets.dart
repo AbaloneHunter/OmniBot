@@ -594,6 +594,33 @@ class _ChatAppBarModeShortcutButton extends StatefulWidget {
 class _ChatAppBarModeShortcutButtonState
     extends State<_ChatAppBarModeShortcutButton> {
   bool _isOpen = false;
+  late final ValueNotifier<bool> _isAgentLoadingNotifier;
+
+  @override
+  void initState() {
+    super.initState();
+    _isAgentLoadingNotifier = ValueNotifier<bool>(widget.isAgentLoading);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ChatAppBarModeShortcutButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isAgentLoading == widget.isAgentLoading) {
+      return;
+    }
+    final isAgentLoading = widget.isAgentLoading;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _isAgentLoadingNotifier.value = isAgentLoading;
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _isAgentLoadingNotifier.dispose();
+    super.dispose();
+  }
 
   Future<void> _openMenu() async {
     if (_isOpen) {
@@ -628,46 +655,52 @@ class _ChatAppBarModeShortcutButtonState
       transitionDuration: _kChatAppBarModeMenuOpenDuration,
       reverseTransitionDuration: _kChatAppBarModeMenuCloseDuration,
       unfoldAlignment: Alignment.topCenter,
-      child: _ChatAppBarModeShortcutMenuContent(
-        width: _kChatAppBarAccessoryButtonSize,
-        closeTooltip: isEnglish ? 'Close mode menu' : '收起模式菜单',
-        headerIcon: _buildOpenIcon(selectedColor),
-        items: [
-          _ChatAppBarModeShortcutMenuItemData(
-            action: _ChatAppBarModeShortcutAction.omniAi,
-            iconAsset: _kChatAppBarAgentIconAsset,
-            tooltip: isEnglish ? 'OmniAi' : '小万',
-            selected: widget.isOmniAiSelected,
-            enabled: widget.onOmniAiTap != null,
-            iconSize: _kChatAppBarModeMenuOmniAiIconSize,
-            iconOffset: _kChatAppBarModeMenuOmniAiIconOffset,
-          ),
-          for (final agent in acpAgentModes)
-            _ChatAppBarModeShortcutMenuItemData(
-              action: _ChatAppBarModeShortcutAction.acpAgent(agent.id),
-              agentId: agent.id,
-              tooltip: agent.name,
-              selected:
-                  widget.isAgentSelected && agent.id == widget.activeAcpAgentId,
-              enabled:
-                  !widget.isAgentLoading &&
-                  (widget.onAcpAgentTap != null || widget.onAgentTap != null),
-              iconSize: _chatAppBarModeMenuAgentIconSize(agent.id),
+      child: ValueListenableBuilder<bool>(
+        valueListenable: _isAgentLoadingNotifier,
+        builder: (context, isAgentLoading, _) =>
+            _ChatAppBarModeShortcutMenuContent(
+              width: _kChatAppBarAccessoryButtonSize,
+              closeTooltip: isEnglish ? 'Close mode menu' : '收起模式菜单',
+              headerIcon: _buildOpenIcon(selectedColor),
+              items: [
+                _ChatAppBarModeShortcutMenuItemData(
+                  action: _ChatAppBarModeShortcutAction.omniAi,
+                  iconAsset: _kChatAppBarAgentIconAsset,
+                  tooltip: isEnglish ? 'OmniAi' : '小万',
+                  selected: widget.isOmniAiSelected,
+                  enabled: widget.onOmniAiTap != null,
+                  iconSize: _kChatAppBarModeMenuOmniAiIconSize,
+                  iconOffset: _kChatAppBarModeMenuOmniAiIconOffset,
+                ),
+                for (final agent in acpAgentModes)
+                  _ChatAppBarModeShortcutMenuItemData(
+                    action: _ChatAppBarModeShortcutAction.acpAgent(agent.id),
+                    agentId: agent.id,
+                    tooltip: agent.name,
+                    selected:
+                        widget.isAgentSelected &&
+                        agent.id == widget.activeAcpAgentId,
+                    enabled:
+                        !isAgentLoading &&
+                        (widget.onAcpAgentTap != null ||
+                            widget.onAgentTap != null),
+                    iconSize: _chatAppBarModeMenuAgentIconSize(agent.id),
+                  ),
+                _ChatAppBarModeShortcutMenuItemData(
+                  action: _ChatAppBarModeShortcutAction.pureChat,
+                  iconAsset: _kChatAppBarPureChatIconAsset,
+                  tooltip: isEnglish ? 'Pure chat' : '纯聊天模式',
+                  selected: widget.isPureChatSelected,
+                  enabled: canSelectPureChat,
+                  iconSize: _kChatAppBarModeMenuPureChatIconSize,
+                ),
+              ],
+              selectedColor: selectedColor,
+              // popup 有自己的不透明 surface，不能复用为聊天壁纸适配的 AppBar
+              // iconTint；后者在浅色主题 + 深色壁纸时可能接近白色。
+              iconTint: palette.textSecondary,
+              disabledTint: palette.textTertiary,
             ),
-          _ChatAppBarModeShortcutMenuItemData(
-            action: _ChatAppBarModeShortcutAction.pureChat,
-            iconAsset: _kChatAppBarPureChatIconAsset,
-            tooltip: isEnglish ? 'Pure chat' : '纯聊天模式',
-            selected: widget.isPureChatSelected,
-            enabled: canSelectPureChat,
-            iconSize: _kChatAppBarModeMenuPureChatIconSize,
-          ),
-        ],
-        selectedColor: selectedColor,
-        // popup 有自己的不透明 surface，不能复用为聊天壁纸适配的 AppBar
-        // iconTint；后者在浅色主题 + 深色壁纸时可能接近白色。
-        iconTint: palette.textSecondary,
-        disabledTint: palette.textTertiary,
       ),
     );
     if (mounted) {
