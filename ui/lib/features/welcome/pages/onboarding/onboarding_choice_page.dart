@@ -5,6 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/constants/storage_keys.dart';
 import 'package:ui/core/router/go_router_manager.dart';
 import 'package:ui/features/home/pages/chat/chat_page.dart';
+import 'package:ui/services/special_permission.dart';
 import 'package:ui/services/storage_service.dart';
 import 'package:ui/theme/theme_context.dart';
 
@@ -12,11 +13,13 @@ import 'onboarding_definitions.dart';
 import 'onboarding_environment_controller.dart';
 import 'onboarding_flow_controller.dart';
 import 'onboarding_l10n.dart';
+import 'onboarding_permission_controller.dart';
 import 'onboarding_provider_controller.dart';
 import 'pages/completion_page.dart';
 import 'pages/development_page.dart';
 import 'pages/environment_progress_page.dart';
 import 'pages/model_inventory_page.dart';
+import 'pages/permissions_page.dart';
 import 'pages/provider_connection_page.dart';
 import 'pages/provider_page.dart';
 import 'pages/scene_models_page.dart';
@@ -43,6 +46,8 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
   final OnboardingEnvironmentController _environment =
       OnboardingEnvironmentController();
   final OnboardingProviderController _provider = OnboardingProviderController();
+  final OnboardingPermissionController _permission =
+      OnboardingPermissionController();
 
   bool _isReplay = false;
   bool _isCompletingTutorial = false;
@@ -62,6 +67,8 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
     _flow.addListener(_onControllerChanged);
     _environment.addListener(_onControllerChanged);
     _provider.addListener(_onControllerChanged);
+    _permission.addListener(_onControllerChanged);
+    _permission.init();
     unawaited(_environment.loadDistribution());
   }
 
@@ -70,9 +77,11 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
     _flow.removeListener(_onControllerChanged);
     _environment.removeListener(_onControllerChanged);
     _provider.removeListener(_onControllerChanged);
+    _permission.removeListener(_onControllerChanged);
     _flow.dispose();
     _environment.dispose();
     _provider.dispose();
+    _permission.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -104,6 +113,9 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
     if (page == TutorialPage.provider) {
       unawaited(_provider.loadData(t: _t));
     }
+    if (page == TutorialPage.permissions) {
+      unawaited(_permission.refresh());
+    }
   }
 
   void _handleBack() {
@@ -128,7 +140,8 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
       TutorialPage.system when !_environment.isDistributionLoading =>
         () => _goToPage(TutorialPage.development),
       TutorialPage.development => () => _goToPage(TutorialPage.tools),
-      TutorialPage.tools => () => _goToPage(TutorialPage.provider),
+      TutorialPage.tools => () => _goToPage(TutorialPage.permissions),
+      TutorialPage.permissions => () => _goToPage(TutorialPage.provider),
       TutorialPage.provider => () => unawaited(_openChatTour()),
       TutorialPage.providerConnection when _provider.connected =>
         () => _goToPage(TutorialPage.modelInventory),
@@ -159,6 +172,7 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
       TutorialPage.system => const ValueKey('tutorial-system-next'),
       TutorialPage.development => const ValueKey('tutorial-development-next'),
       TutorialPage.tools => const ValueKey('tutorial-skip-environment'),
+      TutorialPage.permissions => const ValueKey('tutorial-permissions-next'),
       TutorialPage.provider => const ValueKey('tutorial-skip-models'),
       TutorialPage.modelInventory => const ValueKey('tutorial-models-next'),
       TutorialPage.primaryScenes => const ValueKey(
@@ -220,6 +234,14 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
     final success = await _provider.configure(t: _t);
     if (success && mounted) {
       _goToPage(TutorialPage.modelInventory);
+    }
+  }
+
+  Future<void> _requestShizuku() async {
+    if (!mounted) return;
+    await ensureShizukuPermission(context);
+    if (mounted) {
+      await _permission.refresh();
     }
   }
 
@@ -340,8 +362,13 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
       TutorialPage.environmentProgress => OnboardingEnvironmentProgressPage(
         controller: _environment,
         onBack: _handleBack,
-        onContinue: () => _goToPage(TutorialPage.provider),
+        onContinue: () => _goToPage(TutorialPage.permissions),
         onRetry: _startEnvironmentSetup,
+      ),
+      TutorialPage.permissions => OnboardingPermissionsPage(
+        controller: _permission,
+        scrollController: _scrollController,
+        onRequestShizuku: _requestShizuku,
       ),
       TutorialPage.provider => OnboardingProviderPage(
         controller: _provider,

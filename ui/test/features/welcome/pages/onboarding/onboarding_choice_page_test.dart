@@ -84,6 +84,26 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> openPermissionsPage(WidgetTester tester) async {
+    await openToolsPage(tester);
+    final skipEnvironment = find.byKey(
+      const ValueKey('tutorial-skip-environment'),
+    );
+    await showFinder(tester, skipEnvironment);
+    await tester.tap(skipEnvironment);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> openProviderPage(WidgetTester tester) async {
+    await openPermissionsPage(tester);
+    final permissionsNext = find.byKey(
+      const ValueKey('tutorial-permissions-next'),
+    );
+    await showFinder(tester, permissionsNext);
+    await tester.tap(permissionsNext);
+    await tester.pumpAndSettle();
+  }
+
   setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     await StorageService.init();
@@ -106,6 +126,11 @@ void main() {
           return 'alpine';
         case 'getEmbeddedTerminalInitSnapshot':
           return terminalSnapshot;
+        case 'isBackgroundRunAllowed':
+        case 'isOverlayPermission':
+        case 'isInstalledAppsPermissionGranted':
+        case 'isPublicStorageAccessGranted':
+          return false;
         case 'setEmbeddedTerminalDistribution':
           savedDistribution = (call.arguments as Map)['distribution']
               .toString();
@@ -359,7 +384,7 @@ void main() {
             .onPressed,
         isNull,
       );
-      for (var index = 0; index < 8; index += 1) {
+      for (var index = 0; index < 9; index += 1) {
         expect(
           find.byKey(ValueKey<String>('tutorial-page-dot-$index')),
           findsOneWidget,
@@ -445,7 +470,7 @@ void main() {
       find.byKey(const ValueKey('tutorial-pagination-navigation')),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey('tutorial-page-dot-7')), findsOneWidget);
+    expect(find.byKey(const ValueKey('tutorial-page-dot-8')), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.drag(
@@ -473,13 +498,7 @@ void main() {
       await tester.pumpWidget(buildTestApp());
       await tester.pump(const Duration(milliseconds: 50));
 
-      await openToolsPage(tester);
-      final skipEnvironment = find.byKey(
-        const ValueKey('tutorial-skip-environment'),
-      );
-      await showFinder(tester, skipEnvironment);
-      await tester.tap(skipEnvironment);
-      await tester.pumpAndSettle();
+      await openProviderPage(tester);
 
       expect(find.text('选择模型提供商'), findsOneWidget);
       expect(
@@ -530,6 +549,10 @@ void main() {
       await tester.tap(bottomBack);
       await tester.pumpAndSettle();
 
+      expect(find.text('开启应用权限'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('tutorial-bottom-back')));
+      await tester.pumpAndSettle();
+
       expect(find.text('添加需要的开发工具'), findsOneWidget);
       expect(find.byKey(const ValueKey('tutorial-back-button')), findsNothing);
       expect(
@@ -539,6 +562,55 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('permissions page lists authorization items and continues', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(430, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(buildTestApp());
+    await tester.pump(const Duration(milliseconds: 50));
+
+    await openPermissionsPage(tester);
+
+    expect(find.text('开启应用权限'), findsOneWidget);
+    expect(find.text('0 / 3 项核心授权已就绪'), findsOneWidget);
+    expect(find.text('核心权限'), findsOneWidget);
+    expect(find.text('扩展能力'), findsOneWidget);
+    expect(find.text('通知与提醒'), findsOneWidget);
+    for (final key in <String>[
+      'tutorial-permission-battery',
+      'tutorial-permission-overlay',
+      'tutorial-permission-apps',
+      'tutorial-permission-storage',
+      'tutorial-permission-shizuku',
+      'tutorial-permission-notification',
+    ]) {
+      final row = find.byKey(ValueKey<String>(key));
+      await showFinder(tester, row);
+      expect(row, findsOneWidget);
+    }
+    expect(find.text('去开启'), findsNWidgets(4));
+
+    await tester.tap(
+      find.byKey(const ValueKey('tutorial-permission-notification')),
+    );
+    await tester.pump();
+
+    final permissionsNext = find.byKey(
+      const ValueKey('tutorial-permissions-next'),
+    );
+    expect(tester.widget<IconButton>(permissionsNext).onPressed, isNotNull);
+    await showFinder(tester, permissionsNext);
+    await tester.tap(permissionsNext);
+    await tester.pumpAndSettle();
+
+    expect(find.text('选择模型提供商'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('provider models can be assigned before opening the chat guide', (
     tester,
@@ -551,13 +623,7 @@ void main() {
     await tester.pumpWidget(buildTestApp());
     await tester.pump(const Duration(milliseconds: 50));
 
-    await openToolsPage(tester);
-    final skipEnvironment = find.byKey(
-      const ValueKey('tutorial-skip-environment'),
-    );
-    await showFinder(tester, skipEnvironment);
-    await tester.tap(skipEnvironment);
-    await tester.pumpAndSettle();
+    await openProviderPage(tester);
 
     final providerNext = find.byKey(const ValueKey('tutorial-provider-next'));
     await showFinder(tester, providerNext);
