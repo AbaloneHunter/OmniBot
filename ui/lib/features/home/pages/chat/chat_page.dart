@@ -26,6 +26,7 @@ import '../omnibot_workspace/widgets/omnibot_workspace_browser.dart';
 import 'services/chat_conversation_lifecycle_guard.dart';
 import 'services/chat_conversation_runtime_coordinator.dart';
 import 'package:ui/constants/openclaw/openclaw_keys.dart';
+import 'package:ui/constants/storage_keys.dart';
 import 'package:ui/core/router/go_router_manager.dart';
 import 'package:ui/services/app_state_service.dart';
 import 'package:ui/services/app_update_service.dart';
@@ -81,6 +82,7 @@ import 'widgets/chat_browser_overlay.dart';
 import 'widgets/chat_message_anchor_bar.dart';
 import 'widgets/pet_overlay_permission_sheet.dart';
 import 'widgets/chat_tool_activity_strip.dart';
+import 'widgets/chat_spotlight_tour.dart';
 import 'package:ui/widgets/app_update_dialog.dart';
 import 'package:ui/widgets/app_background_widgets.dart';
 import 'package:ui/widgets/conversation_model_selector.dart';
@@ -104,8 +106,9 @@ const String _kRemoteCodexModeAgentId = 'codex-remote';
 
 class ChatPage extends StatefulWidget {
   final ConversationThreadTarget? threadTarget;
+  final bool showFirstUseTour;
 
-  const ChatPage({super.key, this.threadTarget});
+  const ChatPage({super.key, this.threadTarget, this.showFirstUseTour = false});
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -143,6 +146,10 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   final GlobalKey _browserOverlayKey = GlobalKey();
   final GlobalKey _slashCommandStripKey = GlobalKey();
   final GlobalKey _toolActivityStripKey = GlobalKey();
+  final GlobalKey _firstUseTourMenuAnchorKey = GlobalKey();
+  final GlobalKey _firstUseTourPetAnchorKey = GlobalKey();
+  final GlobalKey _firstUseTourIslandAnchorKey = GlobalKey();
+  final GlobalKey _firstUseTourModeAnchorKey = GlobalKey();
 
   /// 模型选择器走 OverlayEntry，不走 Navigator.push。
   /// 理由：[Navigator.push] → [ModalRoute.didPush] 会调 `setFirstFocus`
@@ -154,6 +161,8 @@ abstract class _ChatPageStateBase extends State<ChatPage>
 
   // ===================== State =====================
   bool _isPopupVisible = false;
+  int _firstUseTourStep = 0;
+  bool _firstUseTourClosing = false;
   bool _isCheckingSendModelConfiguration = false;
   final ChatConversationRuntimeCoordinator _runtimeCoordinator =
       ChatConversationRuntimeCoordinator.instance;
@@ -448,6 +457,49 @@ abstract class _ChatPageStateBase extends State<ChatPage>
       GlobalKey<CodexRemoteWorkspaceBrowserState>();
 
   ChatPageMode get _activeMode => _activeConversationMode;
+
+  bool get _isFirstUseTourActive =>
+      widget.showFirstUseTour && !_firstUseTourClosing;
+
+  GlobalKey get _firstUseTourAnchorKey => switch (_firstUseTourStep) {
+    0 => _firstUseTourMenuAnchorKey,
+    1 => _firstUseTourModeAnchorKey,
+    2 => _firstUseTourPetAnchorKey,
+    3 => _firstUseTourIslandAnchorKey,
+    _ => _inputAreaKey,
+  };
+
+  void _showNextFirstUseTourStep() {
+    if (!mounted ||
+        !_isFirstUseTourActive ||
+        _firstUseTourStep >= ChatSpotlightTour.stepCount - 1) {
+      return;
+    }
+    setState(() {
+      _firstUseTourStep += 1;
+    });
+  }
+
+  void _handleFirstUseTourBack() {
+    if (!mounted || !_isFirstUseTourActive) return;
+    if (_firstUseTourStep > 0) {
+      setState(() {
+        _firstUseTourStep -= 1;
+      });
+      return;
+    }
+    Navigator.of(context).pop();
+  }
+
+  Future<void> _finishFirstUseTour() async {
+    if (!mounted || _firstUseTourClosing) return;
+    setState(() {
+      _firstUseTourClosing = true;
+    });
+    await StorageService.setBool(StorageKeys.welcomeCompleted, true);
+    if (!mounted) return;
+    GoRouterManager.clearAndNavigateTo('/home/chat');
+  }
 
   String? get _conversationBoundAcpAgentId {
     if (_activeMode != ChatPageMode.agent) {

@@ -3,11 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ui/features/home/pages/chat/chat_page.dart';
 import 'package:ui/features/welcome/pages/onboarding/onboarding_choice_page.dart';
 import 'package:ui/l10n/generated/app_localizations.dart';
 import 'package:ui/services/storage_service.dart';
 import 'package:ui/theme/app_theme.dart';
+import 'package:ui/widgets/provider_vendor_icon.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -235,6 +238,22 @@ void main() {
       await tester.pump();
 
       expect(find.text('正在准备 Ubuntu 系统'), findsOneWidget);
+      expect(find.byIcon(LucideIcons.loaderCircle), findsNothing);
+      final activeMilestone = find.byKey(
+        const ValueKey('tutorial-environment-active-milestone-spinner'),
+      );
+      expect(activeMilestone, findsOneWidget);
+      expect(
+        tester
+            .widget<CircularProgressIndicator>(
+              find.descendant(
+                of: activeMilestone,
+                matching: find.byType(CircularProgressIndicator),
+              ),
+            )
+            .value,
+        isNull,
+      );
       final firstProgress = tester
           .widget<CircularProgressIndicator>(
             find.byKey(const ValueKey('tutorial-environment-progress-ring')),
@@ -283,7 +302,7 @@ void main() {
     },
   );
 
-  testWidgets('users can move through split setup and chat guide pages', (
+  testWidgets('later setup pages use bottom back and provider brand icons', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(430, 900);
@@ -304,23 +323,31 @@ void main() {
 
     expect(find.text('选择模型提供商'), findsOneWidget);
     expect(find.byKey(const ValueKey('tutorial-provider-deepseek')), findsOne);
+    expect(find.byKey(const ValueKey('tutorial-back-button')), findsNothing);
+    expect(find.byKey(const ValueKey('tutorial-bottom-back')), findsOneWidget);
+    for (final id in <String>[
+      'deepseek',
+      'moonshot',
+      'mimo',
+      'openai',
+      'anthropic',
+      'custom',
+    ]) {
+      expect(
+        find.byKey(ValueKey<String>('tutorial-provider-icon-$id')),
+        findsOneWidget,
+      );
+    }
+    expect(find.byType(ProviderVendorIcon), findsNWidgets(5));
 
-    final skipModels = find.byKey(const ValueKey('tutorial-skip-models'));
-    await showFinder(tester, skipModels);
-    await tester.tap(skipModels);
+    final bottomBack = find.byKey(const ValueKey('tutorial-bottom-back'));
+    await showFinder(tester, bottomBack);
+    await tester.tap(bottomBack);
     await tester.pumpAndSettle();
 
-    expect(find.text('认识聊天页面顶部'), findsOneWidget);
-    expect(find.byKey(const ValueKey('tutorial-chat-preview')), findsOneWidget);
-    expect(find.text('附件、命令与发送'), findsNothing);
-
-    final chatTopNext = find.byKey(const ValueKey('tutorial-chat-top-next'));
-    await showFinder(tester, chatTopNext);
-    await tester.tap(chatTopNext);
-    await tester.pumpAndSettle();
-
-    expect(find.text('认识工具与输入区'), findsOneWidget);
-    expect(find.text('附件、命令与发送'), findsOneWidget);
+    expect(find.text('添加需要的开发工具'), findsOneWidget);
+    expect(find.byKey(const ValueKey('tutorial-back-button')), findsNothing);
+    expect(find.byKey(const ValueKey('tutorial-bottom-back')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -391,9 +418,20 @@ void main() {
     final saveScenes = find.byKey(const ValueKey('tutorial-save-scenes'));
     await showFinder(tester, saveScenes);
     await tester.tap(saveScenes);
+    for (var frame = 0; frame < 15; frame += 1) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    expect(find.byType(ChatPage), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-spotlight-tour')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-spotlight-back')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-spotlight-next')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('chat-spotlight-back')));
     await tester.pumpAndSettle();
 
-    expect(find.text('认识聊天页面顶部'), findsOneWidget);
+    expect(find.byType(ChatPage), findsNothing);
+    expect(find.text('配置记忆模型'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

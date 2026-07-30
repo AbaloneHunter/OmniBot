@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/constants/storage_keys.dart';
-import 'package:ui/core/router/go_router_manager.dart';
+import 'package:ui/features/home/pages/chat/chat_page.dart';
 import 'package:ui/services/model_provider_config_service.dart';
+import 'package:ui/services/model_vendor_catalog.dart';
 import 'package:ui/services/scene_model_config_service.dart';
 import 'package:ui/services/special_permission.dart';
 import 'package:ui/services/storage_service.dart';
 import 'package:ui/theme/theme_context.dart';
+import 'package:ui/widgets/provider_vendor_icon.dart';
 
 enum _TutorialPage {
   system,
@@ -21,8 +23,6 @@ enum _TutorialPage {
   modelInventory,
   primaryScenes,
   memoryScenes,
-  chatTop,
-  chatComposer,
 }
 
 class _EnvironmentPreset {
@@ -67,7 +67,7 @@ class _ProviderOption {
   const _ProviderOption({
     required this.id,
     required this.label,
-    required this.shortLabel,
+    required this.vendorKey,
     required this.baseUrl,
     required this.sourceType,
     required this.protocolType,
@@ -75,7 +75,7 @@ class _ProviderOption {
 
   final String id;
   final String label;
-  final String shortLabel;
+  final String? vendorKey;
   final String baseUrl;
   final String sourceType;
   final String protocolType;
@@ -93,22 +93,6 @@ class _SceneDefinition {
   final String id;
   final IconData icon;
   final String title;
-  final String descriptionZh;
-  final String descriptionEn;
-}
-
-class _ChatFeature {
-  const _ChatFeature({
-    required this.icon,
-    required this.titleZh,
-    required this.titleEn,
-    required this.descriptionZh,
-    required this.descriptionEn,
-  });
-
-  final IconData icon;
-  final String titleZh;
-  final String titleEn;
   final String descriptionZh;
   final String descriptionEn;
 }
@@ -184,7 +168,7 @@ const List<_ProviderOption> _providerOptions = <_ProviderOption>[
   _ProviderOption(
     id: 'deepseek',
     label: 'DeepSeek',
-    shortLabel: 'DS',
+    vendorKey: 'deepseek',
     baseUrl: 'https://api.deepseek.com',
     sourceType: 'deepseek',
     protocolType: 'deepseek',
@@ -192,7 +176,7 @@ const List<_ProviderOption> _providerOptions = <_ProviderOption>[
   _ProviderOption(
     id: 'moonshot',
     label: 'Kimi',
-    shortLabel: 'K',
+    vendorKey: 'moonshot',
     baseUrl: 'https://api.moonshot.cn/v1',
     sourceType: 'moonshot',
     protocolType: 'openai_compatible',
@@ -200,7 +184,7 @@ const List<_ProviderOption> _providerOptions = <_ProviderOption>[
   _ProviderOption(
     id: 'mimo',
     label: 'Mimo',
-    shortLabel: 'MI',
+    vendorKey: 'xiaomi',
     baseUrl: 'https://api.xiaomimimo.com/v1',
     sourceType: 'mimo',
     protocolType: 'openai_compatible',
@@ -208,7 +192,7 @@ const List<_ProviderOption> _providerOptions = <_ProviderOption>[
   _ProviderOption(
     id: 'openai',
     label: 'OpenAI',
-    shortLabel: 'OAI',
+    vendorKey: 'openai',
     baseUrl: 'https://api.openai.com/v1',
     sourceType: 'custom',
     protocolType: 'openai_compatible',
@@ -216,7 +200,7 @@ const List<_ProviderOption> _providerOptions = <_ProviderOption>[
   _ProviderOption(
     id: 'anthropic',
     label: 'Anthropic',
-    shortLabel: 'A',
+    vendorKey: 'anthropic',
     baseUrl: 'https://api.anthropic.com/v1',
     sourceType: 'custom',
     protocolType: 'anthropic',
@@ -224,7 +208,7 @@ const List<_ProviderOption> _providerOptions = <_ProviderOption>[
   _ProviderOption(
     id: 'custom',
     label: 'Compatible API',
-    shortLabel: 'API',
+    vendorKey: null,
     baseUrl: '',
     sourceType: 'custom',
     protocolType: 'openai_compatible',
@@ -271,57 +255,6 @@ const List<_SceneDefinition> _sceneDefinitions = <_SceneDefinition>[
     descriptionZh: '归纳长期记忆并去除重复信息，适合稳定、成本适中的文本模型。',
     descriptionEn:
         'Consolidates long-term memory and removes duplicates. A reliable text model is ideal.',
-  ),
-];
-
-const List<_ChatFeature> _chatFeatures = <_ChatFeature>[
-  _ChatFeature(
-    icon: LucideIcons.panelLeft,
-    titleZh: '菜单与会话',
-    titleEn: 'Menu and conversations',
-    descriptionZh: '左上角打开侧栏，可新建对话、切换历史会话并进入设置。',
-    descriptionEn:
-        'Open the sidebar to start chats, switch conversation history, and reach settings.',
-  ),
-  _ChatFeature(
-    icon: LucideIcons.workflow,
-    titleZh: '模式切换',
-    titleEn: 'Mode switcher',
-    descriptionZh: '顶部中间在“小万”、编程 Agent 与纯聊天模式之间切换。',
-    descriptionEn:
-        'Switch between OmniAi, coding agents, and pure chat from the top island.',
-  ),
-  _ChatFeature(
-    icon: LucideIcons.pawPrint,
-    titleZh: '宠物与工作区',
-    titleEn: 'Pet and workspace',
-    descriptionZh: '右上角可唤起桌面宠物；平板或宽屏上还能打开工作区文件面板。',
-    descriptionEn:
-        'Open the pet overlay, or show the workspace file pane on larger screens.',
-  ),
-  _ChatFeature(
-    icon: LucideIcons.squareTerminal,
-    titleZh: '环境、终端与浏览器',
-    titleEn: 'Environment, terminal, and browser',
-    descriptionZh: '工具岛依次管理环境变量、打开本地终端，以及查看 Agent 的浏览器会话。',
-    descriptionEn:
-        'Manage environment variables, open the local terminal, or inspect the agent browser.',
-  ),
-  _ChatFeature(
-    icon: LucideIcons.circleGauge,
-    titleZh: '模型与上下文',
-    titleEn: 'Model and context',
-    descriptionZh: '输入框下方可切换当前模型；上下文环显示对话容量，长按可调整阈值。',
-    descriptionEn:
-        'Choose the current model and use the context ring to monitor or adjust chat capacity.',
-  ),
-  _ChatFeature(
-    icon: LucideIcons.paperclip,
-    titleZh: '附件、命令与发送',
-    titleEn: 'Attachments, commands, and send',
-    descriptionZh: '“+”添加图片或文件；输入“/”打开命令面板；发送后按钮会变为停止。',
-    descriptionEn:
-        'Use plus for files, slash for commands, and the send button to submit or stop a run.',
   ),
 ];
 
@@ -372,8 +305,6 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
   Map<String, String> _sceneModelSelections = <String, String>{};
   Set<String> _savingSceneIds = <String>{};
   bool _sceneModelsSaving = false;
-
-  int _selectedChatFeature = 0;
 
   bool get _isEnglish =>
       Localizations.localeOf(context).languageCode.toLowerCase() == 'en';
@@ -684,11 +615,6 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
     setState(() {
       _pageHistory.add(_page);
       _page = page;
-      if (page == _TutorialPage.chatTop) {
-        _selectedChatFeature = 0;
-      } else if (page == _TutorialPage.chatComposer) {
-        _selectedChatFeature = 3;
-      }
     });
     if (_scrollController.hasClients) {
       _scrollController.jumpTo(0);
@@ -696,6 +622,16 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
     if (page == _TutorialPage.provider) {
       unawaited(_loadProviderData());
     }
+  }
+
+  Future<void> _openChatTour() async {
+    if (!mounted) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => const ChatPage(showFirstUseTour: true),
+        settings: const RouteSettings(name: 'first-use-chat-spotlight-tour'),
+      ),
+    );
   }
 
   Future<void> _loadProviderData() async {
@@ -1006,6 +942,7 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
       _sceneModelsSaving = true;
       _providerError = null;
     });
+    var saved = false;
     try {
       for (final scene in _sceneDefinitions) {
         if (!mounted) return;
@@ -1022,7 +959,7 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
           _savingSceneIds = <String>{..._savingSceneIds}..remove(scene.id);
         });
       }
-      _goToPage(_TutorialPage.chatTop);
+      saved = true;
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -1039,12 +976,9 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
         });
       }
     }
-  }
-
-  Future<void> _finishTutorial() async {
-    await StorageService.setBool(StorageKeys.welcomeCompleted, true);
-    if (!mounted) return;
-    GoRouterManager.clearAndNavigateTo('/home/chat');
+    if (saved && mounted) {
+      await _openChatTour();
+    }
   }
 
   void _handleBack() {
@@ -1052,11 +986,6 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
     if (_pageHistory.isNotEmpty) {
       setState(() {
         _page = _pageHistory.removeLast();
-        if (_page == _TutorialPage.chatTop) {
-          _selectedChatFeature = 0;
-        } else if (_page == _TutorialPage.chatComposer) {
-          _selectedChatFeature = 3;
-        }
       });
       if (_scrollController.hasClients) {
         _scrollController.jumpTo(0);
@@ -1085,80 +1014,66 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
       child: Scaffold(
         backgroundColor: palette.pageBackground,
         body: SafeArea(
-          child: Column(
-            children: [
-              if (_page != _TutorialPage.environmentProgress) _buildTopBar(),
-              Expanded(
-                child: AnimatedSwitcher(
-                  duration: reduceMotion
-                      ? Duration.zero
-                      : const Duration(milliseconds: 260),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  transitionBuilder: (child, animation) {
-                    final offset = Tween<Offset>(
-                      begin: const Offset(0.025, 0),
-                      end: Offset.zero,
-                    ).animate(animation);
-                    return FadeTransition(
-                      opacity: animation,
-                      child: SlideTransition(position: offset, child: child),
-                    );
-                  },
-                  child: KeyedSubtree(
-                    key: ValueKey<_TutorialPage>(_page),
-                    child: switch (_page) {
-                      _TutorialPage.system => _buildSystemPage(),
-                      _TutorialPage.development => _buildDevelopmentPage(),
-                      _TutorialPage.tools => _buildToolsPage(),
-                      _TutorialPage.environmentProgress =>
-                        _buildEnvironmentProgressPage(),
-                      _TutorialPage.provider => _buildProviderPage(),
-                      _TutorialPage.providerConnection =>
-                        _buildProviderConnectionPage(),
-                      _TutorialPage.modelInventory =>
-                        _buildModelInventoryPage(),
-                      _TutorialPage.primaryScenes => _buildPrimaryScenesPage(),
-                      _TutorialPage.memoryScenes => _buildMemoryScenesPage(),
-                      _TutorialPage.chatTop => _buildChatGuidePage(top: true),
-                      _TutorialPage.chatComposer => _buildChatGuidePage(
-                        top: false,
-                      ),
-                    },
-                  ),
-                ),
-              ),
-            ],
+          child: AnimatedSwitcher(
+            duration: reduceMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 260),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              final offset = Tween<Offset>(
+                begin: const Offset(0.025, 0),
+                end: Offset.zero,
+              ).animate(animation);
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(position: offset, child: child),
+              );
+            },
+            child: KeyedSubtree(
+              key: ValueKey<_TutorialPage>(_page),
+              child: switch (_page) {
+                _TutorialPage.system => _buildSystemPage(),
+                _TutorialPage.development => _buildDevelopmentPage(),
+                _TutorialPage.tools => _buildToolsPage(),
+                _TutorialPage.environmentProgress =>
+                  _buildEnvironmentProgressPage(),
+                _TutorialPage.provider => _buildProviderPage(),
+                _TutorialPage.providerConnection =>
+                  _buildProviderConnectionPage(),
+                _TutorialPage.modelInventory => _buildModelInventoryPage(),
+                _TutorialPage.primaryScenes => _buildPrimaryScenesPage(),
+                _TutorialPage.memoryScenes => _buildMemoryScenesPage(),
+              },
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildTopBar() {
-    final showBack = _pageHistory.isNotEmpty || _isReplay;
-    if (!showBack) {
-      return const SizedBox(height: 12);
-    }
+  bool get _showBottomBack => _pageHistory.isNotEmpty || _isReplay;
+
+  Widget _buildBottomBackButton({bool enabled = true}) {
+    final palette = context.omniPalette;
     return SizedBox(
-      height: 56,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 860),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: SizedBox(
-              width: 56,
-              height: 56,
-              child: IconButton(
-                key: const ValueKey('tutorial-back-button'),
-                onPressed: _providerBusy || _sceneModelsSaving
-                    ? null
-                    : _handleBack,
-                tooltip: _t('返回', 'Back'),
-                icon: const Icon(LucideIcons.arrowLeft),
-              ),
-            ),
+      width: double.infinity,
+      height: 50,
+      child: OutlinedButton.icon(
+        key: const ValueKey('tutorial-bottom-back'),
+        onPressed: enabled && !_providerBusy && !_sceneModelsSaving
+            ? _handleBack
+            : null,
+        icon: const Icon(LucideIcons.arrowLeft, size: 18),
+        label: Text(
+          _t('返回上一步', 'Back'),
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: palette.textSecondary,
+          side: BorderSide(color: palette.borderStrong),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
           ),
         ),
       ),
@@ -1211,6 +1126,10 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
               ),
               const SizedBox(height: 22),
               ...children,
+              if (_showBottomBack) ...[
+                const SizedBox(height: 14),
+                _buildBottomBackButton(),
+              ],
             ],
           ),
         ),
@@ -1332,6 +1251,10 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
                         ? null
                         : () => _goToPage(_TutorialPage.development),
                   ),
+                  if (_isReplay) ...[
+                    const SizedBox(height: 8),
+                    _buildBottomBackButton(),
+                  ],
                 ],
               ),
             ),
@@ -1799,31 +1722,14 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
                                 ),
                               ),
                             ),
-                            Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  failed
-                                      ? LucideIcons.circleAlert
-                                      : success
-                                      ? LucideIcons.circleCheck
-                                      : LucideIcons.loaderCircle,
-                                  size: 28,
-                                  color: accent,
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  progressLabel,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineMedium
-                                      ?.copyWith(
-                                        color: palette.textPrimary,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: -0.8,
-                                      ),
-                                ),
-                              ],
+                            Text(
+                              progressLabel,
+                              style: Theme.of(context).textTheme.headlineMedium
+                                  ?.copyWith(
+                                    color: palette.textPrimary,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.8,
+                                  ),
                             ),
                           ],
                         ),
@@ -1898,19 +1804,14 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
                       const SizedBox(height: 6),
                       _buildTextAction(
                         key: const ValueKey(
-                          'tutorial-environment-edit-selection',
-                        ),
-                        label: _t('返回修改选择', 'Change selections'),
-                        onPressed: _handleBack,
-                      ),
-                      _buildTextAction(
-                        key: const ValueKey(
                           'tutorial-skip-environment-progress',
                         ),
                         label: _t('暂不配置，先设置模型', 'Set up the environment later'),
                         onPressed: () => _goToPage(_TutorialPage.provider),
                       ),
                     ],
+                    const SizedBox(height: 10),
+                    _buildBottomBackButton(enabled: !_isEnvironmentBusy),
                   ],
                 ),
               ),
@@ -1975,19 +1876,34 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
                   border: Border.all(color: color),
                 ),
                 alignment: Alignment.center,
-                child: Icon(
-                  failed
-                      ? LucideIcons.x
-                      : completed
-                      ? LucideIcons.check
-                      : active
-                      ? LucideIcons.loaderCircle
-                      : LucideIcons.circle,
-                  size: 15,
-                  color: completed
-                      ? Theme.of(context).colorScheme.onPrimary
-                      : color,
-                ),
+                child: active && !failed
+                    ? SizedBox(
+                        key: const ValueKey(
+                          'tutorial-environment-active-milestone-spinner',
+                        ),
+                        width: 15,
+                        height: 15,
+                        child: CircularProgressIndicator(
+                          value:
+                              MediaQuery.maybeOf(context)?.disableAnimations ==
+                                  true
+                              ? 0.72
+                              : null,
+                          strokeWidth: 2.2,
+                          color: color,
+                        ),
+                      )
+                    : Icon(
+                        failed
+                            ? LucideIcons.x
+                            : completed
+                            ? LucideIcons.check
+                            : LucideIcons.circle,
+                        size: 15,
+                        color: completed
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : color,
+                      ),
               ),
               const SizedBox(height: 7),
               Text(
@@ -2163,7 +2079,7 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
           _buildTextAction(
             key: const ValueKey('tutorial-skip-models'),
             label: _t('暂不配置，先了解聊天界面', 'Learn the chat interface first'),
-            onPressed: () => _goToPage(_TutorialPage.chatTop),
+            onPressed: _openChatTour,
           ),
         ],
       ],
@@ -2292,6 +2208,17 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
     final displayLabel = option.id == 'custom'
         ? _t('兼容 API', 'Compatible API')
         : option.label;
+    final vendor = ModelVendorCatalog.byKey(option.vendorKey);
+    final iconSurface = switch (option.vendorKey) {
+      'moonshot' => const Color(0xFF111827),
+      'deepseek' => const Color(0xFFEEF1FF),
+      'xiaomi' => const Color(0xFFFFF1E8),
+      _ => palette.surfaceSecondary,
+    };
+    final iconColor = switch (option.vendorKey) {
+      'xiaomi' => const Color(0xFFFF6900),
+      _ => palette.textPrimary,
+    };
     return Semantics(
       button: true,
       selected: selected,
@@ -2318,24 +2245,28 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
             child: Row(
               children: [
                 Container(
+                  key: ValueKey<String>('tutorial-provider-icon-${option.id}'),
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: selected
-                        ? palette.accentPrimary
-                        : palette.surfaceSecondary,
+                    color: iconSurface,
                     borderRadius: BorderRadius.circular(11),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    option.shortLabel,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: selected
-                          ? Theme.of(context).colorScheme.onPrimary
-                          : palette.textSecondary,
-                      fontWeight: FontWeight.w800,
+                    border: Border.all(
+                      color: palette.borderSubtle.withValues(alpha: 0.8),
                     ),
                   ),
+                  alignment: Alignment.center,
+                  child: vendor == null
+                      ? Icon(
+                          LucideIcons.plugZap,
+                          size: 19,
+                          color: palette.textSecondary,
+                        )
+                      : ProviderVendorIcon(
+                          vendor: vendor,
+                          size: 21,
+                          monochromeColor: iconColor,
+                        ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -2743,190 +2674,6 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
     );
   }
 
-  Widget _buildChatGuidePage({required bool top}) {
-    final indexes = top ? const <int>[0, 1, 2] : const <int>[3, 4, 5];
-    return _buildShortPage(
-      icon: LucideIcons.messageCircleMore,
-      title: top
-          ? _t('认识聊天页面顶部', 'Learn the top chat controls')
-          : _t('认识工具与输入区', 'Learn the tools and composer'),
-      description: top
-          ? _t(
-              '点按下方三个部件，示意界面会高亮对应位置。',
-              'Tap one of the three controls to highlight it in the preview.',
-            )
-          : _t(
-              '这里控制开发工具、当前模型、附件、命令和消息发送。',
-              'These controls manage tools, the current model, attachments, commands, and sending.',
-            ),
-      children: [
-        _ChatInterfacePreview(selectedFeature: _selectedChatFeature),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: indexes
-              .map((index) {
-                final feature = _chatFeatures[index];
-                final selected = _selectedChatFeature == index;
-                return ChoiceChip(
-                  key: ValueKey<String>('tutorial-chat-feature-$index'),
-                  selected: selected,
-                  onSelected: (_) =>
-                      setState(() => _selectedChatFeature = index),
-                  avatar: Icon(
-                    feature.icon,
-                    size: 16,
-                    color: selected
-                        ? Theme.of(context).colorScheme.onPrimary
-                        : context.omniPalette.textSecondary,
-                  ),
-                  label: Text(_t(feature.titleZh, feature.titleEn)),
-                  showCheckmark: false,
-                  selectedColor: context.omniPalette.accentPrimary,
-                  backgroundColor: context.omniPalette.surfacePrimary,
-                  side: BorderSide(
-                    color: selected
-                        ? context.omniPalette.accentPrimary
-                        : context.omniPalette.borderSubtle,
-                  ),
-                  labelStyle: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: selected
-                        ? Theme.of(context).colorScheme.onPrimary
-                        : context.omniPalette.textPrimary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                );
-              })
-              .toList(growable: false),
-        ),
-        const SizedBox(height: 12),
-        _buildChatFeatureCard(
-          _selectedChatFeature,
-          _chatFeatures[_selectedChatFeature],
-        ),
-        const SizedBox(height: 10),
-        _buildPrimaryButton(
-          key: ValueKey<String>(
-            top ? 'tutorial-chat-top-next' : 'tutorial-finish',
-          ),
-          label: top
-              ? _t('继续了解输入区', 'Continue to the composer')
-              : _t('完成，开始第一次对话', 'Finish and start chatting'),
-          icon: top ? LucideIcons.arrowRight : LucideIcons.messageCircleMore,
-          onPressed: top
-              ? () => _goToPage(_TutorialPage.chatComposer)
-              : _finishTutorial,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildChatFeatureCard(int index, _ChatFeature feature) {
-    final palette = context.omniPalette;
-    final selected = _selectedChatFeature == index;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Semantics(
-        button: true,
-        selected: selected,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            key: ValueKey<int>(index),
-            onTap: () => setState(() => _selectedChatFeature = index),
-            borderRadius: BorderRadius.circular(16),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 190),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: selected
-                    ? palette.accentPrimary.withValues(alpha: 0.09)
-                    : palette.surfacePrimary,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: selected
-                      ? palette.accentPrimary
-                      : palette.borderSubtle,
-                  width: selected ? 1.4 : 1,
-                ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? palette.accentPrimary
-                          : palette.surfaceSecondary,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(
-                      feature.icon,
-                      size: 19,
-                      color: selected
-                          ? Theme.of(context).colorScheme.onPrimary
-                          : palette.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(width: 13),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _t(feature.titleZh, feature.titleEn),
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(
-                                color: palette.textPrimary,
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          _t(feature.descriptionZh, feature.descriptionEn),
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: palette.textSecondary,
-                                height: 1.55,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    width: 25,
-                    height: 25,
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? palette.accentPrimary
-                          : palette.surfaceSecondary,
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      '${index + 1}',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: selected
-                            ? Theme.of(context).colorScheme.onPrimary
-                            : palette.textSecondary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildInlineError(String message) {
     final errorColor = Theme.of(context).colorScheme.error;
     return Container(
@@ -3083,394 +2830,6 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
           minimumSize: const Size(44, 44),
         ),
         child: Text(label),
-      ),
-    );
-  }
-}
-
-class _ChatInterfacePreview extends StatelessWidget {
-  const _ChatInterfacePreview({required this.selectedFeature});
-
-  final int selectedFeature;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.omniPalette;
-    final accent = palette.accentPrimary;
-    Color borderFor(int index) =>
-        selectedFeature == index ? accent : palette.borderSubtle;
-    Color surfaceFor(int index) => selectedFeature == index
-        ? accent.withValues(alpha: 0.1)
-        : palette.surfacePrimary;
-
-    return Container(
-      key: const ValueKey('tutorial-chat-preview'),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: palette.surfacePrimary,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: palette.borderStrong),
-        boxShadow: context.isDarkTheme
-            ? const []
-            : [
-                BoxShadow(
-                  color: palette.shadowColor,
-                  blurRadius: 26,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(13, 12, 13, 10),
-            child: Row(
-              children: [
-                _PreviewHighlight(
-                  active: selectedFeature == 0,
-                  number: 1,
-                  child: const _PreviewIcon(icon: LucideIcons.menu),
-                ),
-                const Spacer(),
-                _PreviewHighlight(
-                  active: selectedFeature == 1,
-                  number: 2,
-                  child: Container(
-                    height: 36,
-                    padding: const EdgeInsets.symmetric(horizontal: 13),
-                    decoration: BoxDecoration(
-                      color: surfaceFor(1),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: borderFor(1)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(LucideIcons.sparkles, size: 16, color: accent),
-                        const SizedBox(width: 7),
-                        Text(
-                          'OmniAi',
-                          style: Theme.of(context).textTheme.labelMedium
-                              ?.copyWith(
-                                color: palette.textPrimary,
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                        const SizedBox(width: 6),
-                        Icon(
-                          LucideIcons.chevronDown,
-                          size: 14,
-                          color: palette.textSecondary,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                _PreviewHighlight(
-                  active: selectedFeature == 2,
-                  number: 3,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      _PreviewIcon(icon: LucideIcons.pawPrint),
-                      SizedBox(width: 4),
-                      _PreviewIcon(icon: LucideIcons.folderOpen),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Divider(height: 1, color: palette.borderSubtle),
-          Container(
-            height: 154,
-            width: double.infinity,
-            color: palette.pageBackground,
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    LucideIcons.messageCircleMore,
-                    color: accent,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  height: 8,
-                  width: 150,
-                  decoration: BoxDecoration(
-                    color: palette.borderStrong,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  height: 7,
-                  width: 210,
-                  decoration: BoxDecoration(
-                    color: palette.borderSubtle,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-            child: Column(
-              children: [
-                Align(
-                  alignment: Alignment.center,
-                  child: _PreviewHighlight(
-                    active: selectedFeature == 3,
-                    number: 4,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 7,
-                      ),
-                      decoration: BoxDecoration(
-                        color: surfaceFor(3),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: borderFor(3)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _toolIcon(context, LucideIcons.slidersHorizontal),
-                          _toolDivider(context),
-                          _toolIcon(context, LucideIcons.squareTerminal),
-                          _toolDivider(context),
-                          _toolIcon(context, LucideIcons.globe2),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  decoration: BoxDecoration(
-                    color: palette.surfacePrimary,
-                    borderRadius: BorderRadius.circular(19),
-                    border: Border.all(
-                      color: selectedFeature == 4 || selectedFeature == 5
-                          ? accent
-                          : palette.borderSubtle,
-                      width: selectedFeature == 4 || selectedFeature == 5
-                          ? 1.4
-                          : 1,
-                    ),
-                  ),
-                  padding: const EdgeInsets.fromLTRB(13, 12, 10, 10),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              Localizations.localeOf(context).languageCode ==
-                                      'en'
-                                  ? 'Ask anything…'
-                                  : '输入消息，或键入 / 使用命令…',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: palette.textTertiary),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 18),
-                      Row(
-                        children: [
-                          _PreviewHighlight(
-                            active: selectedFeature == 5,
-                            number: 6,
-                            child: const _PreviewIcon(
-                              icon: LucideIcons.plus,
-                              compact: true,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          _PreviewHighlight(
-                            active: selectedFeature == 4,
-                            number: 5,
-                            child: Container(
-                              height: 30,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 9,
-                              ),
-                              decoration: BoxDecoration(
-                                color: surfaceFor(4),
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(color: borderFor(4)),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    LucideIcons.brainCircuit,
-                                    size: 14,
-                                    color: palette.textSecondary,
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    'model',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelSmall
-                                        ?.copyWith(
-                                          color: palette.textSecondary,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      value: 0.36,
-                                      strokeWidth: 2,
-                                      backgroundColor: palette.borderSubtle,
-                                      color: accent,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const Spacer(),
-                          Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              color: selectedFeature == 5
-                                  ? accent
-                                  : palette.textPrimary,
-                              shape: BoxShape.circle,
-                            ),
-                            alignment: Alignment.center,
-                            child: Icon(
-                              LucideIcons.send,
-                              size: 16,
-                              color: palette.surfacePrimary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _toolIcon(BuildContext context, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 7),
-      child: Icon(icon, size: 15, color: context.omniPalette.textSecondary),
-    );
-  }
-
-  Widget _toolDivider(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 15,
-      color: context.omniPalette.borderSubtle,
-    );
-  }
-}
-
-class _PreviewHighlight extends StatelessWidget {
-  const _PreviewHighlight({
-    required this.active,
-    required this.number,
-    required this.child,
-  });
-
-  final bool active;
-  final int number;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.omniPalette;
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 190),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: active
-                ? [
-                    BoxShadow(
-                      color: palette.accentPrimary.withValues(alpha: 0.24),
-                      blurRadius: 14,
-                      spreadRadius: 1,
-                    ),
-                  ]
-                : const [],
-          ),
-          child: child,
-        ),
-        if (active)
-          Positioned(
-            right: -7,
-            top: -7,
-            child: Container(
-              width: 20,
-              height: 20,
-              decoration: BoxDecoration(
-                color: palette.accentPrimary,
-                shape: BoxShape.circle,
-                border: Border.all(color: palette.surfacePrimary, width: 2),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                '$number',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onPrimary,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _PreviewIcon extends StatelessWidget {
-  const _PreviewIcon({required this.icon, this.compact = false});
-
-  final IconData icon;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: compact ? 32 : 38,
-      height: compact ? 32 : 38,
-      child: Center(
-        child: Icon(
-          icon,
-          size: compact ? 17 : 19,
-          color: context.omniPalette.textSecondary,
-        ),
       ),
     );
   }

@@ -117,6 +117,10 @@ class ChatAppBar extends StatelessWidget {
   final VoidCallback? onDebugConversationIdCopyTap;
   final bool showWorkspacePaneButton;
   final VoidCallback? onWorkspacePaneTap;
+  final Key? tutorialMenuAnchorKey;
+  final Key? tutorialPetAnchorKey;
+  final Key? tutorialIslandAnchorKey;
+  final Key? tutorialModeAnchorKey;
 
   const ChatAppBar({
     super.key,
@@ -160,6 +164,10 @@ class ChatAppBar extends StatelessWidget {
     this.onDebugConversationIdCopyTap,
     this.showWorkspacePaneButton = false,
     this.onWorkspacePaneTap,
+    this.tutorialMenuAnchorKey,
+    this.tutorialPetAnchorKey,
+    this.tutorialIslandAnchorKey,
+    this.tutorialModeAnchorKey,
   });
 
   @override
@@ -258,20 +266,23 @@ class ChatAppBar extends StatelessWidget {
                       top: 0,
                       bottom: 0,
                       width: _kChatAppBarMenuButtonSize,
-                      child: Center(
-                        child: GestureDetector(
-                          key: const ValueKey('chat-app-bar-menu-button'),
-                          onTap: onMenuTap,
-                          child: Container(
-                            color: Colors.transparent,
-                            padding: const EdgeInsets.all(15),
-                            child: SvgPicture.asset(
-                              'assets/home/drawer_icon.svg',
-                              width: 20,
-                              height: 20,
-                              colorFilter: ColorFilter.mode(
-                                iconTint,
-                                BlendMode.srcIn,
+                      child: KeyedSubtree(
+                        key: tutorialMenuAnchorKey,
+                        child: Center(
+                          child: GestureDetector(
+                            key: const ValueKey('chat-app-bar-menu-button'),
+                            onTap: onMenuTap,
+                            child: Container(
+                              color: Colors.transparent,
+                              padding: const EdgeInsets.all(15),
+                              child: SvgPicture.asset(
+                                'assets/home/drawer_icon.svg',
+                                width: 20,
+                                height: 20,
+                                colorFilter: ColorFilter.mode(
+                                  iconTint,
+                                  BlendMode.srcIn,
+                                ),
                               ),
                             ),
                           ),
@@ -284,35 +295,41 @@ class ChatAppBar extends StatelessWidget {
                       top: 0,
                       bottom: 0,
                       width: leftActionRowWidth,
-                      child: _ChatAppBarPetButton(
-                        isLoading: isPetOpening,
-                        isShowing: isPetShowing,
-                        iconTint: iconTint,
-                        selectedColor: palette.accentPrimary,
-                        onTap: onPetTap!,
+                      child: KeyedSubtree(
+                        key: tutorialPetAnchorKey,
+                        child: _ChatAppBarPetButton(
+                          isLoading: isPetOpening,
+                          isShowing: isPetShowing,
+                          iconTint: iconTint,
+                          selectedColor: palette.accentPrimary,
+                          onTap: onPetTap!,
+                        ),
                       ),
                     ),
                   Center(
-                    child: SizedBox(
-                      key: const ValueKey('chat-app-bar-island'),
-                      width: islandWidth,
-                      child: _ChatIslandSwitcher(
-                        activeMode: activeMode,
-                        onModeChanged: onModeChanged,
-                        displayLayer: displayLayer,
-                        onDisplayLayerChanged: onDisplayLayerChanged,
-                        onTerminalEnvironmentTap: onTerminalEnvironmentTap,
-                        onTerminalTap: onTerminalTap,
-                        onBrowserTap: onBrowserTap,
-                        hasTerminalEnvironment: hasTerminalEnvironment,
-                        isBrowserEnabled: isBrowserEnabled,
-                        activeToolType: activeToolType,
-                        translucent: translucent,
-                        visualProfile: visualProfile,
-                        showSurfaceLayer: showSurfaceSwitcher,
-                        primaryModeIconAsset: primaryModeIconAsset,
-                        primaryModeAgentId: primaryModeAgentId,
-                        onPrimaryModeTap: onPrimaryModeTap,
+                    child: KeyedSubtree(
+                      key: tutorialIslandAnchorKey,
+                      child: SizedBox(
+                        key: const ValueKey('chat-app-bar-island'),
+                        width: islandWidth,
+                        child: _ChatIslandSwitcher(
+                          activeMode: activeMode,
+                          onModeChanged: onModeChanged,
+                          displayLayer: displayLayer,
+                          onDisplayLayerChanged: onDisplayLayerChanged,
+                          onTerminalEnvironmentTap: onTerminalEnvironmentTap,
+                          onTerminalTap: onTerminalTap,
+                          onBrowserTap: onBrowserTap,
+                          hasTerminalEnvironment: hasTerminalEnvironment,
+                          isBrowserEnabled: isBrowserEnabled,
+                          activeToolType: activeToolType,
+                          translucent: translucent,
+                          visualProfile: visualProfile,
+                          showSurfaceLayer: showSurfaceSwitcher,
+                          primaryModeIconAsset: primaryModeIconAsset,
+                          primaryModeAgentId: primaryModeAgentId,
+                          onPrimaryModeTap: onPrimaryModeTap,
+                        ),
                       ),
                     ),
                   ),
@@ -372,22 +389,25 @@ class ChatAppBar extends StatelessWidget {
                           width: _kChatAppBarRightActionSlotWidth,
                           height: _kChatAppBarRightActionSlotWidth,
                           child: Center(
-                            child: _ChatAppBarModeShortcutButton(
-                              key: const ValueKey(
-                                'chat-app-bar-pure-chat-button',
+                            child: KeyedSubtree(
+                              key: tutorialModeAnchorKey,
+                              child: _ChatAppBarModeShortcutButton(
+                                key: const ValueKey(
+                                  'chat-app-bar-pure-chat-button',
+                                ),
+                                iconTint: iconTint,
+                                isAgentLoading: isAgentLoading,
+                                isAgentSelected: isAgentSelected,
+                                isOmniAiSelected: isOmniAiSelected,
+                                acpAgentModes: acpAgentModes,
+                                activeAcpAgentId: activeAcpAgentId,
+                                isPureChatSelected: isPureChatSelected,
+                                isPureChatToggleLocked: isPureChatToggleLocked,
+                                onOmniAiTap: onOmniAiTap,
+                                onAgentTap: onAgentTap,
+                                onAcpAgentTap: onAcpAgentTap,
+                                onPureChatToggleTap: onPureChatToggleTap,
                               ),
-                              iconTint: iconTint,
-                              isAgentLoading: isAgentLoading,
-                              isAgentSelected: isAgentSelected,
-                              isOmniAiSelected: isOmniAiSelected,
-                              acpAgentModes: acpAgentModes,
-                              activeAcpAgentId: activeAcpAgentId,
-                              isPureChatSelected: isPureChatSelected,
-                              isPureChatToggleLocked: isPureChatToggleLocked,
-                              onOmniAiTap: onOmniAiTap,
-                              onAgentTap: onAgentTap,
-                              onAcpAgentTap: onAcpAgentTap,
-                              onPureChatToggleTap: onPureChatToggleTap,
                             ),
                           ),
                         ),
@@ -469,11 +489,7 @@ class _ChatAppBarPetButton extends StatelessWidget {
                         ),
                       ),
                     )
-                  : Icon(
-                      LucideIcons.pawPrint,
-                      size: 20,
-                      color: effectiveColor,
-                    ),
+                  : Icon(LucideIcons.pawPrint, size: 20, color: effectiveColor),
             ),
           ),
         ),
