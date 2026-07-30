@@ -1362,6 +1362,7 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
                               modelId: _activeNormalChatModelId ?? '',
                               hasSelectableModels:
                                   _hasSelectableNormalChatModels,
+                              anchorKey: _firstUseTourModelAnchorKey,
                               onPointerDown: () {
                                 _suppressNextOutsideTapKeyboardHide = true;
                               },

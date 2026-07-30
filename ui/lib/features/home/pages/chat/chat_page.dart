@@ -149,6 +149,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
   final GlobalKey _firstUseTourPetAnchorKey = GlobalKey();
   final GlobalKey _firstUseTourIslandAnchorKey = GlobalKey();
   final GlobalKey _firstUseTourModeAnchorKey = GlobalKey();
+  final GlobalKey _firstUseTourModelAnchorKey = GlobalKey();
 
   /// 模型选择器走 OverlayEntry，不走 Navigator.push。
   /// 理由：[Navigator.push] → [ModalRoute.didPush] 会调 `setFirstFocus`
@@ -465,6 +466,7 @@ abstract class _ChatPageStateBase extends State<ChatPage>
     1 => _firstUseTourModeAnchorKey,
     2 => _firstUseTourPetAnchorKey,
     3 => _firstUseTourIslandAnchorKey,
+    4 => _firstUseTourModelAnchorKey,
     _ => _inputAreaKey,
   };
 

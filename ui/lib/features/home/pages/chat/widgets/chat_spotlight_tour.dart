@@ -52,19 +52,8 @@ class _ChatSpotlightTourState extends State<ChatSpotlightTour> {
       final globalTopLeft = anchorBox.localToGlobal(Offset.zero);
       final localTopLeft = overlayBox.globalToLocal(globalTopLeft);
       final anchorRect = localTopLeft & anchorBox.size;
-      final composerAvailableWidth = anchorRect.width > 16
-          ? anchorRect.width - 16
-          : anchorRect.width;
-      final composerTargetWidth = (anchorRect.width * 0.7)
-          .clamp(0, composerAvailableWidth)
-          .toDouble();
       final measured = switch (widget.step) {
-        4 => Rect.fromLTWH(
-          anchorRect.left + 8,
-          anchorRect.bottom - 52,
-          composerTargetWidth,
-          44,
-        ),
+        4 => anchorRect.inflate(4),
         5 => anchorRect.inflate(4),
         _ => anchorRect.inflate(6),
       };
@@ -277,10 +266,10 @@ class _ChatSpotlightTourState extends State<ChatSpotlightTour> {
         height: 48,
       ),
       4 => Rect.fromLTWH(
-        18,
-        size.height - bottomPadding - 190,
-        (width - 104).clamp(210, 430),
-        46,
+        size.width - 118,
+        size.height - bottomPadding - 187,
+        40,
+        40,
       ),
       _ => Rect.fromLTWH(12, size.height - bottomPadding - 132, width - 24, 64),
     };
