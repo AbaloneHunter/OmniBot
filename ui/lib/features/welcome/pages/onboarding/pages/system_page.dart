@@ -137,7 +137,7 @@ class _DistributionRow extends StatelessWidget {
         : 'ubuntu';
     return OnboardingOptionRow(
       tapKey: ValueKey<String>('tutorial-distribution-$id'),
-      leading: _DistroIcon(asset: asset, selected: selected),
+      leading: _DistroIcon(asset: asset),
       title: title,
       badge: badge,
       description: description,
@@ -150,29 +150,23 @@ class _DistributionRow extends StatelessWidget {
   }
 }
 
-/// Brand SVG logo in a neutral rounded surface; the outline animates to the
-/// accent color while selected.
+/// Brand SVG logo in a neutral rounded surface with a constant hairline
+/// border — selection is conveyed by the surrounding option row, not here.
 class _DistroIcon extends StatelessWidget {
-  const _DistroIcon({required this.asset, required this.selected});
+  const _DistroIcon({required this.asset});
 
   final String asset;
-  final bool selected;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOutCubic,
+    return Container(
       width: 40,
       height: 40,
       decoration: BoxDecoration(
         color: palette.surfaceSecondary,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: selected ? palette.accentPrimary : palette.borderSubtle,
-          width: selected ? 1.4 : 1,
-        ),
+        border: Border.all(color: palette.borderSubtle),
       ),
       alignment: Alignment.center,
       child: SvgPicture.asset(asset, width: 22, height: 22),
