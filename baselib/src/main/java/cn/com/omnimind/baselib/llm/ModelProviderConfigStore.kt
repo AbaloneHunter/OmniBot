@@ -3,7 +3,6 @@ package cn.com.omnimind.baselib.llm
 import cn.com.omnimind.baselib.util.OmniLog
 import cn.com.omnimind.baselib.util.OssIdentity
 import com.google.gson.Gson
-import com.google.gson.JsonParser
 import com.google.gson.annotations.SerializedName
 import com.google.gson.reflect.TypeToken
 import com.tencent.mmkv.MMKV
@@ -76,10 +75,6 @@ object ModelProviderConfigStore {
         val deletedOfficialProfileIds = readDeletedOfficialProfileIds(mmkv)
         val storedProfilesRaw = mmkv.decodeString(KEY_PROVIDER_PROFILES)
         val decodedProfiles = decodeProfilesJson(storedProfilesRaw)
-        if (shouldPreserveStoredProfiles(storedProfilesRaw, decodedProfiles)) {
-            OmniLog.w(TAG, "provider profiles payload is not empty but could not be decoded")
-            return defaultProfiles(deletedOfficialProfileIds)
-        }
         val storedProfiles = readActiveProfiles(
             mmkv = mmkv,
             deletedOfficialProfileIds = deletedOfficialProfileIds,
@@ -670,45 +665,8 @@ object ModelProviderConfigStore {
         return gson.toJson(normalized)
     }
 
-    internal fun shouldPreserveStoredProfiles(
-        raw: String?,
-        decodedProfiles: List<ModelProviderProfile>
-    ): Boolean {
-        val normalizedRaw = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return false
-        return try {
-            val root = JsonParser.parseString(normalizedRaw)
-            when {
-                root.isJsonNull -> false
-                !root.isJsonArray -> true
-                root.asJsonArray.isEmpty -> false
-                decodedProfiles.isEmpty() -> true
-                else -> root.asJsonArray.any { element ->
-                    if (!element.isJsonObject) {
-                        true
-                    } else {
-                        val profile = element.asJsonObject
-                        listOf("id", "a").none { fieldName ->
-                            val id = profile.get(fieldName)
-                            id != null &&
-                                id.isJsonPrimitive &&
-                                id.asJsonPrimitive.isString &&
-                                id.asString.isNotBlank()
-                        }
-                    }
-                }
-            }
-        } catch (_: Throwable) {
-            true
-        }
-    }
-
     private fun readProfilesForUpdate(mmkv: MMKV): List<ModelProviderProfile> {
-        val raw = mmkv.decodeString(KEY_PROVIDER_PROFILES)
-        val profiles = decodeProfilesJson(raw)
-        check(!shouldPreserveStoredProfiles(raw, profiles)) {
-            "provider profiles payload cannot be updated safely"
-        }
-        return profiles
+        return decodeProfilesJson(mmkv.decodeString(KEY_PROVIDER_PROFILES))
     }
 
     private fun readActiveProfiles(
@@ -797,10 +755,6 @@ object ModelProviderConfigStore {
             try {
                 val storedProfilesRaw = mmkv.decodeString(KEY_PROVIDER_PROFILES)
                 val existingProfiles = decodeProfilesJson(storedProfilesRaw)
-                if (shouldPreserveStoredProfiles(storedProfilesRaw, existingProfiles)) {
-                    OmniLog.w(TAG, "skip provider migration to preserve undecodable profiles")
-                    return
-                }
                 if (existingProfiles.isNotEmpty()) {
                     ensureEditingProfile(mmkv, existingProfiles)
                     syncLegacyFlatConfig(mmkv, existingProfiles.first())
