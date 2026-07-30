@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:ui/l10n/legacy_text_localizer.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/services/home_greeting_settings_service.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/widgets/agent_brand_icon.dart';
@@ -468,14 +469,10 @@ class _ChatAppBarPetButton extends StatelessWidget {
                         ),
                       ),
                     )
-                  : SvgPicture.asset(
-                      'assets/home/avatar.svg',
-                      width: 20,
-                      height: 20,
-                      colorFilter: ColorFilter.mode(
-                        effectiveColor,
-                        BlendMode.srcIn,
-                      ),
+                  : Icon(
+                      LucideIcons.pawPrint,
+                      size: 20,
+                      color: effectiveColor,
                     ),
             ),
           ),
