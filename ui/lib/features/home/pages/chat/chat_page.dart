@@ -26,7 +26,6 @@ import '../omnibot_workspace/widgets/omnibot_workspace_browser.dart';
 import 'services/chat_conversation_lifecycle_guard.dart';
 import 'services/chat_conversation_runtime_coordinator.dart';
 import 'package:ui/constants/openclaw/openclaw_keys.dart';
-import 'package:ui/constants/storage_keys.dart';
 import 'package:ui/core/router/go_router_manager.dart';
 import 'package:ui/services/app_state_service.dart';
 import 'package:ui/services/app_update_service.dart';
@@ -491,14 +490,12 @@ abstract class _ChatPageStateBase extends State<ChatPage>
     Navigator.of(context).pop();
   }
 
-  Future<void> _finishFirstUseTour() async {
+  void _finishFirstUseTour() {
     if (!mounted || _firstUseTourClosing) return;
     setState(() {
       _firstUseTourClosing = true;
     });
-    await StorageService.setBool(StorageKeys.welcomeCompleted, true);
-    if (!mounted) return;
-    GoRouterManager.clearAndNavigateTo('/home/chat');
+    Navigator.of(context).pop(true);
   }
 
   String? get _conversationBoundAcpAgentId {

@@ -2084,11 +2084,8 @@ mixin _ChatPageUiMixin on _ChatPageStateBase {
         ChatSpotlightTour(
           step: _firstUseTourStep,
           anchorKey: _firstUseTourAnchorKey,
-          onBack: _handleFirstUseTourBack,
           onNext: _showNextFirstUseTourStep,
-          onFinish: () {
-            unawaited(_finishFirstUseTour());
-          },
+          onFinish: _finishFirstUseTour,
         ),
       ],
     );

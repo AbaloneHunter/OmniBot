@@ -7,7 +7,6 @@ class ChatSpotlightTour extends StatefulWidget {
     super.key,
     required this.step,
     this.anchorKey,
-    required this.onBack,
     required this.onNext,
     required this.onFinish,
   });
@@ -16,7 +15,6 @@ class ChatSpotlightTour extends StatefulWidget {
 
   final int step;
   final GlobalKey? anchorKey;
-  final VoidCallback onBack;
   final VoidCallback onNext;
   final VoidCallback onFinish;
 
@@ -84,6 +82,14 @@ class _ChatSpotlightTourState extends State<ChatSpotlightTour> {
     });
   }
 
+  void _advance() {
+    if (widget.step >= ChatSpotlightTour.stepCount - 1) {
+      widget.onFinish();
+      return;
+    }
+    widget.onNext();
+  }
+
   @override
   Widget build(BuildContext context) {
     _scheduleAnchorMeasurement();
@@ -121,201 +127,130 @@ class _ChatSpotlightTourState extends State<ChatSpotlightTour> {
                 : rawMaxCardTop;
             final cardTop = requestedCardTop.clamp(minCardTop, maxCardTop);
 
-            return Semantics(
-              scopesRoute: true,
-              explicitChildNodes: true,
-              label: isEnglish ? item.titleEn : item.titleZh,
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: CustomPaint(
-                      key: ValueKey<String>('chat-spotlight-hole-$step'),
-                      painter: _SpotlightBarrierPainter(
-                        spotlight: spotlight,
-                        accent: palette.accentPrimary,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: 18,
-                    right: 18,
-                    top: cardTop.toDouble(),
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 430),
-                        child: AnimatedSwitcher(
-                          duration: reduceMotion
-                              ? Duration.zero
-                              : const Duration(milliseconds: 220),
-                          switchInCurve: Curves.easeOutCubic,
-                          switchOutCurve: Curves.easeInCubic,
-                          child: Container(
-                            key: ValueKey<String>('chat-spotlight-card-$step'),
-                            padding: const EdgeInsets.fromLTRB(18, 17, 18, 18),
-                            decoration: BoxDecoration(
-                              color: palette.surfacePrimary,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: palette.borderStrong),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.24),
-                                  blurRadius: 28,
-                                  offset: const Offset(0, 12),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: palette.accentPrimary.withValues(
-                                      alpha: 0.12,
-                                    ),
-                                    borderRadius: BorderRadius.circular(13),
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Icon(
-                                    item.icon,
-                                    size: 20,
-                                    color: palette.accentPrimary,
-                                  ),
-                                ),
-                                const SizedBox(width: 13),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        isEnglish ? item.titleEn : item.titleZh,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              color: palette.textPrimary,
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                      ),
-                                      const SizedBox(height: 7),
-                                      Text(
-                                        isEnglish
-                                            ? item.descriptionEn
-                                            : item.descriptionZh,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(
-                                              color: palette.textSecondary,
-                                              height: 1.55,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+            return GestureDetector(
+              key: const ValueKey('chat-spotlight-gesture-layer'),
+              behavior: HitTestBehavior.opaque,
+              onTap: _advance,
+              child: Semantics(
+                scopesRoute: true,
+                explicitChildNodes: true,
+                label: isEnglish ? item.titleEn : item.titleZh,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: CustomPaint(
+                        key: ValueKey<String>('chat-spotlight-hole-$step'),
+                        painter: _SpotlightBarrierPainter(
+                          spotlight: spotlight,
+                          accent: palette.accentPrimary,
                         ),
                       ),
                     ),
-                  ),
-                  Positioned(
-                    left: 16,
-                    right: 16,
-                    bottom: mediaQuery.padding.bottom + 14,
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 430),
-                        child: Container(
-                          height: 58,
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          decoration: BoxDecoration(
-                            color: palette.surfacePrimary,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: palette.borderStrong),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.2),
-                                blurRadius: 24,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              TextButton.icon(
-                                key: const ValueKey('chat-spotlight-back'),
-                                onPressed: widget.onBack,
-                                icon: const Icon(
-                                  LucideIcons.arrowLeft,
-                                  size: 17,
+                    Positioned(
+                      left: 18,
+                      right: 18,
+                      top: cardTop.toDouble(),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 430),
+                          child: AnimatedSwitcher(
+                            duration: reduceMotion
+                                ? Duration.zero
+                                : const Duration(milliseconds: 220),
+                            switchInCurve: Curves.easeOutCubic,
+                            switchOutCurve: Curves.easeInCubic,
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () {},
+                              child: Container(
+                                key: ValueKey<String>(
+                                  'chat-spotlight-card-$step',
                                 ),
-                                label: Text(isEnglish ? 'Back' : '返回'),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: palette.textSecondary,
-                                  minimumSize: const Size(88, 44),
+                                padding: const EdgeInsets.fromLTRB(
+                                  18,
+                                  17,
+                                  18,
+                                  18,
                                 ),
-                              ),
-                              Expanded(
+                                decoration: BoxDecoration(
+                                  color: palette.surfacePrimary,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: palette.borderStrong,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.24,
+                                      ),
+                                      blurRadius: 28,
+                                      offset: const Offset(0, 12),
+                                    ),
+                                  ],
+                                ),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: List<Widget>.generate(
-                                    ChatSpotlightTour.stepCount,
-                                    (index) => AnimatedContainer(
-                                      duration: reduceMotion
-                                          ? Duration.zero
-                                          : const Duration(milliseconds: 180),
-                                      width: index == step ? 18 : 6,
-                                      height: 6,
-                                      margin: const EdgeInsets.symmetric(
-                                        horizontal: 3,
-                                      ),
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      width: 40,
+                                      height: 40,
                                       decoration: BoxDecoration(
-                                        color: index == step
-                                            ? palette.accentPrimary
-                                            : palette.borderStrong,
-                                        borderRadius: BorderRadius.circular(
-                                          999,
+                                        color: palette.accentPrimary.withValues(
+                                          alpha: 0.12,
                                         ),
+                                        borderRadius: BorderRadius.circular(13),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Icon(
+                                        item.icon,
+                                        size: 20,
+                                        color: palette.accentPrimary,
                                       ),
                                     ),
-                                  ),
+                                    const SizedBox(width: 13),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            isEnglish
+                                                ? item.titleEn
+                                                : item.titleZh,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleMedium
+                                                ?.copyWith(
+                                                  color: palette.textPrimary,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                          ),
+                                          const SizedBox(height: 7),
+                                          Text(
+                                            isEnglish
+                                                ? item.descriptionEn
+                                                : item.descriptionZh,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                  color: palette.textSecondary,
+                                                  height: 1.55,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              FilledButton(
-                                key: const ValueKey('chat-spotlight-next'),
-                                onPressed:
-                                    step == ChatSpotlightTour.stepCount - 1
-                                    ? widget.onFinish
-                                    : widget.onNext,
-                                style: FilledButton.styleFrom(
-                                  minimumSize: const Size(92, 44),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                ),
-                                child: Text(
-                                  step == ChatSpotlightTour.stepCount - 1
-                                      ? (isEnglish ? 'Start' : '开始聊天')
-                                      : (isEnglish ? 'Next' : '继续'),
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             );
           },

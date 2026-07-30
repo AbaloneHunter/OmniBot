@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ui/constants/storage_keys.dart';
+import 'package:ui/core/router/go_router_manager.dart';
 import 'package:ui/features/home/pages/chat/chat_page.dart';
 import 'package:ui/services/model_provider_config_service.dart';
 import 'package:ui/services/model_vendor_catalog.dart';
@@ -23,7 +24,19 @@ enum _TutorialPage {
   modelInventory,
   primaryScenes,
   memoryScenes,
+  completion,
 }
+
+const List<_TutorialPage> _tutorialNavigationPages = <_TutorialPage>[
+  _TutorialPage.system,
+  _TutorialPage.development,
+  _TutorialPage.tools,
+  _TutorialPage.provider,
+  _TutorialPage.providerConnection,
+  _TutorialPage.modelInventory,
+  _TutorialPage.primaryScenes,
+  _TutorialPage.memoryScenes,
+];
 
 class _EnvironmentPreset {
   const _EnvironmentPreset({
@@ -278,6 +291,10 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
 
   _TutorialPage _page = _TutorialPage.system;
   final List<_TutorialPage> _pageHistory = <_TutorialPage>[];
+  final Set<_TutorialPage> _visitedTutorialPages = <_TutorialPage>{
+    _TutorialPage.system,
+  };
+  double _horizontalDragDistance = 0;
   EmbeddedTerminalDistribution _distribution =
       EmbeddedTerminalDistribution.alpine;
   String _environmentPresetId = 'general';
@@ -305,6 +322,7 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
   Map<String, String> _sceneModelSelections = <String, String>{};
   Set<String> _savingSceneIds = <String>{};
   bool _sceneModelsSaving = false;
+  bool _isCompletingTutorial = false;
 
   bool get _isEnglish =>
       Localizations.localeOf(context).languageCode.toLowerCase() == 'en';
@@ -612,9 +630,13 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
 
   void _goToPage(_TutorialPage page) {
     if (_page == page) return;
+    final targetIndex = _tutorialNavigationPages.indexOf(page);
     setState(() {
       _pageHistory.add(_page);
       _page = page;
+      if (targetIndex >= 0) {
+        _visitedTutorialPages.add(page);
+      }
     });
     if (_scrollController.hasClients) {
       _scrollController.jumpTo(0);
@@ -626,12 +648,24 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
 
   Future<void> _openChatTour() async {
     if (!mounted) return;
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
+    final tourCompleted = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
         builder: (_) => const ChatPage(showFirstUseTour: true),
         settings: const RouteSettings(name: 'first-use-chat-spotlight-tour'),
       ),
     );
+    if (tourCompleted == true && mounted) {
+      _goToPage(_TutorialPage.completion);
+    }
+  }
+
+  Future<void> _startExploring() async {
+    if (_isCompletingTutorial) return;
+    setState(() => _isCompletingTutorial = true);
+    await StorageService.setBool(StorageKeys.welcomeCompleted, true);
+    if (!mounted) return;
+    setState(() => _isCompletingTutorial = false);
+    GoRouterManager.clearAndNavigateTo('/home/chat');
   }
 
   Future<void> _loadProviderData() async {
@@ -997,6 +1031,101 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
     }
   }
 
+  bool get _isTutorialNavigationPage =>
+      _tutorialNavigationPages.contains(_page);
+
+  VoidCallback? get _tutorialNextAction {
+    return switch (_page) {
+      _TutorialPage.system when !_isDistributionLoading => () => _goToPage(
+        _TutorialPage.development,
+      ),
+      _TutorialPage.development => () => _goToPage(_TutorialPage.tools),
+      _TutorialPage.tools => () => _goToPage(_TutorialPage.provider),
+      _TutorialPage.provider => () => unawaited(_openChatTour()),
+      _TutorialPage.providerConnection when _providerConnected =>
+        () => _goToPage(_TutorialPage.modelInventory),
+      _TutorialPage.modelInventory when _modelOptions.isNotEmpty =>
+        () => _goToPage(_TutorialPage.primaryScenes),
+      _TutorialPage.primaryScenes when _modelOptions.isNotEmpty =>
+        () => _goToPage(_TutorialPage.memoryScenes),
+      _ => null,
+    };
+  }
+
+  String get _tutorialNextTooltip {
+    return switch (_page) {
+      _TutorialPage.tools => _t('暂不配置环境，先设置模型', 'Set up the environment later'),
+      _TutorialPage.provider => _t(
+        '暂不配置模型，先了解聊天界面',
+        'Learn the chat interface first',
+      ),
+      _ =>
+        _tutorialNextAction == null
+            ? _t('请先完成本页操作', 'Complete this page first')
+            : _t('下一步', 'Next'),
+    };
+  }
+
+  Key get _tutorialNextKey {
+    return switch (_page) {
+      _TutorialPage.system => const ValueKey('tutorial-system-next'),
+      _TutorialPage.development => const ValueKey('tutorial-development-next'),
+      _TutorialPage.tools => const ValueKey('tutorial-skip-environment'),
+      _TutorialPage.provider => const ValueKey('tutorial-skip-models'),
+      _TutorialPage.modelInventory => const ValueKey('tutorial-models-next'),
+      _TutorialPage.primaryScenes => const ValueKey(
+        'tutorial-primary-scenes-next',
+      ),
+      _ => const ValueKey('tutorial-page-next'),
+    };
+  }
+
+  void _goToNextTutorialPage() {
+    _tutorialNextAction?.call();
+  }
+
+  void _jumpToVisitedTutorialPage(_TutorialPage page) {
+    if (page == _page || !_visitedTutorialPages.contains(page)) return;
+    final historyIndex = _pageHistory.lastIndexOf(page);
+    if (historyIndex < 0) {
+      _goToPage(page);
+      return;
+    }
+    setState(() {
+      _pageHistory.removeRange(historyIndex, _pageHistory.length);
+      _page = page;
+    });
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+    }
+    if (page == _TutorialPage.provider) {
+      unawaited(_loadProviderData());
+    }
+  }
+
+  void _handleTutorialDragStart(DragStartDetails details) {
+    _horizontalDragDistance = 0;
+  }
+
+  void _handleTutorialDragUpdate(DragUpdateDetails details) {
+    _horizontalDragDistance += details.primaryDelta ?? 0;
+  }
+
+  void _handleTutorialDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    final direction = _horizontalDragDistance.abs() >= 64
+        ? _horizontalDragDistance
+        : velocity.abs() >= 260
+        ? velocity
+        : 0;
+    _horizontalDragDistance = 0;
+    if (direction < 0) {
+      _goToNextTutorialPage();
+    } else if (direction > 0 && _showBottomBack) {
+      _handleBack();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.omniPalette;
@@ -1014,38 +1143,55 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
       child: Scaffold(
         backgroundColor: palette.pageBackground,
         body: SafeArea(
-          child: AnimatedSwitcher(
-            duration: reduceMotion
-                ? Duration.zero
-                : const Duration(milliseconds: 260),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: (child, animation) {
-              final offset = Tween<Offset>(
-                begin: const Offset(0.025, 0),
-                end: Offset.zero,
-              ).animate(animation);
-              return FadeTransition(
-                opacity: animation,
-                child: SlideTransition(position: offset, child: child),
-              );
-            },
-            child: KeyedSubtree(
-              key: ValueKey<_TutorialPage>(_page),
-              child: switch (_page) {
-                _TutorialPage.system => _buildSystemPage(),
-                _TutorialPage.development => _buildDevelopmentPage(),
-                _TutorialPage.tools => _buildToolsPage(),
-                _TutorialPage.environmentProgress =>
-                  _buildEnvironmentProgressPage(),
-                _TutorialPage.provider => _buildProviderPage(),
-                _TutorialPage.providerConnection =>
-                  _buildProviderConnectionPage(),
-                _TutorialPage.modelInventory => _buildModelInventoryPage(),
-                _TutorialPage.primaryScenes => _buildPrimaryScenesPage(),
-                _TutorialPage.memoryScenes => _buildMemoryScenesPage(),
-              },
-            ),
+          child: Column(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  key: const ValueKey('tutorial-page-swipe-surface'),
+                  behavior: HitTestBehavior.translucent,
+                  onHorizontalDragStart: _isTutorialNavigationPage
+                      ? _handleTutorialDragStart
+                      : null,
+                  onHorizontalDragUpdate: _isTutorialNavigationPage
+                      ? _handleTutorialDragUpdate
+                      : null,
+                  onHorizontalDragEnd: _isTutorialNavigationPage
+                      ? _handleTutorialDragEnd
+                      : null,
+                  child: AnimatedSwitcher(
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 240),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) {
+                      return FadeTransition(opacity: animation, child: child);
+                    },
+                    child: KeyedSubtree(
+                      key: ValueKey<_TutorialPage>(_page),
+                      child: switch (_page) {
+                        _TutorialPage.system => _buildSystemPage(),
+                        _TutorialPage.development => _buildDevelopmentPage(),
+                        _TutorialPage.tools => _buildToolsPage(),
+                        _TutorialPage.environmentProgress =>
+                          _buildEnvironmentProgressPage(),
+                        _TutorialPage.provider => _buildProviderPage(),
+                        _TutorialPage.providerConnection =>
+                          _buildProviderConnectionPage(),
+                        _TutorialPage.modelInventory =>
+                          _buildModelInventoryPage(),
+                        _TutorialPage.primaryScenes =>
+                          _buildPrimaryScenesPage(),
+                        _TutorialPage.memoryScenes => _buildMemoryScenesPage(),
+                        _TutorialPage.completion => _buildCompletionPage(),
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              if (_isTutorialNavigationPage) _buildTutorialFooter(),
+              if (_page == _TutorialPage.completion) _buildCompletionFooter(),
+            ],
           ),
         ),
       ),
@@ -1054,29 +1200,288 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
 
   bool get _showBottomBack => _pageHistory.isNotEmpty || _isReplay;
 
-  Widget _buildBottomBackButton({bool enabled = true}) {
-    final palette = context.omniPalette;
-    return SizedBox(
-      width: double.infinity,
-      height: 50,
-      child: OutlinedButton.icon(
-        key: const ValueKey('tutorial-bottom-back'),
-        onPressed: enabled && !_providerBusy && !_sceneModelsSaving
-            ? _handleBack
-            : null,
-        icon: const Icon(LucideIcons.arrowLeft, size: 18),
-        label: Text(
-          _t('返回上一步', 'Back'),
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: palette.textSecondary,
-          side: BorderSide(color: palette.borderStrong),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
+  Widget _buildTutorialFooter() {
+    final primaryAction = _buildTutorialPrimaryAction();
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 2, 20, 8),
+          child: Column(
+            key: const ValueKey('tutorial-fixed-footer'),
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (primaryAction != null) ...[
+                KeyedSubtree(
+                  key: const ValueKey('tutorial-sticky-primary-action'),
+                  child: primaryAction,
+                ),
+                const SizedBox(height: 6),
+              ],
+              _buildTutorialNavigation(),
+            ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildCompletionFooter() {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 2, 20, 8),
+          child: SizedBox(
+            key: const ValueKey('tutorial-completion-footer'),
+            height: 58,
+            child: Row(
+              children: [
+                _buildTutorialArrow(
+                  key: const ValueKey('tutorial-bottom-back'),
+                  icon: LucideIcons.arrowLeft,
+                  tooltip: _t('返回上一步', 'Back'),
+                  onPressed: _isCompletingTutorial ? null : _handleBack,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildPrimaryButton(
+                    key: const ValueKey('tutorial-start-exploring'),
+                    label: _isCompletingTutorial
+                        ? _t('正在进入…', 'Opening…')
+                        : _t('开始探索', 'Start exploring'),
+                    icon: LucideIcons.rocket,
+                    onPressed: _isCompletingTutorial ? null : _startExploring,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget? _buildTutorialPrimaryAction() {
+    return switch (_page) {
+      _TutorialPage.tools => _buildPrimaryButton(
+        key: const ValueKey('tutorial-environment-primary'),
+        label: _t('开始配置', 'Start setup'),
+        icon: LucideIcons.download,
+        onPressed: _isDistributionLoading ? null : _startEnvironmentSetup,
+      ),
+      _TutorialPage.provider => _buildPrimaryButton(
+        key: const ValueKey('tutorial-provider-next'),
+        label: _t('继续填写连接信息', 'Continue to connection details'),
+        icon: LucideIcons.arrowRight,
+        onPressed: _providerLoading
+            ? null
+            : () => _goToPage(_TutorialPage.providerConnection),
+      ),
+      _TutorialPage.providerConnection => _buildPrimaryButton(
+        key: const ValueKey('tutorial-provider-connect'),
+        label: _providerBusy
+            ? _t('正在连接并读取模型…', 'Connecting and fetching models…')
+            : _providerConnected
+            ? _t('重新连接并读取模型', 'Reconnect and fetch models')
+            : _t('连接并读取模型', 'Connect and fetch models'),
+        icon: _providerConnected ? LucideIcons.refreshCw : LucideIcons.plugZap,
+        onPressed: _providerBusy ? null : _configureProvider,
+      ),
+      _TutorialPage.memoryScenes => _buildPrimaryButton(
+        key: const ValueKey('tutorial-save-scenes'),
+        label: _sceneModelsSaving
+            ? _t('正在保存场景配置…', 'Saving model roles…')
+            : _t('保存并了解聊天界面', 'Save and learn the chat interface'),
+        icon: LucideIcons.arrowRight,
+        onPressed:
+            _sceneModelsSaving ||
+                _activeProfile == null ||
+                _modelOptions.isEmpty
+            ? null
+            : _saveSceneModels,
+      ),
+      _ => null,
+    };
+  }
+
+  Widget _buildTutorialNavigation() {
+    final palette = context.omniPalette;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final currentIndex = _tutorialNavigationPages.indexOf(_page);
+    final canGoBack = _showBottomBack;
+    final nextAction = _tutorialNextAction;
+
+    return SizedBox(
+      key: const ValueKey('tutorial-pagination-navigation'),
+      height: 58,
+      child: Row(
+        children: [
+          _buildTutorialArrow(
+            key: const ValueKey('tutorial-bottom-back'),
+            icon: LucideIcons.arrowLeft,
+            tooltip: _t('上一步', 'Previous'),
+            onPressed: canGoBack ? _handleBack : null,
+          ),
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List<Widget>.generate(_tutorialNavigationPages.length, (
+                index,
+              ) {
+                final page = _tutorialNavigationPages[index];
+                final selected = index == currentIndex;
+                final visited = _visitedTutorialPages.contains(page);
+                return Expanded(
+                  child: Semantics(
+                    button: true,
+                    selected: selected,
+                    enabled: visited,
+                    label: _t(
+                      '教程第 ${index + 1} 页',
+                      'Tutorial page ${index + 1}',
+                    ),
+                    child: InkResponse(
+                      key: ValueKey<String>('tutorial-page-dot-$index'),
+                      onTap: visited
+                          ? () => _jumpToVisitedTutorialPage(page)
+                          : null,
+                      radius: 22,
+                      child: SizedBox(
+                        height: 48,
+                        child: Center(
+                          child: AnimatedContainer(
+                            duration: reduceMotion
+                                ? Duration.zero
+                                : const Duration(milliseconds: 180),
+                            width: selected ? 9 : 6,
+                            height: selected ? 9 : 6,
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? palette.accentPrimary
+                                  : visited
+                                  ? palette.textTertiary
+                                  : palette.borderStrong,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+          _buildTutorialArrow(
+            key: _tutorialNextKey,
+            icon: LucideIcons.arrowRight,
+            tooltip: _tutorialNextTooltip,
+            onPressed: nextAction == null ? null : _goToNextTutorialPage,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTutorialArrow({
+    required Key key,
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback? onPressed,
+  }) {
+    final palette = context.omniPalette;
+    final enabled = onPressed != null;
+    return Material(
+      color: enabled ? palette.surfacePrimary : palette.surfaceSecondary,
+      shape: CircleBorder(side: BorderSide(color: palette.borderStrong)),
+      child: IconButton(
+        key: key,
+        onPressed: onPressed,
+        tooltip: tooltip,
+        icon: Icon(icon, size: 20),
+        color: enabled ? palette.textPrimary : palette.textTertiary,
+        disabledColor: palette.textTertiary,
+        constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+        padding: EdgeInsets.zero,
+      ),
+    );
+  }
+
+  Widget _buildEnvironmentProgressNavigation({
+    required bool success,
+    required bool failed,
+  }) {
+    final canLeave = !_isEnvironmentBusy;
+    final canContinue = canLeave && (success || failed);
+    return SizedBox(
+      key: const ValueKey('tutorial-environment-progress-navigation'),
+      height: 58,
+      child: Row(
+        children: [
+          _buildTutorialArrow(
+            key: const ValueKey('tutorial-bottom-back'),
+            icon: LucideIcons.arrowLeft,
+            tooltip: _t('上一步', 'Previous'),
+            onPressed: canLeave ? _handleBack : null,
+          ),
+          const Spacer(),
+          _buildTutorialArrow(
+            key: failed
+                ? const ValueKey('tutorial-skip-environment-progress')
+                : const ValueKey('tutorial-environment-continue'),
+            icon: LucideIcons.arrowRight,
+            tooltip: failed
+                ? _t('暂不配置环境，先设置模型', 'Set up the environment later')
+                : _t('继续配置模型', 'Continue to models'),
+            onPressed: canContinue
+                ? () => _goToPage(_TutorialPage.provider)
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTutorialPageHeading({
+    required IconData icon,
+    required String title,
+  }) {
+    final palette = context.omniPalette;
+    return Row(
+      key: const ValueKey('tutorial-page-heading'),
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          key: const ValueKey('tutorial-page-leading-icon'),
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: palette.accentPrimary.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          alignment: Alignment.center,
+          child: Icon(icon, size: 24, color: palette.accentPrimary),
+        ),
+        const SizedBox(width: 13),
+        Expanded(
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 48),
+            alignment: Alignment.centerLeft,
+            child: Text(
+              title,
+              key: const ValueKey('tutorial-page-title'),
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: palette.textPrimary,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.35,
+                height: 1.2,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1087,35 +1492,17 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
     required List<Widget> children,
   }) {
     final palette = context.omniPalette;
-    return Center(
+    return Align(
+      alignment: Alignment.topCenter,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 760),
         child: SingleChildScrollView(
           controller: _scrollController,
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: palette.accentPrimary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                alignment: Alignment.center,
-                child: Icon(icon, size: 24, color: palette.accentPrimary),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: palette.textPrimary,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.35,
-                  height: 1.2,
-                ),
-              ),
+              _buildTutorialPageHeading(icon: icon, title: title),
               const SizedBox(height: 10),
               Text(
                 description,
@@ -1126,10 +1513,6 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
               ),
               const SizedBox(height: 22),
               ...children,
-              if (_showBottomBack) ...[
-                const SizedBox(height: 14),
-                _buildBottomBackButton(),
-              ],
             ],
           ),
         ),
@@ -1143,43 +1526,23 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
       key: const ValueKey('tutorial-system-page'),
       builder: (context, constraints) {
         final compactHeight = constraints.maxHeight < 700;
-        return Center(
+        return Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 760),
             child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                20,
-                compactHeight ? 4 : 12,
-                20,
-                compactHeight ? 14 : 24,
-              ),
+              padding: EdgeInsets.fromLTRB(20, 20, 20, compactHeight ? 14 : 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: compactHeight ? 42 : 48,
-                    height: compactHeight ? 42 : 48,
-                    decoration: BoxDecoration(
-                      color: palette.accentPrimary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(
-                      LucideIcons.box,
-                      size: compactHeight ? 21 : 24,
-                      color: palette.accentPrimary,
+                  _buildTutorialPageHeading(
+                    icon: LucideIcons.box,
+                    title: _t(
+                      '选择本地 Linux 系统',
+                      'Choose your local Linux system',
                     ),
                   ),
-                  SizedBox(height: compactHeight ? 10 : 16),
-                  Text(
-                    _t('选择本地 Linux 系统', 'Choose your local Linux system'),
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: palette.textPrimary,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.35,
-                    ),
-                  ),
-                  const SizedBox(height: 7),
+                  const SizedBox(height: 10),
                   Text(
                     _t(
                       '用于 Agent 执行命令和管理项目文件；系统与工作区只保留在本机。',
@@ -1243,18 +1606,6 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
                     },
                   ),
                   const Spacer(),
-                  _buildPrimaryButton(
-                    key: const ValueKey('tutorial-system-next'),
-                    label: _t('继续选择开发环境', 'Continue to development tools'),
-                    icon: LucideIcons.arrowRight,
-                    onPressed: _isDistributionLoading
-                        ? null
-                        : () => _goToPage(_TutorialPage.development),
-                  ),
-                  if (_isReplay) ...[
-                    const SizedBox(height: 8),
-                    _buildBottomBackButton(),
-                  ],
                 ],
               ),
             ),
@@ -1293,13 +1644,6 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
             );
           },
         ),
-        const SizedBox(height: 20),
-        _buildPrimaryButton(
-          key: const ValueKey('tutorial-development-next'),
-          label: _t('继续选择附加工具', 'Continue to optional tools'),
-          icon: LucideIcons.arrowRight,
-          onPressed: () => _goToPage(_TutorialPage.tools),
-        ),
       ],
     );
   }
@@ -1322,19 +1666,6 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
         ),
         const SizedBox(height: 20),
         _buildEnvironmentSummary(),
-        const SizedBox(height: 20),
-        _buildPrimaryButton(
-          key: const ValueKey('tutorial-environment-primary'),
-          label: _t('开始配置', 'Start setup'),
-          icon: LucideIcons.download,
-          onPressed: _isDistributionLoading ? null : _startEnvironmentSetup,
-        ),
-        const SizedBox(height: 8),
-        _buildTextAction(
-          key: const ValueKey('tutorial-skip-environment'),
-          label: _t('暂不配置，先设置模型', 'Set up the environment later'),
-          onPressed: () => _goToPage(_TutorialPage.provider),
-        ),
       ],
     );
   }
@@ -1785,15 +2116,7 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
                         height: 1.5,
                       ),
                     ),
-                    if (success) ...[
-                      const SizedBox(height: 28),
-                      _buildPrimaryButton(
-                        key: const ValueKey('tutorial-environment-continue'),
-                        label: _t('继续配置模型', 'Continue to models'),
-                        icon: LucideIcons.arrowRight,
-                        onPressed: () => _goToPage(_TutorialPage.provider),
-                      ),
-                    ] else if (failed) ...[
+                    if (failed) ...[
                       const SizedBox(height: 28),
                       _buildPrimaryButton(
                         key: const ValueKey('tutorial-environment-retry'),
@@ -1801,17 +2124,12 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
                         icon: LucideIcons.rotateCw,
                         onPressed: _startEnvironmentSetup,
                       ),
-                      const SizedBox(height: 6),
-                      _buildTextAction(
-                        key: const ValueKey(
-                          'tutorial-skip-environment-progress',
-                        ),
-                        label: _t('暂不配置，先设置模型', 'Set up the environment later'),
-                        onPressed: () => _goToPage(_TutorialPage.provider),
-                      ),
                     ],
                     const SizedBox(height: 10),
-                    _buildBottomBackButton(enabled: !_isEnvironmentBusy),
+                    _buildEnvironmentProgressNavigation(
+                      success: success,
+                      failed: failed,
+                    ),
                   ],
                 ),
               ),
@@ -2068,19 +2386,6 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
               );
             },
           ),
-          const SizedBox(height: 20),
-          _buildPrimaryButton(
-            key: const ValueKey('tutorial-provider-next'),
-            label: _t('继续填写连接信息', 'Continue to connection details'),
-            icon: LucideIcons.arrowRight,
-            onPressed: () => _goToPage(_TutorialPage.providerConnection),
-          ),
-          const SizedBox(height: 8),
-          _buildTextAction(
-            key: const ValueKey('tutorial-skip-models'),
-            label: _t('暂不配置，先了解聊天界面', 'Learn the chat interface first'),
-            onPressed: _openChatTour,
-          ),
         ],
       ],
     );
@@ -2103,19 +2408,6 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
           const SizedBox(height: 12),
           _buildInlineError(_providerError!),
         ],
-        const SizedBox(height: 18),
-        _buildPrimaryButton(
-          key: const ValueKey('tutorial-provider-connect'),
-          label: _providerBusy
-              ? _t('正在连接并读取模型…', 'Connecting and fetching models…')
-              : _providerConnected
-              ? _t('重新连接并读取模型', 'Reconnect and fetch models')
-              : _t('连接并读取模型', 'Connect and fetch models'),
-          icon: _providerConnected
-              ? LucideIcons.refreshCw
-              : LucideIcons.plugZap,
-          onPressed: _providerBusy ? null : _configureProvider,
-        ),
       ],
     );
   }
@@ -2134,15 +2426,6 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
           const SizedBox(height: 12),
           _buildInlineError(_providerError!),
         ],
-        const SizedBox(height: 20),
-        _buildPrimaryButton(
-          key: const ValueKey('tutorial-models-next'),
-          label: _t('继续分配场景模型', 'Continue to model roles'),
-          icon: LucideIcons.arrowRight,
-          onPressed: _modelOptions.isEmpty
-              ? null
-              : () => _goToPage(_TutorialPage.primaryScenes),
-        ),
       ],
     );
   }
@@ -2155,18 +2438,7 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
         '先使用同一个通用模型也没有问题，之后可在“场景模型”设置中调整。',
         'Using one general model for now is fine. You can refine these roles later.',
       ),
-      children: [
-        ..._sceneDefinitions.take(3).map(_buildSceneModelCard),
-        const SizedBox(height: 8),
-        _buildPrimaryButton(
-          key: const ValueKey('tutorial-primary-scenes-next'),
-          label: _t('继续配置记忆模型', 'Continue to memory models'),
-          icon: LucideIcons.arrowRight,
-          onPressed: _modelOptions.isEmpty
-              ? null
-              : () => _goToPage(_TutorialPage.memoryScenes),
-        ),
-      ],
+      children: [..._sceneDefinitions.take(3).map(_buildSceneModelCard)],
     );
   }
 
@@ -2184,21 +2456,161 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
           const SizedBox(height: 4),
           _buildInlineError(_providerError!),
         ],
-        const SizedBox(height: 8),
-        _buildPrimaryButton(
-          key: const ValueKey('tutorial-save-scenes'),
-          label: _sceneModelsSaving
-              ? _t('正在保存场景配置…', 'Saving model roles…')
-              : _t('保存并了解聊天界面', 'Save and learn the chat interface'),
-          icon: LucideIcons.arrowRight,
-          onPressed:
-              _sceneModelsSaving ||
-                  _activeProfile == null ||
-                  _modelOptions.isEmpty
-              ? null
-              : _saveSceneModels,
-        ),
       ],
+    );
+  }
+
+  Widget _buildCompletionPage() {
+    final palette = context.omniPalette;
+    return LayoutBuilder(
+      key: const ValueKey('tutorial-completion-page'),
+      builder: (context, constraints) {
+        final compact = constraints.maxHeight < 620;
+        final heroSize = compact ? 82.0 : 104.0;
+        return Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+              child: Column(
+                children: [
+                  _buildTutorialPageHeading(
+                    icon: LucideIcons.rocket,
+                    title: _t('开始探索', 'Start exploring'),
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 540),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: heroSize,
+                              height: heroSize,
+                              decoration: BoxDecoration(
+                                color: palette.accentPrimary.withValues(
+                                  alpha: 0.11,
+                                ),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: palette.accentPrimary.withValues(
+                                    alpha: 0.2,
+                                  ),
+                                ),
+                              ),
+                              alignment: Alignment.center,
+                              child: Container(
+                                width: heroSize * 0.62,
+                                height: heroSize * 0.62,
+                                decoration: BoxDecoration(
+                                  color: palette.accentPrimary,
+                                  shape: BoxShape.circle,
+                                ),
+                                alignment: Alignment.center,
+                                child: Icon(
+                                  LucideIcons.check,
+                                  size: compact ? 30 : 38,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onPrimary,
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: compact ? 16 : 22),
+                            Text(
+                              _t('一切准备就绪', 'Everything is ready'),
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.headlineMedium
+                                  ?.copyWith(
+                                    color: palette.textPrimary,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.6,
+                                  ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              _t(
+                                '你已经完成首次使用教程。现在可以创建对话、调用 Agent，并在真实项目中开始工作。',
+                                'You have completed the first-use guide. Start a conversation, use an agent, and work on a real project.',
+                              ),
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: palette.textSecondary,
+                                    height: 1.6,
+                                  ),
+                            ),
+                            SizedBox(height: compact ? 18 : 26),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildCompletionCapability(
+                                    icon: LucideIcons.squareTerminal,
+                                    label: _t('本地环境', 'Local setup'),
+                                  ),
+                                ),
+                                const SizedBox(width: 9),
+                                Expanded(
+                                  child: _buildCompletionCapability(
+                                    icon: LucideIcons.brainCircuit,
+                                    label: _t('模型服务', 'Models'),
+                                  ),
+                                ),
+                                const SizedBox(width: 9),
+                                Expanded(
+                                  child: _buildCompletionCapability(
+                                    icon: LucideIcons.messageCircle,
+                                    label: _t('聊天功能', 'Chat'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCompletionCapability({
+    required IconData icon,
+    required String label,
+  }) {
+    final palette = context.omniPalette;
+    return Container(
+      height: 78,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
+      decoration: BoxDecoration(
+        color: palette.surfacePrimary,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: palette.borderSubtle),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 20, color: palette.accentPrimary),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: palette.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2812,24 +3224,6 @@ class _OnboardingChoicePageState extends State<OnboardingChoicePage> {
             borderRadius: BorderRadius.circular(16),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildTextAction({
-    required Key key,
-    required String label,
-    required VoidCallback? onPressed,
-  }) {
-    return Center(
-      child: TextButton(
-        key: key,
-        onPressed: onPressed,
-        style: TextButton.styleFrom(
-          foregroundColor: context.omniPalette.textSecondary,
-          minimumSize: const Size(44, 44),
-        ),
-        child: Text(label),
       ),
     );
   }

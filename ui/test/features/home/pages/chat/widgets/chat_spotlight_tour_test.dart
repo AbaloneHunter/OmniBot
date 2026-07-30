@@ -32,10 +32,6 @@ class _TourHarnessState extends State<_TourHarness> {
             ),
             ChatSpotlightTour(
               step: step,
-              onBack: () {
-                if (step == 0) return;
-                setState(() => step -= 1);
-              },
               onNext: () => setState(() => step += 1),
               onFinish: () => setState(() => finishCount += 1),
             ),
@@ -47,7 +43,7 @@ class _TourHarnessState extends State<_TourHarness> {
 }
 
 void main() {
-  testWidgets('spotlight tour overlays chat and keeps navigation at bottom', (
+  testWidgets('spotlight tour advances from blank areas without bottom bar', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 700);
@@ -65,21 +61,34 @@ void main() {
     expect(find.byKey(const ValueKey('chat-spotlight-card-0')), findsOneWidget);
     expect(find.text('菜单与会话'), findsOneWidget);
 
-    final back = find.byKey(const ValueKey('chat-spotlight-back'));
-    final next = find.byKey(const ValueKey('chat-spotlight-next'));
-    expect(tester.getBottomLeft(back).dy, greaterThan(620));
-    expect(tester.getBottomRight(next).dy, greaterThan(620));
+    expect(
+      find.byKey(const ValueKey('chat-spotlight-navigation')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('chat-spotlight-back')), findsNothing);
+    expect(find.byKey(const ValueKey('chat-spotlight-next')), findsNothing);
 
-    await tester.tap(next);
+    await tester.tap(find.byKey(const ValueKey('chat-spotlight-card-0')));
     await tester.pumpAndSettle();
-
-    expect(find.byKey(const ValueKey('chat-spotlight-card-1')), findsOneWidget);
-    expect(find.text('选择工作模式'), findsOneWidget);
-
-    await tester.tap(back);
-    await tester.pumpAndSettle();
-
     expect(find.byKey(const ValueKey('chat-spotlight-card-0')), findsOneWidget);
+
+    await tester.tapAt(const Offset(16, 350));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('chat-spotlight-card-1')), findsOneWidget);
+
+    for (var step = 2; step < ChatSpotlightTour.stepCount; step += 1) {
+      await tester.tapAt(const Offset(16, 350));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(ValueKey<String>('chat-spotlight-card-$step')),
+        findsOneWidget,
+      );
+    }
+
+    await tester.tapAt(const Offset(16, 350));
+    await tester.pumpAndSettle();
+    final harness = tester.state<_TourHarnessState>(find.byType(_TourHarness));
+    expect(harness.finishCount, 1);
     expect(tester.takeException(), isNull);
   });
 }

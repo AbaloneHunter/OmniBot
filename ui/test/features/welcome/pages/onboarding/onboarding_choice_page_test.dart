@@ -5,7 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ui/constants/storage_keys.dart';
 import 'package:ui/features/home/pages/chat/chat_page.dart';
+import 'package:ui/features/home/pages/chat/widgets/chat_spotlight_tour.dart';
 import 'package:ui/features/welcome/pages/onboarding/onboarding_choice_page.dart';
 import 'package:ui/l10n/generated/app_localizations.dart';
 import 'package:ui/services/storage_service.dart';
@@ -297,15 +299,141 @@ void main() {
       );
       expect(find.byType(LinearProgressIndicator), findsNothing);
       expect(find.text('开发环境已准备完成'), findsOneWidget);
-      expect(find.text('继续配置模型'), findsOneWidget);
+      expect(find.text('继续配置模型'), findsNothing);
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byKey(const ValueKey('tutorial-environment-continue')),
+            )
+            .onPressed,
+        isNotNull,
+      );
       expect(tester.takeException(), isNull);
     },
   );
 
-  testWidgets('later setup pages use bottom back and provider brand icons', (
+  testWidgets(
+    'tutorial pages use dots circular arrows and horizontal swipe navigation',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(buildTestApp());
+      await tester.pump(const Duration(milliseconds: 50));
+
+      double expectInlineHeading(String title) {
+        final headingRect = tester.getRect(
+          find.byKey(const ValueKey('tutorial-page-heading')),
+        );
+        final iconRect = tester.getRect(
+          find.byKey(const ValueKey('tutorial-page-leading-icon')),
+        );
+        final titleRect = tester.getRect(
+          find.byKey(const ValueKey('tutorial-page-title')),
+        );
+        expect(find.text(title), findsOneWidget);
+        expect(headingRect.top, greaterThanOrEqualTo(20));
+        expect(iconRect.right, lessThan(titleRect.left));
+        expect((iconRect.center.dy - titleRect.center.dy).abs(), lessThan(1));
+        return headingRect.top;
+      }
+
+      final initialHeadingTop = expectInlineHeading('选择本地 Linux 系统');
+
+      final navigation = find.byKey(
+        const ValueKey('tutorial-pagination-navigation'),
+      );
+      expect(navigation, findsOneWidget);
+      final initialNavigationRect = tester.getRect(navigation);
+      expect(
+        find.byKey(const ValueKey('tutorial-bottom-back')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byKey(const ValueKey('tutorial-bottom-back')),
+            )
+            .onPressed,
+        isNull,
+      );
+      for (var index = 0; index < 8; index += 1) {
+        expect(
+          find.byKey(ValueKey<String>('tutorial-page-dot-$index')),
+          findsOneWidget,
+        );
+      }
+
+      final systemNext = find.byKey(const ValueKey('tutorial-system-next'));
+      expect(tester.widget<IconButton>(systemNext).onPressed, isNotNull);
+      expect(
+        tester
+            .widget<Material>(
+              find
+                  .ancestor(of: systemNext, matching: find.byType(Material))
+                  .first,
+            )
+            .shape,
+        isA<CircleBorder>(),
+      );
+
+      await tester.drag(
+        find.byKey(const ValueKey('tutorial-page-swipe-surface')),
+        const Offset(-300, 0),
+      );
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(navigation, findsOneWidget);
+      expect(tester.getRect(navigation), initialNavigationRect);
+      await tester.pumpAndSettle();
+      expect(find.text('选择开发环境'), findsOneWidget);
+      expect(expectInlineHeading('选择开发环境'), initialHeadingTop);
+      expect(tester.getRect(navigation), initialNavigationRect);
+
+      await tester.drag(
+        find.byKey(const ValueKey('tutorial-page-swipe-surface')),
+        const Offset(300, 0),
+      );
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(navigation, findsOneWidget);
+      expect(tester.getRect(navigation), initialNavigationRect);
+      await tester.pumpAndSettle();
+      expect(find.text('选择本地 Linux 系统'), findsOneWidget);
+      expect(tester.getRect(navigation), initialNavigationRect);
+
+      await tester.tap(find.byKey(const ValueKey('tutorial-page-dot-1')));
+      await tester.pumpAndSettle();
+      expect(find.text('选择开发环境'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('tutorial-development-next')));
+      await tester.pumpAndSettle();
+      expect(find.text('添加需要的开发工具'), findsOneWidget);
+      expect(find.text('暂不配置，先设置模型'), findsNothing);
+      final stickyAction = find.byKey(
+        const ValueKey('tutorial-sticky-primary-action'),
+      );
+      final skipEnvironment = find.byKey(
+        const ValueKey('tutorial-skip-environment'),
+      );
+      expect(stickyAction, findsOneWidget);
+      expect(tester.widget<IconButton>(skipEnvironment).onPressed, isNotNull);
+      final stickyActionRect = tester.getRect(stickyAction);
+      final toolsNavigationRect = tester.getRect(navigation);
+      expect(stickyActionRect.bottom, lessThan(toolsNavigationRect.top));
+      expect(
+        toolsNavigationRect.top - stickyActionRect.bottom,
+        lessThanOrEqualTo(8),
+      );
+      expect(toolsNavigationRect, initialNavigationRect);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('tutorial pagination stays stable on a narrow viewport', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(430, 900);
+    tester.view.physicalSize = const Size(320, 640);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -313,43 +441,104 @@ void main() {
     await tester.pumpWidget(buildTestApp());
     await tester.pump(const Duration(milliseconds: 50));
 
-    await openToolsPage(tester);
-    final skipEnvironment = find.byKey(
-      const ValueKey('tutorial-skip-environment'),
+    expect(
+      find.byKey(const ValueKey('tutorial-pagination-navigation')),
+      findsOneWidget,
     );
-    await showFinder(tester, skipEnvironment);
-    await tester.tap(skipEnvironment);
+    expect(find.byKey(const ValueKey('tutorial-page-dot-7')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.drag(
+      find.byKey(const ValueKey('tutorial-page-swipe-surface')),
+      const Offset(-260, 0),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.text('选择模型提供商'), findsOneWidget);
-    expect(find.byKey(const ValueKey('tutorial-provider-deepseek')), findsOne);
-    expect(find.byKey(const ValueKey('tutorial-back-button')), findsNothing);
-    expect(find.byKey(const ValueKey('tutorial-bottom-back')), findsOneWidget);
-    for (final id in <String>[
-      'deepseek',
-      'moonshot',
-      'mimo',
-      'openai',
-      'anthropic',
-      'custom',
-    ]) {
-      expect(
-        find.byKey(ValueKey<String>('tutorial-provider-icon-$id')),
-        findsOneWidget,
-      );
-    }
-    expect(find.byType(ProviderVendorIcon), findsNWidgets(5));
-
-    final bottomBack = find.byKey(const ValueKey('tutorial-bottom-back'));
-    await showFinder(tester, bottomBack);
-    await tester.tap(bottomBack);
-    await tester.pumpAndSettle();
-
-    expect(find.text('添加需要的开发工具'), findsOneWidget);
-    expect(find.byKey(const ValueKey('tutorial-back-button')), findsNothing);
-    expect(find.byKey(const ValueKey('tutorial-bottom-back')), findsOneWidget);
+    expect(find.text('选择开发环境'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('tutorial-pagination-navigation')),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'later setup pages use pagination back and provider brand icons',
+    (tester) async {
+      tester.view.physicalSize = const Size(430, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(buildTestApp());
+      await tester.pump(const Duration(milliseconds: 50));
+
+      await openToolsPage(tester);
+      final skipEnvironment = find.byKey(
+        const ValueKey('tutorial-skip-environment'),
+      );
+      await showFinder(tester, skipEnvironment);
+      await tester.tap(skipEnvironment);
+      await tester.pumpAndSettle();
+
+      expect(find.text('选择模型提供商'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('tutorial-provider-deepseek')),
+        findsOne,
+      );
+      expect(find.byKey(const ValueKey('tutorial-back-button')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('tutorial-bottom-back')),
+        findsOneWidget,
+      );
+      expect(find.text('暂不配置，先了解聊天界面'), findsNothing);
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byKey(const ValueKey('tutorial-skip-models')),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      final providerPrimary = find.byKey(
+        const ValueKey('tutorial-provider-next'),
+      );
+      final providerNavigation = find.byKey(
+        const ValueKey('tutorial-pagination-navigation'),
+      );
+      expect(
+        tester.getRect(providerPrimary).bottom,
+        lessThan(tester.getRect(providerNavigation).top),
+      );
+      for (final id in <String>[
+        'deepseek',
+        'moonshot',
+        'mimo',
+        'openai',
+        'anthropic',
+        'custom',
+      ]) {
+        expect(
+          find.byKey(ValueKey<String>('tutorial-provider-icon-$id')),
+          findsOneWidget,
+        );
+      }
+      expect(find.byType(ProviderVendorIcon), findsNWidgets(5));
+
+      final bottomBack = find.byKey(const ValueKey('tutorial-bottom-back'));
+      await showFinder(tester, bottomBack);
+      await tester.tap(bottomBack);
+      await tester.pumpAndSettle();
+
+      expect(find.text('添加需要的开发工具'), findsOneWidget);
+      expect(find.byKey(const ValueKey('tutorial-back-button')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('tutorial-bottom-back')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('provider models can be assigned before opening the chat guide', (
     tester,
@@ -416,6 +605,20 @@ void main() {
     );
 
     final saveScenes = find.byKey(const ValueKey('tutorial-save-scenes'));
+    final stickyAction = find.byKey(
+      const ValueKey('tutorial-sticky-primary-action'),
+    );
+    final memoryNavigation = find.byKey(
+      const ValueKey('tutorial-pagination-navigation'),
+    );
+    expect(
+      find.descendant(of: stickyAction, matching: saveScenes),
+      findsOneWidget,
+    );
+    expect(
+      tester.getRect(saveScenes).bottom,
+      lessThan(tester.getRect(memoryNavigation).top),
+    );
     await showFinder(tester, saveScenes);
     await tester.tap(saveScenes);
     for (var frame = 0; frame < 15; frame += 1) {
@@ -424,14 +627,44 @@ void main() {
 
     expect(find.byType(ChatPage), findsOneWidget);
     expect(find.byKey(const ValueKey('chat-spotlight-tour')), findsOneWidget);
-    expect(find.byKey(const ValueKey('chat-spotlight-back')), findsOneWidget);
-    expect(find.byKey(const ValueKey('chat-spotlight-next')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('chat-spotlight-navigation')),
+      findsNothing,
+    );
 
-    await tester.tap(find.byKey(const ValueKey('chat-spotlight-back')));
+    for (var step = 1; step < ChatSpotlightTour.stepCount; step += 1) {
+      await tester.tapAt(const Offset(8, 350));
+      await tester.pump(const Duration(milliseconds: 260));
+      expect(
+        find.byKey(ValueKey<String>('chat-spotlight-card-$step')),
+        findsOneWidget,
+      );
+    }
+    await tester.tapAt(const Offset(8, 350));
     await tester.pumpAndSettle();
 
     expect(find.byType(ChatPage), findsNothing);
-    expect(find.text('配置记忆模型'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('tutorial-completion-page')),
+      findsOneWidget,
+    );
+    expect(find.text('一切准备就绪'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('tutorial-start-exploring')),
+      findsOneWidget,
+    );
+    expect(
+      StorageService.getBool(StorageKeys.welcomeCompleted, defaultValue: false),
+      isFalse,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('tutorial-start-exploring')));
+    await tester.pump();
+
+    expect(
+      StorageService.getBool(StorageKeys.welcomeCompleted, defaultValue: false),
+      isTrue,
+    );
     expect(tester.takeException(), isNull);
   });
 }
