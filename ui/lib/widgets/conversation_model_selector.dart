@@ -5,6 +5,7 @@ import 'package:ui/services/model_vendor_catalog.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/widgets/omni_glass.dart';
 import 'package:ui/widgets/provider_vendor_icon.dart';
+import 'package:omnimind_bot/widgets/model_capability_tag.dart';
 
 class ConversationModelSelection {
   const ConversationModelSelection({
@@ -432,6 +433,25 @@ class _ConversationModelSelectorContentState
                     ),
                   ),
                 ),
+                const SizedBox(width: 6),
+                // 模型能力标签（横向滚动）
+                if (model.inputModalities?.contains('image') == true ||
+                    model.toolCall == true ||
+                    model.reasoning == true ||
+                    model.attachment == true ||
+                    model.structuredOutput == true)
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      reverse: true,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: _buildCapabilityTags(model),
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 6),
                 if (selected)
                   Icon(
                     Icons.check_rounded,
@@ -446,6 +466,58 @@ class _ConversationModelSelectorContentState
         ),
       ),
     );
+  }
+
+  /// 构建模型能力标签列表
+  List<Widget> _buildCapabilityTags(ProviderModelOption model) {
+    final tags = <Widget>[];
+    
+    // 视觉能力（图像输入）
+    if (model.inputModalities?.contains('image') == true) {
+      tags.add(const ModelCapabilityTag(
+        icon: Icons.image_outlined,
+        label: '视觉',
+        color: ModelCapabilityTagColor.vision,
+      ));
+    }
+    
+    // 工具调用能力
+    if (model.toolCall == true) {
+      tags.add(const ModelCapabilityTag(
+        icon: Icons.build_outlined,
+        label: '工具',
+        color: ModelCapabilityTagColor.tool,
+      ));
+    }
+    
+    // 推理能力
+    if (model.reasoning == true) {
+      tags.add(const ModelCapabilityTag(
+        icon: Icons.psychology_outlined,
+        label: '推理',
+        color: ModelCapabilityTagColor.reasoning,
+      ));
+    }
+    
+    // 文件附件能力
+    if (model.attachment == true) {
+      tags.add(const ModelCapabilityTag(
+        icon: Icons.attach_file,
+        label: '文件',
+        color: ModelCapabilityTagColor.file,
+      ));
+    }
+    
+    // 结构化输出能力
+    if (model.structuredOutput == true) {
+      tags.add(const ModelCapabilityTag(
+        icon: Icons.format_list_bulleted,
+        label: 'JSON',
+        color: ModelCapabilityTagColor.json,
+      ));
+    }
+    
+    return tags;
   }
 
   Widget _buildMutedMessage(String? label) {
