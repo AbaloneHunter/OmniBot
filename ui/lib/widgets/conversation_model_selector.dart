@@ -5,7 +5,7 @@ import 'package:ui/services/model_vendor_catalog.dart';
 import 'package:ui/theme/theme_context.dart';
 import 'package:ui/widgets/omni_glass.dart';
 import 'package:ui/widgets/provider_vendor_icon.dart';
-import 'package:omnimind_bot/widgets/model_capability_tag.dart';
+import 'package:ui/widgets/model_capability_tag.dart';
 
 class ConversationModelSelection {
   const ConversationModelSelection({
@@ -474,7 +474,7 @@ class _ConversationModelSelectorContentState
     
     // 视觉能力（图像输入）
     if (model.inputModalities?.contains('image') == true) {
-      tags.add(const ModelCapabilityTag(
+      tags.add(ModelCapabilityTag(
         icon: Icons.image_outlined,
         label: '视觉',
         color: ModelCapabilityTagColor.vision,
@@ -483,7 +483,7 @@ class _ConversationModelSelectorContentState
     
     // 工具调用能力
     if (model.toolCall == true) {
-      tags.add(const ModelCapabilityTag(
+      tags.add(ModelCapabilityTag(
         icon: Icons.build_outlined,
         label: '工具',
         color: ModelCapabilityTagColor.tool,
@@ -492,7 +492,7 @@ class _ConversationModelSelectorContentState
     
     // 推理能力
     if (model.reasoning == true) {
-      tags.add(const ModelCapabilityTag(
+      tags.add(ModelCapabilityTag(
         icon: Icons.psychology_outlined,
         label: '推理',
         color: ModelCapabilityTagColor.reasoning,
@@ -501,7 +501,7 @@ class _ConversationModelSelectorContentState
     
     // 文件附件能力
     if (model.attachment == true) {
-      tags.add(const ModelCapabilityTag(
+      tags.add(ModelCapabilityTag(
         icon: Icons.attach_file,
         label: '文件',
         color: ModelCapabilityTagColor.file,
@@ -510,7 +510,7 @@ class _ConversationModelSelectorContentState
     
     // 结构化输出能力
     if (model.structuredOutput == true) {
-      tags.add(const ModelCapabilityTag(
+      tags.add(ModelCapabilityTag(
         icon: Icons.format_list_bulleted,
         label: 'JSON',
         color: ModelCapabilityTagColor.json,
