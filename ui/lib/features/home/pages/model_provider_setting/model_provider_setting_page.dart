@@ -3322,6 +3322,7 @@ class _ProviderSwitchPopupEntryState extends State<_ProviderSwitchPopupEntry> {
   }
 
   /// 构建模型能力标签列表
+  Widget build(BuildContext context) {
     final palette = context.omniPalette;
     final mediaQuery = MediaQuery.of(context);
     final dynamicMaxHeight =
