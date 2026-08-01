@@ -62,7 +62,7 @@ class ModelCapabilityTag extends StatelessWidget {
     // 结构化输出标签
     if (structuredOutput) {
       tags.add(_buildTag(
-        icon: LucideIcons.codeBlock,
+        icon: LucideIcons.braces,
         label: '结构化',
         color: palette.primaryContainer,
         size: size,

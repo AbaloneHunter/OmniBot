@@ -1761,7 +1761,7 @@ class _SceneSelectionPopupEntryState extends State<_SceneSelectionPopupEntry> {
                 ),
                 const SizedBox(width: 6),
                 // 模型能力标签
-                ..._buildCapabilityTags(item),
+                _buildCapabilityTags(item),
                 const SizedBox(width: 6),
                 if (selected)
                   Icon(
@@ -1779,56 +1779,16 @@ class _SceneSelectionPopupEntryState extends State<_SceneSelectionPopupEntry> {
     );
   }
 
-  /// 构建模型能力标签列表
-  List<Widget> _buildCapabilityTags(ProviderModelOption model) {
-    final tags = <Widget>[];
-    
-    // 视觉能力（图像输入）
-    if (model.inputModalities?.contains('image') == true) {
-      tags.add(ModelCapabilityTag(
-        icon: Icons.image_outlined,
-        label: '视觉',
-        color: ModelCapabilityTagColor.vision,
-      ));
-    }
-    
-    // 工具调用能力
-    if (model.toolCall == true) {
-      tags.add(ModelCapabilityTag(
-        icon: Icons.build_outlined,
-        label: '工具',
-        color: ModelCapabilityTagColor.tool,
-      ));
-    }
-    
-    // 推理能力
-    if (model.reasoning == true) {
-      tags.add(ModelCapabilityTag(
-        icon: Icons.psychology_outlined,
-        label: '推理',
-        color: ModelCapabilityTagColor.reasoning,
-      ));
-    }
-    
-    // 文件附件能力
-    if (model.attachment == true) {
-      tags.add(ModelCapabilityTag(
-        icon: Icons.attach_file,
-        label: '文件',
-        color: ModelCapabilityTagColor.file,
-      ));
-    }
-    
-    // 结构化输出能力
-    if (model.structuredOutput == true) {
-      tags.add(ModelCapabilityTag(
-        icon: Icons.format_list_bulleted,
-        label: 'JSON',
-        color: ModelCapabilityTagColor.json,
-      ));
-    }
-    
-    return tags;
+  /// 构建模型能力标签（单个 ModelCapabilityTag 自动显示所有相关标签）
+  Widget _buildCapabilityTags(ProviderModelOption model) {
+    return ModelCapabilityTag(
+      inputModalities: model.inputModalities ?? [],
+      toolCall: model.toolCall == true,
+      reasoning: model.reasoning == true,
+      attachment: model.attachment == true,
+      structuredOutput: model.structuredOutput == true,
+      size: 10,
+    );
   }
 
   @override
