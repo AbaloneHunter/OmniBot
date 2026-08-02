@@ -13,6 +13,7 @@ class ModelCapabilityTag extends StatelessWidget {
     this.inputModalities = const [],
     this.outputModalities = const [],
     this.size = 12,
+    this.iconOnly = true, // 默认只显示图标，无文字
   });
 
   final bool attachment;
@@ -23,6 +24,7 @@ class ModelCapabilityTag extends StatelessWidget {
   final List<String> inputModalities;
   final List<String> outputModalities;
   final double size;
+  final bool iconOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -64,7 +66,7 @@ class ModelCapabilityTag extends StatelessWidget {
       tags.add(_buildTag(
         icon: LucideIcons.braces,
         label: '结构化',
-        color: palette.primaryContainer,
+        color: palette.inversePrimary,
         size: size,
       ));
     }
@@ -84,7 +86,7 @@ class ModelCapabilityTag extends StatelessWidget {
       tags.add(_buildTag(
         icon: _getModalityIcon(modality),
         label: _getModalityLabel(modality),
-        color: palette.tertiaryContainer,
+        color: palette.secondaryContainer,
         size: size,
       ));
     }
@@ -94,7 +96,7 @@ class ModelCapabilityTag extends StatelessWidget {
       tags.add(_buildTag(
         icon: _getModalityIcon(modality),
         label: _getModalityLabel(modality),
-        color: palette.tertiaryContainer,
+        color: palette.secondaryContainer,
         size: size,
       ));
     }
@@ -102,7 +104,15 @@ class ModelCapabilityTag extends StatelessWidget {
     if (tags.isEmpty) {
       return const SizedBox.shrink();
     }
-
+    
+    // iconOnly 模式下用 Row 紧凑排列，否则用 Wrap 自动换行
+    if (iconOnly) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: tags,
+      );
+    }
+    
     return Wrap(
       spacing: 4,
       runSpacing: 4,
@@ -116,6 +126,14 @@ class ModelCapabilityTag extends StatelessWidget {
     required Color color,
     required double size,
   }) {
+    if (iconOnly) {
+      // 只显示图标，无文字、无容器包裹
+      return Padding(
+        padding: EdgeInsets.only(right: size * 0.75),
+        child: Icon(icon, size: size, color: color),
+      );
+    }
+    
     return Container(
       padding: EdgeInsets.symmetric(horizontal: size * 1.5, vertical: size * 0.5),
       decoration: BoxDecoration(

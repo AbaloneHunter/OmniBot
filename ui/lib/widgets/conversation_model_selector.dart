@@ -440,7 +440,7 @@ class _ConversationModelSelectorContentState
                     model.reasoning == true ||
                     model.attachment == true ||
                     model.structuredOutput == true)
-                  Expanded(
+                  Flexible(
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       physics: const BouncingScrollPhysics(),
