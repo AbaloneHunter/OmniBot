@@ -1423,6 +1423,93 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     }
   }
 
+  Future<void> _deleteAllModels() async {
+    final current = _currentProfile;
+    if (current == null) {
+      return;
+    }
+
+    final totalModels = _modelItems.length;
+    if (totalModels == 0) {
+      if (!mounted) return;
+      showToast(
+        _headerText('没有可删除的模型', 'No models to delete'),
+        type: ToastType.info,
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      useRootNavigator: false,
+      builder: (_) => AlertDialog(
+        title: Text(_headerText('确认删除', 'Confirm Delete')),
+        content: Text(
+          _headerText(
+            '确定要删除所有 $totalModels 个模型吗？此操作无法撤销。',
+            'Delete all $totalModels models? This cannot be undone.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(_headerText('取消', 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: Text(_headerText('删除', 'Delete')),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    final prevManual = List<String>.from(_manualModelIds);
+    final prevManualModels = List<ProviderModelOption>.from(_manualModels);
+    final prevRemote = List<ProviderModelOption>.from(_remoteModels);
+
+    setState(() {
+      _manualModelIds = [];
+      _manualModels = [];
+      _remoteModels = [];
+    });
+
+    try {
+      await Future.wait([
+        ModelProviderConfigService.saveManualModelIds(
+          profileId: current.id,
+          ids: [],
+        ),
+        ModelProviderConfigService.saveCachedFetchedModels(
+          profileId: current.id,
+          apiBase: _baseUrlController.text.trim(),
+          models: [],
+        ),
+      ]);
+
+      if (!mounted) return;
+      showToast(
+        _headerText('已删除所有 $totalModels 个模型', 'Deleted all $totalModels models'),
+        type: ToastType.success,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _manualModelIds = prevManual;
+        _manualModels = prevManualModels;
+        _remoteModels = prevRemote;
+      });
+      showToast(
+        _headerText('删除失败', 'Failed to delete models'),
+        type: ToastType.error,
+      );
+    }
+  }
+
   Future<void> _selectProviderType(String value) async {
     final selected = _kProviderTypeOptions.firstWhere(
       (option) => option.value == value,
@@ -3160,22 +3247,18 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
                                 );
                                 return _buildLucideModelActionButton(
                                   key: const Key(
-                                    'provider-chat-model-visibility-button',
+                                    'provider-delete-all-chat-models-button',
                                   ),
-                                  icon: LucideIcons.columns3Cog,
+                                  icon: LucideIcons.trash2,
                                   tooltip: _headerText(
-                                    '管理聊天页模型',
-                                    'Manage chat list models',
+                                    '删除下面所有模型',
+                                    'Delete all models below',
                                   ),
-                                  highlighted: hasHiddenRemoteModel,
+                                  highlighted: false,
                                   onPressed: _currentProfile == null
                                       ? null
                                       : () {
-                                          unawaited(
-                                            _openChatModelVisibilityMenu(
-                                              anchorContext,
-                                            ),
-                                          );
+                                          unawaited(_deleteAllModels());
                                         },
                                 );
                               },
