@@ -439,13 +439,22 @@ class _ConversationModelSelectorContentState
                     model.toolCall == true ||
                     model.reasoning == true ||
                     model.attachment == true ||
-                    model.structuredOutput == true)
+                    model.structuredOutput == true ||
+                    (model.contextLimit != null && model.contextLimit! > 0))
                   Flexible(
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       physics: const BouncingScrollPhysics(),
                       reverse: true,
-                      child: _buildCapabilityTags(model),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // 上下文限制标签（显示在能力标签之前）
+                          _buildContextLimitChip(model),
+                          // 模型能力图标标签
+                          _buildCapabilityTags(model),
+                        ],
+                      ),
                     ),
                   ),
                 const SizedBox(width: 6),
@@ -474,6 +483,63 @@ class _ConversationModelSelectorContentState
       attachment: model.attachment == true,
       structuredOutput: model.structuredOutput == true,
       size: 10,
+    );
+  }
+
+  /// 格式化 token 限制为可读字符串
+  String _formatTokenLimit(int? value) {
+    if (value == null || value <= 0) {
+      return '--';
+    }
+    if (value >= 1000000) {
+      final formatted = value % 1000000 == 0
+          ? '${value ~/ 1000000}'
+          : (value / 1000000).toStringAsFixed(1);
+      return '${formatted}M';
+    }
+    if (value >= 1000) {
+      final formatted = value % 1000 == 0
+          ? '${value ~/ 1000}'
+          : (value / 1000).toStringAsFixed(1);
+      return '${formatted}K';
+    }
+    return value.toString();
+  }
+
+  /// 构建上下文限制芯片标签（蓝色主题）
+  Widget _buildContextLimitChip(ProviderModelOption model) {
+    final contextLimit = _formatTokenLimit(model.contextLimit);
+    if (contextLimit == '--') {
+      return const SizedBox.shrink();
+    }
+    final isDark = context.isDarkTheme;
+    final primaryColor = isDark
+        ? palette.primary
+        : const Color(0xFF1976D2);
+    final chipColor = isDark
+        ? palette.primary.withOpacity(0.15)
+        : const Color(0x0D1976D2);
+    final borderColor = isDark
+        ? palette.primary.withOpacity(0.3)
+        : const Color(0x331976D2);
+    return Container(
+      height: 18,
+      padding: const EdgeInsets.symmetric(horizontal: 5),
+      margin: const EdgeInsets.only(right: 4),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: chipColor,
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: borderColor, width: 0.5),
+      ),
+      child: Text(
+        contextLimit,
+        style: TextStyle(
+          fontSize: 9,
+          color: primaryColor,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 

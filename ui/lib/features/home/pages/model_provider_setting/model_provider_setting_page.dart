@@ -263,6 +263,10 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
       _isDarkTheme ? context.omniPalette.pageBackground : AppColors.background;
   Color get _cardColor =>
       _isDarkTheme ? context.omniPalette.surfacePrimary : Colors.white;
+  Color get _primaryChipColor =>
+      _isDarkTheme
+          ? context.omniPalette.primary.withOpacity(0.15)
+          : const Color(0x0D1976D2);
   Color get _primaryTextColor =>
       _isDarkTheme ? context.omniPalette.textPrimary : AppColors.text;
   Color get _secondaryTextColor =>
@@ -2236,12 +2240,12 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
         padding: const EdgeInsets.symmetric(horizontal: 7),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: _cardColor,
+          color: _primaryChipColor,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
             color: _isDarkTheme
-                ? context.omniPalette.borderSubtle
-                : const Color(0x14000000),
+                ? context.omniPalette.primary.withOpacity(0.3)
+                : const Color(0x331976D2),
           ),
         ),
         child: Text(
@@ -2250,7 +2254,9 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 11,
-            color: _tertiaryTextColor,
+            color: _isDarkTheme
+                ? context.omniPalette.primary
+                : const Color(0xFF1976D2),
             fontWeight: FontWeight.w700,
             fontFamily: 'PingFang SC',
             letterSpacing: 0,
@@ -2266,18 +2272,20 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
       padding: const EdgeInsets.symmetric(horizontal: 6),
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: _cardColor,
+        color: _primaryChipColor,
         borderRadius: BorderRadius.circular(6),
         border: Border.all(
           color: _isDarkTheme
-              ? context.omniPalette.borderSubtle
-              : const Color(0x14000000),
+              ? context.omniPalette.primary.withOpacity(0.3)
+              : const Color(0x331976D2),
         ),
       ),
       child: Text(
         modality.toUpperCase(),
         style: TextStyle(
-          color: _secondaryTextColor,
+          color: _isDarkTheme
+              ? context.omniPalette.primary
+              : const Color(0xFF1976D2),
           fontSize: 9,
           fontWeight: FontWeight.w700,
           letterSpacing: 0,

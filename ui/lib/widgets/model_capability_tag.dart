@@ -46,7 +46,7 @@ class ModelCapabilityTag extends StatelessWidget {
       tags.add(_buildTag(
         icon: LucideIcons.brainCircuit,
         label: '推理',
-        color: palette.tertiary,
+        color: palette.primary,
         size: size,
       ));
     }
@@ -56,7 +56,7 @@ class ModelCapabilityTag extends StatelessWidget {
       tags.add(_buildTag(
         icon: LucideIcons.wrench,
         label: '工具',
-        color: palette.secondary,
+        color: palette.primary,
         size: size,
       ));
     }
@@ -66,7 +66,7 @@ class ModelCapabilityTag extends StatelessWidget {
       tags.add(_buildTag(
         icon: LucideIcons.braces,
         label: '结构化',
-        color: palette.inversePrimary,
+        color: palette.primary,
         size: size,
       ));
     }
@@ -76,7 +76,7 @@ class ModelCapabilityTag extends StatelessWidget {
       tags.add(_buildTag(
         icon: LucideIcons.zap,
         label: '温度',
-        color: palette.error,
+        color: palette.primary,
         size: size,
       ));
     }
@@ -86,7 +86,7 @@ class ModelCapabilityTag extends StatelessWidget {
       tags.add(_buildTag(
         icon: _getModalityIcon(modality),
         label: _getModalityLabel(modality),
-        color: palette.secondaryContainer,
+        color: palette.primary,
         size: size,
       ));
     }
@@ -96,7 +96,7 @@ class ModelCapabilityTag extends StatelessWidget {
       tags.add(_buildTag(
         icon: _getModalityIcon(modality),
         label: _getModalityLabel(modality),
-        color: palette.secondaryContainer,
+        color: palette.primary,
         size: size,
       ));
     }
