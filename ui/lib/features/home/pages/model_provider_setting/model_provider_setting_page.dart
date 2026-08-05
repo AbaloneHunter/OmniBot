@@ -265,7 +265,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
       _isDarkTheme ? context.omniPalette.surfacePrimary : Colors.white;
   Color get _primaryChipColor =>
       _isDarkTheme
-          ? context.omniPalette.primary.withOpacity(0.15)
+          ? context.omniPalette.accentPrimary.withOpacity(0.15)
           : const Color(0x0D1976D2);
   Color get _primaryTextColor =>
       _isDarkTheme ? context.omniPalette.textPrimary : AppColors.text;
@@ -2244,7 +2244,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
             color: _isDarkTheme
-                ? context.omniPalette.primary.withOpacity(0.3)
+                ? context.omniPalette.accentPrimary.withOpacity(0.3)
                 : const Color(0x331976D2),
           ),
         ),
@@ -2255,7 +2255,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
           style: TextStyle(
             fontSize: 11,
             color: _isDarkTheme
-                ? context.omniPalette.primary
+                ? context.omniPalette.accentPrimary
                 : const Color(0xFF1976D2),
             fontWeight: FontWeight.w700,
             fontFamily: 'PingFang SC',
@@ -2276,7 +2276,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
         borderRadius: BorderRadius.circular(6),
         border: Border.all(
           color: _isDarkTheme
-              ? context.omniPalette.primary.withOpacity(0.3)
+              ? context.omniPalette.accentPrimary.withOpacity(0.3)
               : const Color(0x331976D2),
         ),
       ),
@@ -2284,7 +2284,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
         modality.toUpperCase(),
         style: TextStyle(
           color: _isDarkTheme
-              ? context.omniPalette.primary
+              ? context.omniPalette.accentPrimary
               : const Color(0xFF1976D2),
           fontSize: 9,
           fontWeight: FontWeight.w700,

@@ -539,63 +539,6 @@ class _ConversationModelSelectorContentState
     );
   }
 
-  /// 格式化 token 限制为可读字符串
-  String _formatTokenLimit(int? value) {
-    if (value == null || value <= 0) {
-      return '--';
-    }
-    if (value >= 1000000) {
-      final formatted = value % 1000000 == 0
-          ? '${value ~/ 1000000}'
-          : (value / 1000000).toStringAsFixed(1);
-      return '${formatted}M';
-    }
-    if (value >= 1000) {
-      final formatted = value % 1000 == 0
-          ? '${value ~/ 1000}'
-          : (value / 1000).toStringAsFixed(1);
-      return '${formatted}K';
-    }
-    return value.toString();
-  }
-
-  /// 构建上下文限制芯片标签（蓝色主题）
-  Widget _buildContextLimitChip(ProviderModelOption model) {
-    final contextLimit = _formatTokenLimit(model.contextLimit);
-    if (contextLimit == '--') {
-      return const SizedBox.shrink();
-    }
-    final isDark = context.isDarkTheme;
-    final primaryColor = isDark
-        ? palette.primary
-        : const Color(0xFF1976D2);
-    final chipColor = isDark
-        ? palette.primary.withOpacity(0.15)
-        : const Color(0x0D1976D2);
-    final borderColor = isDark
-        ? palette.primary.withOpacity(0.3)
-        : const Color(0x331976D2);
-    return Container(
-      height: 18,
-      padding: const EdgeInsets.symmetric(horizontal: 5),
-      margin: const EdgeInsets.only(right: 4),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: chipColor,
-        borderRadius: BorderRadius.circular(5),
-        border: Border.all(color: borderColor, width: 0.5),
-      ),
-      child: Text(
-        contextLimit,
-        style: TextStyle(
-          fontSize: 9,
-          color: primaryColor,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
   Widget _buildMutedMessage(String? label) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
