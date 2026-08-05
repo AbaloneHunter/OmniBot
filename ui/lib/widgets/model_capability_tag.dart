@@ -139,10 +139,6 @@ class ModelCapabilityTag extends StatelessWidget {
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(size * 1.5),
-        border: Border.all(
-          color: color.withOpacity(0.3),
-          width: size * 0.3,
-        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

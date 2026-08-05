@@ -263,10 +263,6 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
       _isDarkTheme ? context.omniPalette.pageBackground : AppColors.background;
   Color get _cardColor =>
       _isDarkTheme ? context.omniPalette.surfacePrimary : Colors.white;
-  Color get _primaryChipColor =>
-      _isDarkTheme
-          ? context.omniPalette.accentPrimary.withOpacity(0.15)
-          : const Color(0x0D1976D2);
   Color get _primaryTextColor =>
       _isDarkTheme ? context.omniPalette.textPrimary : AppColors.text;
   Color get _secondaryTextColor =>
@@ -2232,6 +2228,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
   }
 
   Widget _buildContextLimitChip(String modelId, String label) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
     return Tooltip(
       message: 'Context limit $label',
       child: Container(
@@ -2240,13 +2237,8 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
         padding: const EdgeInsets.symmetric(horizontal: 7),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: _primaryChipColor,
+          color: primaryColor.withOpacity(0.15),
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: _isDarkTheme
-                ? context.omniPalette.accentPrimary.withOpacity(0.3)
-                : const Color(0x331976D2),
-          ),
         ),
         child: Text(
           label,
@@ -2254,9 +2246,7 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 11,
-            color: _isDarkTheme
-                ? context.omniPalette.accentPrimary
-                : const Color(0xFF1976D2),
+            color: primaryColor,
             fontWeight: FontWeight.w700,
             fontFamily: 'PingFang SC',
             letterSpacing: 0,
@@ -2267,25 +2257,19 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
   }
 
   Widget _buildModalityTextChip(String modality) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
     return Container(
       height: 22,
       padding: const EdgeInsets.symmetric(horizontal: 6),
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: _primaryChipColor,
+        color: primaryColor.withOpacity(0.15),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: _isDarkTheme
-              ? context.omniPalette.accentPrimary.withOpacity(0.3)
-              : const Color(0x331976D2),
-        ),
       ),
       child: Text(
         modality.toUpperCase(),
         style: TextStyle(
-          color: _isDarkTheme
-              ? context.omniPalette.accentPrimary
-              : const Color(0xFF1976D2),
+          color: primaryColor,
           fontSize: 9,
           fontWeight: FontWeight.w700,
           letterSpacing: 0,

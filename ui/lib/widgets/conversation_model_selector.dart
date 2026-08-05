@@ -523,9 +523,6 @@ class _ConversationModelSelectorContentState
       decoration: BoxDecoration(
         color: palette.primary.withOpacity(0.15),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: palette.primary.withOpacity(0.3),
-        ),
       ),
       child: Text(
         contextLimit.toUpperCase(),
