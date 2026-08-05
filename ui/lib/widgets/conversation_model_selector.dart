@@ -474,7 +474,7 @@ class _ConversationModelSelectorContentState
     );
   }
 
-  /// 构建模型能力标签（单个 ModelCapabilityTag 自动显示所有相关标签）
+    /// 构建模型能力标签（单个 ModelCapabilityTag 自动显示所有相关标签）
   Widget _buildCapabilityTags(ProviderModelOption model) {
     return ModelCapabilityTag(
       inputModalities: model.inputModalities ?? [],
@@ -483,6 +483,59 @@ class _ConversationModelSelectorContentState
       attachment: model.attachment == true,
       structuredOutput: model.structuredOutput == true,
       size: 10,
+    );
+  }
+
+  /// 格式化 token 限制为可读字符串
+  String _formatTokenLimit(int? value) {
+    if (value == null || value <= 0) {
+      return '--';
+    }
+    if (value >= 1000000) {
+      final formatted = value % 1000000 == 0
+          ? '${value ~/ 1000000}'
+          : (value / 1000000).toStringAsFixed(1);
+      return '${formatted}M';
+    }
+    if (value >= 1000) {
+      final formatted = value % 1000 == 0
+          ? '${value ~/ 1000}'
+          : (value / 1000).toStringAsFixed(1);
+      return '${formatted}K';
+    }
+    return value.toString();
+  }
+
+  /// 构建上下文限制标签（用于聊天框弹出页面）
+  Widget _buildContextLimitChip(ProviderModelOption model) {
+    final contextLimit = _formatTokenLimit(model.contextLimit);
+    if (contextLimit == '--') {
+      return const SizedBox.shrink();
+    }
+    
+    // 从 Theme.of(context).colorScheme 拿取 primary 颜色，而不是 OmniThemePalette
+    final palette = Theme.of(context).colorScheme;
+    
+    return Container(
+      height: 22,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: palette.primary.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: palette.primary.withOpacity(0.3),
+        ),
+      ),
+      child: Text(
+        contextLimit.toUpperCase(),
+        style: TextStyle(
+          color: palette.primary,
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0,
+        ),
+      ),
     );
   }
 
