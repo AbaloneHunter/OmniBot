@@ -520,10 +520,6 @@ class _ConversationModelSelectorContentState
       height: 22,
       padding: const EdgeInsets.symmetric(horizontal: 6),
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: palette.primary.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(6),
-      ),
       child: Text(
         contextLimit.toUpperCase(),
         style: TextStyle(

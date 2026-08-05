@@ -2236,10 +2236,6 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
         height: 22,
         padding: const EdgeInsets.symmetric(horizontal: 7),
         alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: primaryColor.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(6),
-        ),
         child: Text(
           label,
           maxLines: 1,
@@ -2262,10 +2258,6 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
       height: 22,
       padding: const EdgeInsets.symmetric(horizontal: 6),
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: primaryColor.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(6),
-      ),
       child: Text(
         modality.toUpperCase(),
         style: TextStyle(
@@ -2282,16 +2274,16 @@ class _ModelProviderSettingPageState extends State<ModelProviderSettingPage> {
     final widgets = <Widget>[];
     final contextLimit = _formatTokenLimit(model.contextLimit);
     widgets.add(_buildContextLimitChip(model.id, contextLimit));
-    if (model.reasoning == true) {
-      widgets.add(
-        _buildCompactIconChip(
-          key: 'provider-model-reasoning-${model.id}',
-          svg: _kReasoningSvg,
-          tooltip: 'Reasoning',
-        ),
-      );
-    }
-    widgets.addAll(_buildInputModalityWidgets(model));
+    widgets.add(
+      ModelCapabilityTag(
+        inputModalities: model.inputModalities ?? [],
+        toolCall: model.toolCall == true,
+        reasoning: model.reasoning == true,
+        attachment: model.attachment == true,
+        structuredOutput: model.structuredOutput == true,
+        size: 10,
+      ),
+    );
     return widgets;
   }
 
